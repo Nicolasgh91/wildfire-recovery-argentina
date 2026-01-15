@@ -86,34 +86,6 @@ wildfire-recovery-argentina/
     └── casos_de_uso.md
 ```
 
-## 🚀 Instalación
-
-```bash
-# Clonar repositorio
-git clone https://github.com/Nicolasgh91/wildfire-recovery-argentina.git
-cd wildfire-recovery-argentina
-
-# Crear entorno virtual
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Instalar dependencias
-pip install -r requirements.txt
-
-# Configurar variables de entorno
-cp .env.example .env
-# Editar .env con tus credenciales
-```
-
-## 🔧 Configuración
-
-### Google Earth Engine
-1. Registrarse en: https://earthengine.google.com/
-2. Autenticar: `earthengine authenticate`
-
-### Supabase
-1. Crear proyecto en: https://supabase.com
-2. Copiar URL y API Key al `.env`
 
 ## 📝 Reglas de Negocio
 
