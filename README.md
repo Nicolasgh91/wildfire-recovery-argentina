@@ -83,7 +83,8 @@ wildfire-recovery-argentina/
 ├── notebooks/              # Exploración de datos
 └── docs/
     ├── arquitectura.md
-    └── casos_de_uso.md
+    └──il.com
+     casos_de_uso.md
 ```
 
 
