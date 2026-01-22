@@ -1,13 +1,12 @@
 """
-Configuración de la aplicación
-Lee variables de entorno y provee settings globales
+Configuración de la API Principal - Wildfire Recovery System
 """
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
 
-class Settings(BaseSettings):
-    """Settings de la aplicación"""
+class APISettings(BaseSettings):
+    """Settings de la API Principal"""
     
     # API
     app_name: str = "Wildfire Recovery API"
@@ -16,55 +15,32 @@ class Settings(BaseSettings):
     api_port: int = 8000
     debug: bool = True
     
-    # Supabase
+    # Supabase (base de datos)
     supabase_url: str
-    supabase_anon_key: str
     supabase_service_key: str
-    supabase_db_url: str
     
-    # Google Earth Engine
-    gee_service_account_email: str
-    gee_private_key_path: str
-    
-    # Microservicio de imágenes
-    image_service_url: str = "http://localhost:8001"
-    
-    # Configuración de análisis
-    max_incendios_por_consulta: int = 100
-    meses_analisis_post_incendio: int = 36
-    
-    # Reglas de negocio
-    distancia_recurrencia_metros: int = 100
-    dias_minimos_recurrencia: int = 180  # 6 meses
-    porcentaje_superposicion_minimo: float = 5.0
+    # Límites
+    max_incendios_por_consulta: int = 1000
     
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignorar variables extra del .env
 
 
 @lru_cache()
-def get_settings() -> Settings:
-    """
-    Retorna settings cacheadas (singleton)
-    Usa lru_cache para no recrear el objeto en cada llamada
-    """
-    return Settings()
+def get_api_settings() -> APISettings:
+    """Retorna settings cacheadas"""
+    return APISettings()
 
 
-# Para importar fácilmente
-settings = get_settings()
+# Export
+settings = get_api_settings()
 
 
 if __name__ == "__main__":
-    # Test de configuración
     print("=== Configuración de la API ===\n")
     print(f"App: {settings.app_name} v{settings.app_version}")
-    print(f"Puerto: {settings.api_port}")
-    print(f"Supabase URL: {settings.supabase_url[:30]}...")
-    print(f"GEE Service Account: {settings.gee_service_account_email}")
-    print(f"Image Service: {settings.image_service_url}")
-    print(f"\nReglas de negocio:")
-    print(f"- Distancia recurrencia: {settings.distancia_recurrencia_metros}m")
-    print(f"- Días mínimos recurrencia: {settings.dias_minimos_recurrencia}")
-    print(f"- Superposición mínima: {settings.porcentaje_superposicion_minimo}%")
+    print(f"Host: {settings.api_host}:{settings.api_port}")
+    print(f"Debug: {settings.debug}")
+    print(f"Max incendios por consulta: {settings.max_incendios_por_consulta}")
