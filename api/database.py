@@ -32,6 +32,23 @@ class Database:
         response = self.client.table('incendios').insert(incendio_data).execute()
         return response.data[0] if response.data else None
     
+    def crear_incendios_batch(self, incendios_data: List[Dict]) -> List[Dict]:
+        """
+        Crea múltiples incendios en una sola operación (batch insert)
+        
+        Args:
+            incendios_data: Lista de dicts con los datos de los incendios
+            
+        Returns:
+            Lista de incendios creados
+        """
+        if not incendios_data:
+            return []
+        
+        # Supabase permite insertar múltiples registros a la vez
+        response = self.client.table('incendios').insert(incendios_data).execute()
+        return response.data if response.data else []
+    
     def obtener_incendio(self, incendio_id: str) -> Optional[Dict]:
         """
         Obtiene un incendio por ID

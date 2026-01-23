@@ -2,17 +2,23 @@
 Microservicio de Análisis de Imágenes Satelitales
 Servicio independiente para procesamiento de imágenes y análisis temporal
 """
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Query
+from fastapi.responses import FileResponse #Para devolver la imagen del análisis
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 import json
 import ee
+from image_service.geo_utils import obtener_info_geografica # <--- NUEVO
+from datetime import datetime
 
+from image_service.report_generator import ReportGenerator
+from pathlib import Path
 from image_service.config import settings
 from image_service.gee_client import GEEClient
 from image_service.analyzers.ndvi import NDVIAnalyzer
 from image_service.analyzers.construcciones import ConstruccionesDetector
+from image_service.sentinel_analyzer import FireRecoveryAnalyzerGEE
 
 # Importar cliente de Supabase (reutilizamos desde api)
 from supabase import create_client, Client
@@ -57,6 +63,17 @@ gee_client = GEEClient()
 ndvi_analyzer = NDVIAnalyzer()
 construcciones_detector = ConstruccionesDetector()
 
+# ... inicialización de visual_analyzer ...
+print("📸 Inicializando generador de evidencia visual...")
+try:
+    visual_analyzer = FireRecoveryAnalyzerGEE()
+except Exception as e:
+    print(f"⚠️ Advertencia: No se pudo inicializar el analizador visual: {e}")
+    visual_analyzer = None
+
+# Inicializar Generador de Reportes
+output_pdf_folder = Path("output_reports") # Carpeta donde se guardarán
+report_generator = ReportGenerator(output_pdf_folder)
 
 # ========== FUNCIONES AUXILIARES ==========
 
@@ -312,6 +329,106 @@ async def analizar_mes_unico(
         "ndvi": ndvi_resultado,
         "interpretacion": ndvi_analyzer.interpretar_ndvi(ndvi_resultado['ndvi_promedio'])
     }
+
+
+
+
+@app.get("/evidencia-visual", tags=["Visualización"])
+async def obtener_evidencia_visual(
+    incendio_id: str = Query(..., description="UUID del incendio"),
+    calidad: str = Query("alta", enum=["alta", "baja"], description="Calidad de imagen: alta (HD) o baja (Rápida)")
+):
+    """
+    Genera y retorna una imagen comparativa (RGB, SWIR, NDVI).
+    Retorna directamente el archivo PNG (Content-Type: image/png).
+    """
+    if not visual_analyzer:
+        raise HTTPException(status_code=503, detail="El servicio de visualización GEE no está disponible.")
+
+    # Verificar existencia en BD (Reutilizamos tu función auxiliar)
+    incendio = obtener_incendio_bd(incendio_id)
+    if not incendio:
+        raise HTTPException(status_code=404, detail="Incendio no encontrado en la base de datos.")
+
+    try:
+        print(f"🖼️ Generando evidencia visual para {incendio_id} ({calidad})...")
+        
+        # Llamamos a la función que creamos hoy
+        # NOTA: Asegúrate de que en sentinel_analyzer.py el método retorne 'output_path'
+        output_path = visual_analyzer.analyze_recovery(incendio_id, calidad=calidad)
+        
+        if not output_path or not output_path.exists():
+            raise HTTPException(status_code=404, detail="No se pudieron generar imágenes (nubes o falta de datos).")
+
+        return FileResponse(
+            path=output_path, 
+            media_type="image/png", 
+            filename=f"evidencia_{incendio_id}.png"
+        )
+
+    except Exception as e:
+        print(f"❌ Error generando imagen: {e}")
+        raise HTTPException(status_code=500, detail=f"Error interno generando imagen: {str(e)}")
+
+@app.get("/reporte-pdf", tags=["Reportes"])
+async def obtener_reporte_pdf(
+    incendio_id: str = Query(..., description="UUID del incendio"),
+    calidad: str = Query("alta", enum=["alta", "baja"])
+):
+    if not visual_analyzer:
+        raise HTTPException(status_code=503, detail="Servicio GEE no disponible")
+    
+    incendio = obtener_incendio_bd(incendio_id)
+    if not incendio:
+        raise HTTPException(status_code=404, detail="Incendio no encontrado")
+
+    try:
+        lat = incendio['latitud']
+        lon = incendio['longitud']
+        fecha_dt = datetime.strptime(str(incendio['fecha_deteccion']), "%Y-%m-%d")
+
+        # 1. Obtener Datos Geográficos (Localidad, Provincia, Parque)
+        print("   🌍 Consultando geolocalización...")
+        geo_data = obtener_info_geografica(lat, lon)
+        
+        # 2. Obtener Tipo de Suelo (Land Cover desde GEE)
+        print("   🌱 Analizando tipo de suelo...")
+        tipo_suelo = visual_analyzer.get_land_cover(lat, lon, fecha_dt.year)
+
+        # 3. Generar Imagen Satelital
+        print("   🖼️ Generando imagen para reporte...")
+        image_path = visual_analyzer.analyze_recovery(incendio_id, calidad=calidad)
+
+        # 4. Preparar datos COMPLETOS para el PDF
+        datos_reporte = {
+            'id': incendio_id,
+            'fecha_deteccion': incendio['fecha_deteccion'],
+            'latitud': lat,
+            'longitud': lon,
+            'area': incendio.get('area_afectada_hectareas', 'N/A'),
+            
+            # Datos Nuevos
+            'provincia': geo_data.get('provincia', incendio.get('provincia')), # Priorizamos geopy, fallback a BD
+            'localidad': geo_data.get('localidad', 'Zona Rural'),
+            'departamento': geo_data.get('departamento', ''),
+            'tipo_suelo': tipo_suelo, # Ej: "Bosque de Hojas Anchas"
+            'es_area_protegida': geo_data.get('area_protegida', False),
+            'nombre_parque': geo_data.get('nombre_parque', '')
+        }
+
+        # 5. Generar PDF (Necesitamos actualizar report_generator.py en el sig paso)
+        filename_pdf = f"reporte_{incendio_id}.pdf"
+        pdf_path = report_generator.generate_pdf(datos_reporte, image_path, filename_pdf)
+
+        return FileResponse(path=pdf_path, media_type="application/pdf", filename=filename_pdf)
+
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
 
 
 # ========== INICIAR SERVIDOR ==========
