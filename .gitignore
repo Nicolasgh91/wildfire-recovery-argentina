@@ -67,3 +67,8 @@ credentials.json
 service-account.json
 *-credentials.json
 secrets/
+
+# Data & outputs
+raw_data/
+output_images/
+output_reports/
