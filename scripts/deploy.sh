@@ -13,8 +13,8 @@
 
 set -e
 
-APP_DIR="/opt/forestguard"
-COMPOSE_FILE="docker-compose.prod.yml"
+APP_DIR="/home/opc"
+COMPOSE_FILE="docker-compose.yml"
 
 cd $APP_DIR
 
