@@ -1,4 +1,5 @@
 from typing import List, Optional, Any
+from urllib.parse import quote_plus  # ← AGREGADO
 from pydantic import AnyHttpUrl, field_validator, ValidationInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -7,13 +8,13 @@ class Settings(BaseSettings):
     VERSION: str = "3.0.0"
     API_V1_PREFIX: str = "/api/v1"
     
-    # --- Environment & Debug (Lo que faltaba) ---
-    ENVIRONMENT: str = "local"  # <--- ¡ESTO FALTABA!
+    # --- Environment & Debug ---
+    ENVIRONMENT: str = "local"
     DEBUG: bool = True
     LOG_LEVEL: str = "INFO"
 
     # --- CORS ---
-    ALLOWED_ORIGINS: List[AnyHttpUrl] = []
+    ALLOWED_ORIGINS: List[str] = ["*"]  # Cambiado a str para flexibilidad
     ALLOWED_FILE_TYPES: List[str] = ["image/jpeg", "image/png", "application/pdf"]
 
     # --- Database Config ---
@@ -40,6 +41,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def assemble_db_connection(cls, v: Optional[str], info: ValidationInfo) -> Any:
+        # Si ya viene una URL completa, usarla directamente
         if isinstance(v, str) and v:
             return v
         
@@ -48,7 +50,8 @@ class Settings(BaseSettings):
             return None
 
         user = values.get("DB_USER")
-        password = values.get("DB_PASSWORD")
+        # URL-encode el password para manejar caracteres especiales (@, #, !, etc.)
+        password = quote_plus(values.get("DB_PASSWORD") or "")
         host = values.get("DB_HOST")
         port = values.get("DB_PORT", "5432")
         db = values.get("DB_NAME", "postgres")
