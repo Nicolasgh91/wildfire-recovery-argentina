@@ -70,6 +70,7 @@ secrets/
 
 # Data & outputs
 raw_data/
+data/raw/firms/
 output_images/
 output_reports/
 data/
