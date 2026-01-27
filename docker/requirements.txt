@@ -36,9 +36,6 @@ httpx==0.25.1
 # Cloud Storage
 boto3==1.29.7
 
-# Google Earth Engine (NUEVO)
-earthengine-api==0.1.384
-
 # Utilities
 tqdm==4.66.1
 python-dotenv==1.0.0

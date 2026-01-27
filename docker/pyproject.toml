@@ -1,0 +1,60 @@
+[tool.poetry]
+name = "wildfire-recoveries"
+version = "3.0.0"
+description = "API for legal oversight of wildfires in Argentina"
+authors = ["Wildfire Team <contact@wildfire-recoveries.ar>"]
+readme = "README.md"
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.104.0"
+uvicorn = {extras = ["standard"], version = "^0.24.0"}
+sqlalchemy = "^2.0.0"
+geoalchemy2 = "^0.14.0"
+psycopg2-binary = "^2.9.9"
+alembic = "^1.12.0"
+pydantic = "^2.4.0"
+pydantic-settings = "^2.0.0"
+python-multipart = "^0.0.6"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+celery = "^5.3.4"
+redis = "^5.0.1"
+pandas = "^2.1.0"
+geopandas = "^0.14.0"
+shapely = "^2.0.0"
+requests = "^2.31.0"
+boto3 = "^1.28.0"
+tqdm = "^4.66.0"
+python-dotenv = "^1.0.0"
+sentry-sdk = {extras = ["fastapi"], version = "^1.38.0"}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+pytest-asyncio = "^0.21.0"
+black = "^23.10.0"
+isort = "^5.12.0"
+mypy = "^1.6.0"
+flake8 = "^6.1.0"
+pre-commit = "^3.5.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --cov=app --cov-report=html --cov-report=term"
