@@ -21,32 +21,32 @@ cd $APP_DIR
 case "$1" in
     --build)
         echo "🔨 Rebuilding images..."
-        docker-compose -f $COMPOSE_FILE build --no-cache
-        docker-compose -f $COMPOSE_FILE up -d
+        docker compose -f $COMPOSE_FILE build --no-cache
+        docker compose -f $COMPOSE_FILE up -d
         echo "✅ Deploy completado con rebuild"
         ;;
     --logs)
         echo "📋 Mostrando logs..."
-        docker-compose -f $COMPOSE_FILE logs -f
+        docker compose -f $COMPOSE_FILE logs -f
         ;;
     --stop)
         echo "🛑 Deteniendo servicios..."
-        docker-compose -f $COMPOSE_FILE down
+        docker compose -f $COMPOSE_FILE down
         echo "✅ Servicios detenidos"
         ;;
     --restart)
         echo "🔄 Reiniciando servicios..."
-        docker-compose -f $COMPOSE_FILE restart
+        docker compose -f $COMPOSE_FILE restart
         echo "✅ Servicios reiniciados"
         ;;
     --status)
         echo "📊 Estado de servicios:"
-        docker-compose -f $COMPOSE_FILE ps
+        docker compose -f $COMPOSE_FILE ps
         ;;
     --pull)
         echo "📥 Actualizando código..."
         git pull origin main
-        docker-compose -f $COMPOSE_FILE up -d --build
+        docker compose -f $COMPOSE_FILE up -d --build
         echo "✅ Código actualizado y desplegado"
         ;;
     *)
@@ -60,10 +60,10 @@ case "$1" in
         fi
         
         # Pull de imágenes base
-        docker-compose -f $COMPOSE_FILE pull nginx certbot 2>/dev/null || true
+        docker compose -f $COMPOSE_FILE pull nginx certbot 2>/dev/null || true
         
         # Levantar servicios
-        docker-compose -f $COMPOSE_FILE up -d
+        docker compose -f $COMPOSE_FILE up -d
         
         # Esperar a que la API esté lista
         echo "⏳ Esperando a que la API inicie..."
@@ -74,7 +74,7 @@ case "$1" in
             echo "✅ Deploy completado exitosamente"
             echo ""
             echo "📊 Estado:"
-            docker-compose -f $COMPOSE_FILE ps
+            docker compose -f $COMPOSE_FILE ps
             echo ""
             echo "🔗 URLs:"
             echo "   - Health: http://$(curl -s ifconfig.me)/health"
