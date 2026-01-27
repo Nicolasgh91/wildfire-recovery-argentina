@@ -23,6 +23,14 @@ wheels/
 .installed.cfg
 *.egg
 
+# Estos son provisorios! Eliminar cuando se suban los scripts definitivos
+database/supabase.sql
+scripts/debug_forensic.py
+scripts/generate_forensic_timelapse.py
+conftest.py
+llave
+llave.pub
+
 # Virtual environments
 .venv
 venv/
