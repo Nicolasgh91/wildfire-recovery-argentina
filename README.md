@@ -48,7 +48,21 @@ ForestGuard convierte millones de detecciones satelitales en:
 
 Todo con una arquitectura moderna, escalable y orientada a APIs.
 
-Para más detalles, ver FAQs
+## 📚 Documentación
+
+Hemos preparado guías detalladas para todos los perfiles de usuario:
+
+### 📘 Manuales de Usuario
+- **Español**: [Manual de Usuario](docs/MANUAL_DE_USUARIO.md)
+- **English**: [User Manual](docs/USER_MANUAL.md)
+
+### ❓ Preguntas Frecuentes
+- **Español**: [Preguntas Frecuentes (FAQ)](docs/preguntas_frecuentes.md)
+- **English**: [Frequently Asked Questions](docs/faq.md)
+
+### 📖 Glosario Técnico
+- **Español**: [Glosario](docs/glosario.md)
+- **English**: [Glossary](docs/glossary.md)
 
 ---
 
