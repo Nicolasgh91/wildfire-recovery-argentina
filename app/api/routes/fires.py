@@ -22,7 +22,12 @@ def read_fires(
     province: Optional[str] = None
 ):
     """
-    Recupera incendios agrupados (Eventos).
+    Lists fire events (clustered wildfires) with optional filtering by date range, significance, and province. Supports pagination via skip and limit
+
+    ---
+    Enumera eventos de incendios (incendios forestales agrupados) con filtrado opcional por rango de fechas, importancia y provincia. Admite paginación a través de skip y limit.
+
+
     """
     query = db.query(FireEvent)
 

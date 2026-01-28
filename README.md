@@ -363,7 +363,7 @@ FIRMS_API_KEY=tu_api_key
 
 ## 🚢 Deploy
 
-### Render (Recomendado)
+### Oracle Cloud
 
 1. Crear cuenta en [Render](https://render.com)
 2. Conectar repositorio de GitHub
