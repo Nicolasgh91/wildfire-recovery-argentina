@@ -2,6 +2,9 @@
 
 **Plataforma de inteligencia geoespacial para fiscalización legal de incendios forestales en Argentina**
 
+> 🌍 **Read in English**: [Jump to English Version](#-forestguard-api-english-version)
+
+
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-blue.svg)](https://www.postgresql.org/)
@@ -612,3 +615,134 @@ Los incendios forestales ya no son eventos aislados: son **riesgo sistémico**. 
 **Progreso:** 70% completado
 
 [![Star on GitHub](https://img.shields.io/github/stars/Nicolasgh91/wildfire-recovery-argentina?style=social)](https://github.com/Nicolasgh91/wildfire-recovery-argentina)
+
+---
+
+# 🌲 ForestGuard API (English Version)
+
+**Geospatial intelligence platform for legal enforcement of wildfire recovery in Argentina**
+
+> 🌍 **Leer en Español**: [Ir a la versión en Español](#-forestguard-api)
+
+## ✨ Mission
+
+**ForestGuard** is an environmental intelligence platform designed to **detect, analyze, audit, and document wildfires in Argentina**, turning raw satellite data into **actionable, traceable, and legally verifiable information**.
+
+The project was born to solve a concrete problem: **fire data exists, but it is fragmented, difficult to interpret, and almost never becomes useful evidence for decision-making, accountability, or legal processes.**
+
+ForestGuard transforms satellite data into **legal evidence** to enforce Article 22 bis of Law 26.815, which prohibits land use changes in fire-affected areas for 30-60 years.
+
+## 🎯 Problem Solved
+
+Today, in Argentina:
+* Wildfires are detected late or analyzed reactively.
+* Satellite information (NASA FIRMS, VIIRS, MODIS) is scattered and technical.
+* There is no unified system that:
+  * Consolidates detections into **real events**.
+  * Allows **auditing specific zones**.
+  * Generates **verifiable evidence** for agencies, NGOs, or citizens.
+
+**ForestGuard bridges the gap between open data and real decisions.**
+
+ForestGuard converts millions of satellite detections into:
+* 🔥 **Fire Events** (not just isolated dots)
+* 🧭 **Geospatial Audits** by radius, plot, or location
+* 📜 **Hashed Digital Certificates (PDF)**, publicly verifiable
+* 📊 **National Historical Archive (2015–present)**
+* 🌱 **Vegetation Recovery Monitoring** post-fire
+* 🚧 **Illegal Land Use Change Detection**
+
+## 📚 Documentation
+
+We have prepared detailed guides for all user profiles:
+
+### 📘 User Manuals
+- **English**: [User Manual](docs/USER_MANUAL.md)
+- **Español**: [Manual de Usuario](docs/MANUAL_DE_USUARIO.md)
+
+### ❓ FAQ
+- **English**: [Frequently Asked Questions](docs/faq.md)
+- **Español**: [Preguntas Frecuentes](docs/preguntas_frecuentes.md)
+
+### 📖 Glossary
+- **English**: [Glossary](docs/glossary.md)
+- **Español**: [Glosario](docs/glosario.md)
+
+## 🧩 Use Cases (11 Implemented)
+
+### Full Feature List
+
+| UC | Category | Name | Description | Status |
+|---|---|---|---|---|
+| **UC-01** | Enforcement | Land Use Audit | Verify legal restrictions due to fires | ✅ DONE |
+| **UC-02** | Enforcement | Judicial Forensics | Generate forensic evidence for court cases | 🔜 PENDING |
+| **UC-03** | Analysis | Fire Recurrence | Detect zones with suspicious repetitive patterns | 🔜 PENDING |
+| **UC-04** | Alerts | Carrying Capacity | Preventive park alerts based on visitors | 🔜 PENDING |
+| **UC-05** | Analysis | Historical Trends | Long-term projections and risk migration | 🔜 PENDING |
+| **UC-06** | Analysis | Reforestation | NDVI monitoring of vegetation recovery (36 mos) | ⏳ IN PROGRESS |
+| **UC-07** | Enforcement | Legal Certification | Issue verifiable digital certificates | ✅ DONE |
+| **UC-08** | Enforcement | Land Use Change | Detect illegal construction/farming post-fire | 🔜 PENDING |
+| **UC-09** | Participation | Citizen Reporting | Public reports with satellite evidence | 🔜 PENDING |
+| **UC-10** | Analysis | Data Quality | Reliability metrics for forensics | 🔜 PENDING |
+| **UC-11** | Analysis | Historical Reports | PDFs of fires in protected areas | 🔜 PENDING |
+
+## 🏗️ Unified Architecture
+
+ForestGuard uses a **hybrid API + Workers architecture** with shared modules to eliminate redundancy.
+
+*(See Spanish section for detailed diagrams)*
+
+### 🆕 Shared Modules
+*   **Vegetation Analysis Engine (VAE)**: Centralized vegetation analysis using NDVI.
+*   **Evidence Reporting Service (ERS)**: Unified engine for verifiable report generation.
+
+## 🚀 Quick Start
+
+### Requirements
+*   Python 3.11+
+*   PostgreSQL 14+ with PostGIS
+*   Redis (for Celery)
+*   Supabase Account (Database)
+*   Google Cloud Account with Earth Engine API enabled
+
+### Local Installation
+
+```bash
+# 1. Clone repository
+git clone https://github.com/Nicolasgh91/wildfire-recovery-argentina.git
+cd wildfire-recovery-argentina
+
+# 2. Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Configure environment variables
+cp .env.example .env
+# Edit .env with your credentials
+
+# 5. Load schema to Supabase
+# Run database/schema_v0.1.sql in Supabase SQL Editor
+
+# 6. Start services (Docker)
+docker-compose up -d
+
+# 7. Start API
+uvicorn app.main:app --reload --port 8000
+```
+
+## 🚢 Deployment
+
+### 🌐 Production (Oracle Cloud Free Tier) ✅
+
+**Status**: LIVE
+**URL**: https://forestguard.freedynamicdns.org
+**API Docs**: https://forestguard.freedynamicdns.org/docs
+**Infrastructure**: Oracle Cloud VM (Always Free)
+
+## 📄 License
+
+MIT License - See [LICENSE](LICENSE) for details.
+
