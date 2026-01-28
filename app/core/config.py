@@ -10,11 +10,22 @@ class Settings(BaseSettings):
     
     # --- Environment & Debug ---
     ENVIRONMENT: str = "local"
-    DEBUG: bool = True
+    DEBUG: bool = False  # Default to False for security
     LOG_LEVEL: str = "INFO"
 
+    # --- Security ---
+    API_KEY: str = ""  # Required for protected endpoints
+    SECRET_KEY: str = ""  # For JWT/session signing
+    
+    # --- Alerting ---
+    ALERT_EMAIL: Optional[str] = None  # Email to receive security alerts
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+
     # --- CORS ---
-    ALLOWED_ORIGINS: List[str] = ["*"]  # Cambiado a str para flexibilidad
+    ALLOWED_ORIGINS: List[str] = ["*"]  # Open for MVP accessibility
     ALLOWED_FILE_TYPES: List[str] = ["image/jpeg", "image/png", "application/pdf"]
 
     # --- Database Config ---

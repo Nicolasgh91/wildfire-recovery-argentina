@@ -48,6 +48,7 @@ Wildfire Recoveries implementa una **arquitectura híbrida API+Workers** diseña
 │  - Auth/RBAC     │    │   - Mapas            │
 │  - Validation    │    └──────────────────────┘
 │  - Logging       │
+│  - 🆕 Rate Limit │
 └────────┬─────────┘
          │
          │ Read/Write
@@ -167,8 +168,10 @@ wildfire-recoveries/
 │   ├── core/                     # Configuración core
 │   │   ├── __init__.py
 │   │   ├── config.py             # ✅ Pydantic Settings (con GEE)
-│   │   ├── security.py           # Auth, API keys
+│   │   ├── security.py           # ✅ Auth, API keys (APIKeyHeader)
+│   │   ├── rate_limiter.py       # ✅ IP Blocking + Email Alerts
 │   │   ├── logging.py            # ✅ Structured logging
+│   │   ├── errors.py             # ✅ Global Exception Handler
 │   │   └── exceptions.py         # Custom exceptions
 │   │
 │   ├── models/                   # ✅ SQLAlchemy ORM Models
@@ -499,6 +502,15 @@ Ventaja GEE: No descarga 700MB, solo 500KB thumbnail!
    - ✅ Todo lo anterior
    - ✅ Revisar denuncias ciudadanas
    - ✅ Acceso a métricas
+
+### 🔒 Nuevos Controles de Seguridad (v3.1)
+- **API Key**: Header `X-API-Key` obligatorio para endpoints sensibles.
+- **IP Rate Limiting**:
+  - Límite: 10 requests/día por IP (para endpoints protegidos).
+  - Acción: Bloqueo automático + Alerta Email al Admin.
+- **Error Handling**:
+  - Dev (DEBUG=True): Stack traces visibles.
+  - Prod (DEBUG=False): Mensaje genérico "Internal Server Error".
 
 ---
 

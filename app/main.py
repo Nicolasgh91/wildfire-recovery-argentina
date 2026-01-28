@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 
 from app.core.config import settings
 from app.core.logging import setup_logging
+from app.core.errors import register_exception_handlers
+from app.core.security import verify_api_key
+from app.core.rate_limiter import check_ip_rate_limit
 from app.api.routes import fires, certificates, audit #, reports, monitoring, citizen
 
 # Setup logging
@@ -46,6 +49,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Register global exception handlers
+register_exception_handlers(app)
+
 # Include routers
 app.include_router(
     fires.router,
@@ -57,7 +63,8 @@ app.include_router(
 app.include_router(
     audit.router,
     prefix=f"{settings.API_V1_PREFIX}/audit",
-    tags=["audit"]
+    tags=["audit"],
+    dependencies=[Depends(verify_api_key), Depends(check_ip_rate_limit)]
 )
 """
 app.include_router(
@@ -69,7 +76,8 @@ app.include_router(
 app.include_router(
     certificates.router,
     prefix=f"{settings.API_V1_PREFIX}/certificates",
-    tags=["certificates"]
+    tags=["certificates"],
+    dependencies=[Depends(verify_api_key), Depends(check_ip_rate_limit)]
 )
 """
 app.include_router(

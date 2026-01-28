@@ -549,11 +549,16 @@ pytest tests/e2e/test_audit_flow.py
 ### Mejores Prácticas Implementadas
 
 - ✅ **RLS Policies**: Row Level Security en Supabase
-- ✅ **Rate Limiting**: 100 req/min por IP (Cloudflare)
+- ✅ **Rate Limiting**: 
+  - **Global**: 100 req/min por IP (Cloudflare/Nginx)
+  - **App-Level**: Bloqueo automático de IP tras 10 intentos fallidos/día + Alerta por Email opcional
+- ✅ **Authentication**: 
+  - API Key requerida para endpoints críticos (`/audit`, `/certificates`)
+  - Header: `X-API-Key: <tu-clave>`
 - ✅ **GEE Credentials**: Never committed, env variables only
 - ✅ **API Versioning**: `/api/v1/` con deprecation policy
 - ✅ **Health Checks**: Componente-level monitoring
-- ✅ **Error Handling**: Retry policies, DLQ, alerting
+- ✅ **Error Handling**: Mensajes sanitizados en producción (sin stack traces)
 
 ### Rate Limits Externos
 
@@ -753,6 +758,14 @@ uvicorn app.main:app --reload --port 8000
 **URL**: https://forestguard.freedynamicdns.org
 **API Docs**: https://forestguard.freedynamicdns.org/docs
 **Infrastructure**: Oracle Cloud VM (Always Free)
+
+## 🔒 Security
+
+### Implemented Controls
+- **Authentication**: `X-API-Key` header required for `/audit` and `/certificates`.
+- **Rate Limiting**: IPs blocked after 10 requests/day. Optional alerts via email.
+- **Error Handling**: Production-safe error messages (no stack traces).
+- **SSL/TLS**: Mandatory HTTPS via Let's Encrypt.
 
 ## 📄 License
 
