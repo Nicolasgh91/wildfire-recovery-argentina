@@ -55,3 +55,7 @@ isort==5.12.0
 mypy==1.7.1
 flake8==6.1.0
 pre-commit==3.5.0
+
+# QR Code and PDF generation
+qrcode[pil]==7.4.2
+fpdf2==2.7.1
