@@ -50,7 +50,7 @@ Todo con una arquitectura moderna, escalable y orientada a APIs.
 
 ## 📚 Documentación
 
-Hemos preparado guías detalladas para todos los perfiles de usuario:
+Guías detalladas para todos los perfiles de usuario:
 
 ### 📘 Manuales de Usuario
 - **Español**: [Manual de Usuario](docs/MANUAL_DE_USUARIO.md)
@@ -68,26 +68,21 @@ Hemos preparado guías detalladas para todos los perfiles de usuario:
 
 ## 🧩 Casos de Uso (11 implementados)
 
-### Core Features
+### Lista Completa de Funcionalidades
 
-| UC | Nombre | Descripción | Estado |
-|----|--------|-------------|--------|
-| **UC-01** | Auditoría Anti-Loteo | Verificar restricciones legales por incendios | ✅ DONE |
-| **UC-02** | Peritaje Judicial | Generar evidencia forense para causas judiciales | 🔜 PENDING |
-| **UC-06** | Reforestación | Monitoreo NDVI de recuperación vegetal (36 meses) | ⏳ IN PROGRESS |
-| **UC-07** | Certificación Legal | Emitir certificados digitales verificables | ✅ DONE |
-| **UC-08** | Cambio de Uso | Detectar construcción/agricultura ilegal post-fuego | 🔜 PENDING |
-| **UC-09** | Denuncias Ciudadanas | Reportes públicos con evidencia satelital | 🔜 PENDING |
-| **UC-10** | Calidad del Dato | Métricas de confiabilidad para peritajes | 🔜 PENDING |
-| **UC-11** | Reportes Históricos | PDFs de incendios en áreas protegidas | 🔜 PENDING |
-
-### Análisis Avanzado (Próximamente)
-
-| UC | Nombre | Estado |
-|----|--------|--------|
-| UC-03 | Alertas Tempranas (Drought Index) | 🔜 PENDING |
-| UC-04 | Alertas por Capacidad de Respuesta | 🔜 PENDING |
-| UC-05 | Tendencias y Proyecciones | 🔜 PENDING |
+| UC | Categoría | Nombre | Descripción | Estado |
+|---|---|---|---|---|
+| **UC-01** | Fiscalización | Auditoría Anti-Loteo | Verificar restricciones legales por incendios | ✅ DONE |
+| **UC-02** | Fiscalización | Peritaje Judicial | Generar evidencia forense para causas judiciales | 🔜 PENDING |
+| **UC-03** | Análisis | Recurrencia de Incendios | Detectar zonas con patrones repetitivos sospechosos | 🔜 PENDING |
+| **UC-04** | Alertas | Capacidad de Carga | Alertas preventivas en parques por afluencia | 🔜 PENDING |
+| **UC-05** | Análisis | Tendencias Históricas | Proyecciones de largo plazo y migración de riesgos | 🔜 PENDING |
+| **UC-06** | Análisis | Reforestación | Monitoreo NDVI de recuperación vegetal (36 meses) | ⏳ IN PROGRESS |
+| **UC-07** | Fiscalización | Certificación Legal | Emitir certificados digitales verificables | ✅ DONE |
+| **UC-08** | Fiscalización | Cambio de Uso | Detectar construcción/agricultura ilegal post-fuego | 🔜 PENDING |
+| **UC-09** | Participación | Denuncias Ciudadanas | Reportes públicos con evidencia satelital | 🔜 PENDING |
+| **UC-10** | Análisis | Calidad del Dato | Métricas de confiabilidad para peritajes | 🔜 PENDING |
+| **UC-11** | Análisis | Reportes Históricos | PDFs de incendios en áreas protegidas | 🔜 PENDING |
 
 ---
 
