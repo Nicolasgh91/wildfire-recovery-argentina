@@ -67,6 +67,12 @@ Guías detalladas para todos los perfiles de usuario:
 - **Español**: [Glosario](docs/glosario.md)
 - **English**: [Glossary](docs/glossary.md)
 
+### 📐 Arquitectura y Diseño
+- [Documentación de Arquitectura](Architecture/forestguard_architecture.md)
+- [Casos de Uso Detallados](Architecture/forestguard_use_cases.md)
+- [Plan del Proyecto](Architecture/PROJECT_PLAN.md)
+- [Manual de Marca (Branding)](Architecture/wildfire_branding.md)
+
 ---
 
 ## 🧩 Casos de Uso (11 implementados)
@@ -667,6 +673,12 @@ We have prepared detailed guides for all user profiles:
 ### 📖 Glossary
 - **English**: [Glossary](docs/glossary.md)
 - **Español**: [Glosario](docs/glosario.md)
+
+### 📐 Architecture & Design
+- [Architecture Documentation](Architecture/forestguard_architecture.md)
+- [Detailed Use Cases](Architecture/forestguard_use_cases.md)
+- [Project Plan](Architecture/PROJECT_PLAN.md)
+- [Branding Guidelines](Architecture/wildfire_branding.md)
 
 ## 🧩 Use Cases (11 Implemented)
 
