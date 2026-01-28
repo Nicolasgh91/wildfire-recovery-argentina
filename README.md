@@ -48,6 +48,8 @@ ForestGuard convierte millones de detecciones satelitales en:
 
 Todo con una arquitectura moderna, escalable y orientada a APIs.
 
+Para más detalles, ver FAQs
+
 ---
 
 ## 🧩 Casos de Uso (11 implementados)

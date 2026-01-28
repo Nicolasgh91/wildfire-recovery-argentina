@@ -725,6 +725,7 @@ Cloudflare R2 (External)
 - **Logs**: journalctl -u forestguard -f
 - **Uptime Monitoring**: Manual (planned: UptimeRobot)
 - **Performance**: Nginx access logs
+- **Docker Log Rotation**: Configured to prevent disk exhaustion (max-size: 10m, max-file: 3)
 
 ### Deployment Pipeline
 ```bash

@@ -8,26 +8,34 @@
 
 ## Step 1: Install Dependencies
 
+## Step 1: Install Dependencies (Oracle Linux)
+
 ```bash
 # Update system
-sudo apt update && sudo apt upgrade -y
+sudo dnf update -y
 
-# Install Python 3.11
-sudo apt install -y python3.11 python3.11-venv python3-pip
+# Enable EPEL and CodeReady Builder (needed for some packages)
+sudo dnf install -y oracle-epel-release-el9
+sudo dnf config-manager --set-enabled ol9_codeready_builder
+
+# Install Python 3.11 and tools
+sudo dnf install -y python3.11 python3.11-devel python3-pip git gcc
 
 # Install Nginx
-sudo apt install -y nginx
+sudo dnf install -y nginx
+sudo systemctl enable nginx
+sudo systemctl start nginx
 
 # Install Redis
-sudo apt install -y redis-server
-sudo systemctl enable redis-server
-sudo systemctl start redis-server
+sudo dnf install -y redis
+sudo systemctl enable redis
+sudo systemctl start redis
 
 # Install Certbot (Let's Encrypt)
-sudo apt install -y certbot python3-certbot-nginx
+sudo dnf install -y certbot python3-certbot-nginx
 
-# Install PostgreSQL client tools (for debugging)
-sudo apt install -y postgresql-client
+# Install PostgreSQL client tools
+sudo dnf install -y postgresql
 ```
 
 ## Step 2: Clone Repository
@@ -35,7 +43,7 @@ sudo apt install -y postgresql-client
 ```bash
 # Create application directory
 sudo mkdir -p /opt/forestguard
-sudo chown ubuntu:ubuntu /opt/forestguard
+sudo chown opc:opc /opt/forestguard
 
 # Clone repository
 cd /opt/forestguard
@@ -55,7 +63,7 @@ pip install -r requirements.txt
 ```bash
 # Create secrets directory
 sudo mkdir -p /opt/secrets
-sudo chown ubuntu:ubuntu /opt/secrets
+sudo chown opc:opc /opt/secrets
 sudo chmod 700 /opt/secrets
 
 # Copy GEE credentials
@@ -94,7 +102,7 @@ sudo cp deployment/forestguard.service /etc/systemd/system/
 
 # Create log directory
 sudo mkdir -p /var/log/forestguard
-sudo chown ubuntu:ubuntu /var/log/forestguard
+sudo chown opc:opc /var/log/forestguard
 
 # Reload systemd
 sudo systemctl daemon-reload

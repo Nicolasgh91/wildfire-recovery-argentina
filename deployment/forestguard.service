@@ -4,7 +4,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
+User=opc
 WorkingDirectory=/opt/forestguard
 ExecStart=/opt/forestguard/venv/bin/gunicorn app.main:app \
     --workers 4 \
