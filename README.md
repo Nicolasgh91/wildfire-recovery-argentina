@@ -6,6 +6,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-blue.svg)](https://www.postgresql.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![Progress](https://img.shields.io/badge/Progress-70%25-green.svg)
 
 ---
 
@@ -37,156 +38,132 @@ ForestGuard convierte millones de detecciones satelitales en:
 * 🧭 **Auditorías geoespaciales** por radio, parcela o ubicación
 * 📜 **Certificados digitales hasheados (PDF)**, verificables públicamente
 * 📊 **Historial histórico nacional (2015–presente)**
+* 🌱 **Monitoreo de recuperación** de vegetación post-incendio
+* 🚧 **Detección de cambios ilegales** de uso del suelo
 
 Todo con una arquitectura moderna, escalable y orientada a APIs.
 
+---
 
+## 🧩 Casos de Uso (11 implementados)
 
-## 🧩 Casos de uso principales
+### Core Features
 
-### 1️⃣ Detección y análisis histórico de incendios
+| UC | Nombre | Descripción | Estado |
+|----|--------|-------------|--------|
+| **UC-01** | Auditoría Anti-Loteo | Verificar restricciones legales por incendios | ✅ DONE |
+| **UC-02** | Peritaje Judicial | Generar evidencia forense para causas judiciales | 🔜 PENDING |
+| **UC-06** | Reforestación | Monitoreo NDVI de recuperación vegetal (36 meses) | ⏳ IN PROGRESS |
+| **UC-07** | Certificación Legal | Emitir certificados digitales verificables | ✅ DONE |
+| **UC-08** | Cambio de Uso | Detectar construcción/agricultura ilegal post-fuego | 🔜 PENDING |
+| **UC-09** | Denuncias Ciudadanas | Reportes públicos con evidencia satelital | 🔜 PENDING |
+| **UC-10** | Calidad del Dato | Métricas de confiabilidad para peritajes | 🔜 PENDING |
+| **UC-11** | Reportes Históricos | PDFs de incendios en áreas protegidas | 🔜 PENDING |
 
-* Consolidación de datos FIRMS (VIIRS / MODIS)
-* Normalización de sensores y métricas térmicas
-* Clustering espacio-temporal para identificar **incendios reales**
+### Análisis Avanzado (Próximamente)
 
-👉 Ideal para análisis ambiental, investigación y periodismo de datos.
+| UC | Nombre | Estado |
+|----|--------|--------|
+| UC-03 | Alertas Tempranas (Drought Index) | 🔜 PENDING |
+| UC-04 | Alertas por Capacidad de Respuesta | 🔜 PENDING |
+| UC-05 | Tendencias y Proyecciones | 🔜 PENDING |
 
 ---
 
-### 2️⃣ Auditoría ambiental por ubicación
+## 🏗️ Arquitectura Unificada
 
-Dado un punto geográfico:
-
-```json
-{
-  "lat": -27.4658,
-  "lon": -58.8346,
-  "radius_meters": 500,
-  "cadastral_id": "..."
-}
-```
-
-ForestGuard responde:
-
-* incendios históricos cercanos
-* recurrencia
-* severidad
-* contexto temporal
-
-👉 Útil para municipios, desarrolladores inmobiliarios, ONGs y ciudadanos.
-
----
-
-### 3️⃣ Certificados legales verificables
-
-ForestGuard puede generar:
-
-* 📄 **Certificados PDF** con branding
-* 🔐 Hash SHA-256 del contenido
-* 🔎 QR de verificación pública
-
-Cada certificado puede descargarse vía API y verificarse externamente.
-
-👉 Aplicable a:
-
-* denuncias ambientales
-* compliance
-* procesos administrativos o legales
-
-
-## 🏗️ Arquitectura (alto nivel)
+ForestGuard utiliza una **arquitectura híbrida API + Workers** con módulos compartidos para eliminar redundancias:
 
 ```text
-┌──────────────┐
-│ NASA FIRMS   │
-│ (VIIRS/MODIS│
-└──────┬───────┘
-       │ ETL
-┌──────▼────────────┐
-│ Ingesta & Normal. │
-└──────┬────────────┘
-       │
-┌──────▼────────────┐
-│ Base Geoespacial  │  PostgreSQL + PostGIS
-└──────┬────────────┘
-       │
-┌──────▼────────────┐
-│ Clustering        │  DBSCAN / heurísticas
-└──────┬────────────┘
-       │
-┌──────▼────────────┐
-│ API REST (FastAPI)│
-└──────┬────────────┘
-       │
-┌──────▼────────────┐
-│ Auditorías / PDFs │
-└───────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                         USUARIO FINAL                            │
+│  (Escribanos, ONGs, Ciudadanos, Fiscales, Investigadores)       │
+└────────────────────┬────────────────────────────────────────────┘
+                     │ HTTPS
+                     ▼
+              CLOUDFLARE CDN
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────────┐
+│              FASTAPI APP (Gunicorn + Uvicorn)                    │
+│  ✅ UC-01: POST /audit/land-use                                 │
+│  ✅ UC-07: POST /certificates/request                           │
+│  🔜 UC-02: POST /reports/judicial                               │
+│  🔜 UC-11: POST /reports/historical-fire                        │
+└────────────────────┬────────────────────────────────────────────┘
+                     │
+         ┌───────────┴────────────┐
+         ▼                        ▼
+┌──────────────────┐    ┌──────────────────────┐
+│   SUPABASE       │    │   CELERY WORKERS     │
+│   PostgreSQL     │    │                      │
+│   + PostGIS      │    │  1️⃣ Ingestion        │
+│                  │    │  2️⃣ VAE (UC-06, 08)  │
+│  📊 14 tables    │    │  3️⃣ Climate          │
+└──────────────────┘    └──────────┬───────────┘
+                                   │
+              ┌────────────────────┴────────────────────┐
+              ▼                    ▼                    ▼
+      ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
+      │ GOOGLE EARTH │    │  NASA FIRMS  │    │  Open-Meteo  │
+      │   ENGINE     │    │ (VIIRS/MODIS)│    │  (ERA5-Land) │
+      │              │    │              │    │              │
+      │ • Sentinel-2 │    │ • Fire spots │    │ • Climate    │
+      │ • NDVI       │    │ • 20y history│    │ • Drought    │
+      └──────────────┘    └──────────────┘    └──────────────┘
 ```
 
----
+### 🆕 Módulos Compartidos (Unified Architecture)
 
-## 🗄️ Modelo de datos (resumen)
+#### Vegetation Analysis Engine (VAE)
+Módulo centralizado para análisis de vegetación usando NDVI:
+- **UC-06**: Monitoreo de recuperación (reforestación)
+- **UC-08**: Detección de cambios ilegales de uso
 
-Entidades principales:
+**Ventajas**: Evita duplicación de procesamiento GEE, mantiene consistencia metodológica.
 
-* **fire_detections**: detecciones satelitales normalizadas
-* **fire_events**: incendios consolidados (cluster)
-* **regions**: regiones / áreas geográficas
-* **certificates**: certificados emitidos y verificables
+#### Evidence Reporting Service (ERS)
+Motor unificado para generación de reportes verificables:
+- **UC-09**: Paquetes de evidencia para denuncias
+- **UC-11**: Reportes históricos en áreas protegidas
+- **UC-02**: Peritajes judiciales
 
-Relación conceptual:
-
-```text
-fire_detections ──▶ fire_events
-        │                 │
-        ▼                 ▼
-     regions         certificates
-```
-
-El diseño prioriza:
-
-* trazabilidad
-* reproducibilidad
-* auditoría histórica
+**Ventajas**: PDFs homogéneos, verificación criptográfica centralizada, auditoría consistente.
 
 ---
 
-## 🛠️ Stack tecnológico
+## 🛠️ Stack Tecnológico
 
-* **Backend**: Python, FastAPI
-* **DB**: PostgreSQL + PostGIS (Supabase)
-* **ETL**: Python, Pandas
-* **Clustering**: scikit-learn (DBSCAN)
-* **PDFs**: FPDF (branding + QR + hash)
-* **Infra**: Docker-ready, cloud-agnostic
+### Backend
+| Componente | Tecnología | Versión |
+|------------|------------|---------|
+| API Framework | FastAPI + Uvicorn | 0.104+ |
+| ORM | SQLAlchemy + GeoAlchemy2 | 2.0+ |
+| Async Tasks | Celery + Redis | 5.3+ |
+| PDF Generation | WeasyPrint | - |
+
+### Database & Storage
+| Componente | Tecnología | Límites |
+|------------|------------|---------|
+| Database | PostgreSQL 14 + PostGIS 3.0 | 500 MB (Supabase free) |
+| Object Storage | Cloudflare R2 | 10 GB free |
+| Cache/Queue | Redis | - |
+
+### Data Sources
+| Fuente | Propósito | Frecuencia |
+|--------|-----------|------------|
+| NASA FIRMS (VIIRS/MODIS) | Detección de incendios | Diaria |
+| Google Earth Engine (GEE) | Imágenes Sentinel-2, NDVI | Mensual |
+| Open-Meteo (ERA5-Land) | Datos climáticos históricos | Batch |
+
+### DevOps
+| Componente | Tecnología |
+|------------|------------|
+| Containerization | Docker + Docker Compose |
+| CI/CD | GitHub Actions (planned) |
+| Deployment | Oracle Cloud / Railway |
 
 ---
-
-## 🌍 Por qué ForestGuard importa
-
-* Los incendios forestales ya no son eventos aislados: son **riesgo sistémico**.
-* La transparencia ambiental es clave para políticas públicas y privadas.
-* Los datos abiertos solo generan impacto cuando se transforman en evidencia.
-
-**ForestGuard convierte datos en decisiones, y decisiones en responsabilidad.**
-
----
-
-## 💡 Estado del proyecto
-
-* ✔️ Pipeline histórico completo (2015–presente)
-* ✔️ Ingesta incremental diaria
-* ✔️ Clustering de incendios
-* ✔️ Auditoría geoespacial
-* ✔️ Certificados PDF verificables
-* 🔜 Dashboard público / API monetizable
-
-
-
-
-
-
 
 ## 🚀 Quick Start
 
@@ -194,37 +171,49 @@ El diseño prioriza:
 
 - Python 3.11+
 - PostgreSQL 14+ con PostGIS
+- Redis (para Celery)
 - Cuenta en [Supabase](https://supabase.com) (base de datos)
+- Cuenta Google Cloud con Earth Engine API habilitada
 
 ### Instalación Local
 
 ```bash
 # 1. Clonar repositorio
-git clone https://github.com/tu-usuario/forestguard-api.git
-cd forestguard-api
+git clone https://github.com/Nicolasgh91/wildfire-recovery-argentina.git
+cd wildfire-recovery-argentina
 
 # 2. Crear entorno virtual
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate  # Windows: venv\\Scripts\\activate
 
 # 3. Instalar dependencias
 pip install -r requirements.txt
 
 # 4. Configurar variables de entorno
 cp .env.example .env
-# Editar .env con tus credenciales de Supabase
+# Editar .env con credenciales:
+# - Supabase (DB_HOST, DB_PASSWORD)
+# - NASA FIRMS API key
+# - GEE service account JSON path
+# - Cloudflare R2 credentials
 
-# 5. Iniciar servidor
+# 5. Cargar schema en Supabase
+# Ejecutar: database/schema_v0.1.sql en Supabase SQL Editor
+
+# 6. Iniciar servicios (Docker)
+docker-compose up -d
+
+# 7. Iniciar API
 uvicorn app.main:app --reload --port 8000
 ```
 
 ### Verificar instalación
 
 ```bash
-# Health check
+# Health check (verifica DB, Redis, GEE, R2)
 curl http://localhost:8000/health
 
-# Documentación interactiva
+# Documentación interactiva OpenAPI
 open http://localhost:8000/docs
 ```
 
@@ -232,13 +221,14 @@ open http://localhost:8000/docs
 
 ## 📚 API Endpoints
 
-### Auditoría Legal (UC-01)
+### Core Endpoints
 
+#### Auditoría Legal (UC-01) ✅
 ```bash
 POST /api/v1/audit/land-use
 ```
 
-Verifica si un terreno tiene restricciones por incendios.
+Verifica si un terreno tiene restricciones por incendios históricos.
 
 **Request:**
 ```json
@@ -260,81 +250,76 @@ Verifica si un terreno tiene restricciones por incendios.
 }
 ```
 
-### Certificados (UC-07)
-
+#### Certificados (UC-07) ✅
 ```bash
-# Emitir certificado
-POST /api/v1/certificates/issue
+# Solicitar certificado
+POST /api/v1/certificates/request
 
 # Descargar PDF
 GET /api/v1/certificates/download/{certificate_number}
 
-# Verificar autenticidad
+# Verificar autenticidad (hash SHA-256)
 GET /api/v1/certificates/verify/{certificate_number}
 ```
 
----
-
-## 🏗️ Arquitectura
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Frontend      │────▶│   FastAPI       │────▶│   Supabase      │
-│   (React)       │     │   (Python)      │     │   (PostgreSQL)  │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-                               │
-                               ▼
-                        ┌─────────────────┐
-                        │   NASA FIRMS    │
-                        │   (Datos)       │
-                        └─────────────────┘
+#### Health Check ✅
+```bash
+GET /health
 ```
 
-### Stack Tecnológico
-
-| Componente | Tecnología |
-|------------|------------|
-| API | FastAPI + Uvicorn |
-| Base de Datos | PostgreSQL + PostGIS (Supabase) |
-| ORM | SQLAlchemy + GeoAlchemy2 |
-| PDFs | FPDF2 + QRCode |
-| Deploy | Render / Docker |
+Verifica estado de todos los componentes:
+- Database (Supabase)
+- Redis
+- Google Earth Engine
+- Cloudflare R2
 
 ---
 
 ## 📁 Estructura del Proyecto
 
 ```
-forestguard/
-├── app/
-│   ├── api/
-│   │   ├── routes/
-│   │   │   ├── audit.py        # UC-01: Auditoría
-│   │   │   ├── certificates.py # UC-07: Certificados
-│   │   │   └── fires.py        # CRUD incendios
-│   │   └── deps.py             # Dependencias
-│   ├── core/
-│   │   ├── config.py           # Configuración
-│   │   └── logging.py          # Logging
-│   ├── models/                 # SQLAlchemy models
-│   ├── schemas/                # Pydantic schemas
-│   ├── services/               # Lógica de negocio
-│   └── main.py                 # Entry point
-├── scripts/
-│   ├── load_firms_incremental.py  # Carga diaria FIRMS
-│   ├── cluster_fire_events.py     # Clustering
-│   └── cross_fire_protected_areas.py  # Cruce legal
-├── Dockerfile
-├── render.yaml
-├── requirements.txt
-└── README.md
+wildfire-recovery-argentina/
+├── app/                          # Backend FastAPI
+│   ├── api/routes/
+│   │   ├── audit.py             # ✅ UC-01
+│   │   ├── certificates.py      # ✅ UC-07
+│   │   ├── fires.py             # ✅ CRUD
+│   │   ├── health.py            # ✅ Health check
+│   │   ├── historical.py        # 🔜 UC-11
+│   │   ├── reports.py           # 🔜 UC-02
+│   │   ├── citizen.py           # 🔜 UC-09
+│   │   └── monitoring.py        # 🔜 UC-06
+│   ├── services/
+│   │   ├── gee_service.py       # ✅ Google Earth Engine
+│   │   ├── vae_service.py       # 🔜 Vegetation Analysis Engine
+│   │   ├── ers_service.py       # 🔜 Evidence Reporting Service
+│   │   ├── spatial_service.py   # ✅ PostGIS queries
+│   │   └── pdf_composer.py      # 🔜 PDF generation
+│   ├── models/                  # SQLAlchemy ORM
+│   ├── schemas/                 # Pydantic validation
+│   └── main.py                  # Entry point
+├── workers/                      # Celery workers
+│   ├── tasks/
+│   │   ├── ingestion.py         # ✅ NASA FIRMS
+│   │   ├── clustering.py        # ✅ DBSCAN
+│   │   ├── recovery.py          # 🔜 VAE: UC-06
+│   │   ├── destruction.py       # 🔜 VAE: UC-08
+│   │   └── climate.py           # 🔜 Open-Meteo
+├── database/
+│   ├── schema_v0.1.sql          # ✅ Schema completo (14 tablas)
+│   └── supabase.sql             # ✅ RLS policies
+├── Architecture/                 # 📖 Documentación
+│   ├── forestguard_use_cases.md # ✅ 11 casos de uso
+│   ├── forestguard_architecture.md # ✅ Arquitectura técnica
+│   └── PROJECT_PLAN.md          # ✅ Roadmap (70% complete)
+└── docker/                       # Docker configs
 ```
 
 ---
 
 ## 🔧 Configuración
 
-### Variables de Entorno
+### Variables de Entorno Requeridas
 
 ```bash
 # Base de datos (Supabase)
@@ -342,77 +327,86 @@ DB_HOST=db.xxxx.supabase.co
 DB_PORT=5432
 DB_NAME=postgres
 DB_USER=postgres
-DB_PASSWORD=tu_password
+DB_PASSWORD=tu_password_supabase
+
+# Google Earth Engine
+GEE_SERVICE_ACCOUNT_JSON=/path/to/gee-service-account.json
+# O como variable de entorno (base64)
+# GEE_SERVICE_ACCOUNT_JSON=eyJ0eXBlIjoi...
+
+# Cloudflare R2
+R2_ACCESS_KEY_ID=tu_access_key
+R2_SECRET_ACCESS_KEY=tu_secret_key
+R2_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
+R2_BUCKET_NAME=forestguard-images
+
+# NASA FIRMS
+FIRMS_API_KEY=tu_firms_api_key
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
 
 # Aplicación
 ENVIRONMENT=production
 DEBUG=false
-SECRET_KEY=tu_clave_secreta
-
-# NASA FIRMS (para actualizaciones)
-FIRMS_API_KEY=tu_api_key
+SECRET_KEY=tu_clave_secreta_aleatoria
 ```
 
-### Obtener API Key de NASA FIRMS
+### Obtener Credenciales
 
+#### NASA FIRMS API Key
 1. Ir a https://firms.modaps.eosdis.nasa.gov/api/area/
 2. Registrarse (gratis)
 3. Copiar el API key
+
+#### Google Earth Engine
+1. Crear proyecto en Google Cloud Console
+2. Habilitar Earth Engine API
+3. Crear Service Account
+4. Descargar JSON key
+5. Guardar en `/secrets/gee-service-account.json` (fuera del repo)
+
+#### Cloudflare R2
+1. Crear cuenta en Cloudflare
+2. Crear bucket R2
+3. Generar API token con permisos de lectura/escritura
 
 ---
 
 ## 🚢 Deploy
 
-### Oracle Cloud
-
-1. Crear cuenta en [Render](https://render.com)
-2. Conectar repositorio de GitHub
-3. Crear nuevo "Web Service"
-4. Seleccionar "Docker"
-5. Configurar variables de entorno
-6. Deploy automático ✅
-
-### Docker Manual
+### Docker (Recomendado)
 
 ```bash
-# Build
-docker build -t forestguard-api .
+# Desarrollo
+docker-compose up -d
 
-# Run
-docker run -p 8000:8000 --env-file .env forestguard-api
+# Producción
+docker-compose -f docker-compose.prod.yml up -d
 ```
+
+### Oracle Cloud / Railway
+
+1. Conectar repositorio GitHub
+2. Configurar variables de entorno
+3. Deploy automático con Dockerfile
+4. Configurar DNS y SSL
 
 ---
 
-## 📊 Scripts de Datos
+## 📊 Scripts de Mantenimiento
 
-### Carga Incremental Diaria
+### Carga Incremental de Datos
 
 ```bash
 # Descargar últimos 2 días de FIRMS
 python scripts/load_firms_incremental.py
 
-# O especificar días
-python scripts/load_firms_incremental.py --days 3
-```
+# Clustering de nuevas detecciones
+python workers/tasks/clustering.py --mode incremental
 
-### Clustering de Eventos
-
-```bash
-# Procesar rango de fechas
-python scripts/cluster_fire_events_parallel.py \
-  --start-date 2024-01-01 \
-  --end-date 2024-12-31
-```
-
-### Cruce con Áreas Protegidas
-
-```bash
-# Batch completo (primera vez)
-python scripts/cross_fire_protected_areas.py --mode batch
-
-# Incremental (diario)
-python scripts/cross_fire_protected_areas.py --mode incremental
+# Enriquecer con datos climáticos
+python workers/tasks/climate.py --days 7
 ```
 
 ---
@@ -421,50 +415,87 @@ python scripts/cross_fire_protected_areas.py --mode incremental
 
 ### Ley 26.815 Art. 22 bis
 
-| Tipo de Zona | Prohibición |
-|--------------|-------------|
-| Bosques nativos | 60 años |
-| Áreas protegidas | 60 años |
-| Zonas agrícolas | 30 años |
+| Tipo de Zona | Prohibición | Aplicable a |
+|--------------|-------------|-------------|
+| Bosques nativos | **60 años** | Cambio de uso, loteo, construcción |
+| Áreas protegidas | **60 años** | Toda actividad extractiva |
+| Zonas agrícolas | **30 años** | Cambio de uso productivo |
 
-La prohibición impide:
-- Cambio de uso del suelo
-- Loteo inmobiliario
-- Construcción
-- Agricultura intensiva
+**Sanciones**: Multas, nulidad de actos, responsabilidad penal por incumplimiento.
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-# Ejecutar tests
+# Ejecutar todos los tests
 pytest
 
-# Con coverage
+# Con coverage (objetivo: >80%)
 pytest --cov=app --cov-report=html
+
+# Solo tests de integración
+pytest tests/integration/
+
+# E2E de UC-01
+pytest tests/e2e/test_audit_flow.py
 ```
 
 ---
 
-## 📈 Roadmap
+## 📈 Roadmap & Estado
 
-- [x] **MVP Core**
-  - [x] Carga de datos FIRMS (2015-2025)
-  - [x] Clustering de eventos
-  - [x] Cruce con áreas protegidas
-  - [x] Endpoint de auditoría
-  - [x] Generación de certificados PDF
+### ✅ Completado (70%)
 
-- [ ] **Pre-Frontend**
-  - [ ] Datos climáticos (Open-Meteo)
-  - [ ] Monitoreo NDVI
-  - [ ] Denuncias ciudadanas (UC-09)
+- [x] Schema PostgreSQL v0.2 (14 tablas)
+- [x] Casos de uso documentados (11 UCs)
+- [x] Arquitectura unificada (VAE + ERS)
+- [x] Validación arquitectónica completa
+- [x] Carga histórica NASA FIRMS (2015-2025)
+- [x] Clustering de eventos (DBSCAN)
+- [x] Integración Google Earth Engine
+- [x] Endpoints UC-01 (Auditoría)
+- [x] Endpoints UC-07 (Certificados)
+- [x] Health checks completos
+- [x] Docker setup
+- [x] Security hardening & RLS policies
 
-- [ ] **Frontend**
-  - [ ] Dashboard React + Leaflet
-  - [ ] Formularios de consulta
-  - [ ] Mapa interactivo
+### ⏳ En Desarrollo (20%)
+
+- [ ] VAE Service (UC-06, UC-08)
+- [ ] ERS Service (UC-09, UC-11)
+- [ ] Endpoints faltantes (UC-02, UC-06, UC-09, UC-11)
+- [ ] Workers Celery (recovery, destruction)
+- [ ] Datos de áreas protegidas
+
+### 🔜 Próximos (10%)
+
+- [ ] Frontend React + Leaflet
+- [ ] Tests E2E completos
+- [ ] CI/CD (GitHub Actions)
+- [ ] Deploy a producción
+- [ ] Monitoreo Prometheus
+
+---
+
+## 🔒 Seguridad
+
+### Mejores Prácticas Implementadas
+
+- ✅ **RLS Policies**: Row Level Security en Supabase
+- ✅ **Rate Limiting**: 100 req/min por IP (Cloudflare)
+- ✅ **GEE Credentials**: Never committed, env variables only
+- ✅ **API Versioning**: `/api/v1/` con deprecation policy
+- ✅ **Health Checks**: Componente-level monitoring
+- ✅ **Error Handling**: Retry policies, DLQ, alerting
+
+### Rate Limits Externos
+
+| Servicio | Límite Free Tier |
+|----------|------------------|
+| Google Earth Engine | 50,000 requests/day |
+| Supabase | 500 MB storage, 60 connections |
+| Cloudflare R2 | 10 GB storage, unlimited egress |
 
 ---
 
@@ -476,6 +507,12 @@ pytest --cov=app --cov-report=html
 4. Push al branch (`git push origin feature/nueva-funcionalidad`)
 5. Crear Pull Request
 
+**Áreas que necesitan ayuda**:
+- Frontend React (UI/UX)
+- Tests E2E
+- Documentación de APIs
+- Optimización de queries PostGIS
+
 ---
 
 ## 📄 Licencia
@@ -486,19 +523,35 @@ MIT License - Ver [LICENSE](LICENSE) para detalles.
 
 ## 👨‍💻 Autor
 
-**Nicolás Gabriel Hruszczak** - Analista Funcional
+**Nicolás Gabriel Hruszczak**  
+Business Analyst / Full-Stack Developer
+
+📧 Email: nicolasgh91@gmail.com  
+🔗 GitHub: [@Nicolasgh91](https://github.com/Nicolasgh91)  
+💼 LinkedIn: [Nicolas Hruszczak](https://www.linkedin.com/in/nicolas-hruszczak/)
 
 ---
 
 ## 🙏 Agradecimientos
 
-- **NASA FIRMS** - Datos de detección de incendios
-- **Supabase** - Base de datos PostgreSQL
-- **FastAPI** - Framework web
+- **NASA FIRMS** - Datos abiertos de detección de incendios
+- **Google Earth Engine** - Procesamiento satelital server-side
+- **Supabase** - Base de datos PostgreSQL + PostGIS
+- **FastAPI** - Framework web moderno
+- **Cloudflare** - CDN y object storage (R2)
 
+---
 
-## 🤝 Contacto y Contribuciones
-Este es un proyecto de código abierto desarrollado para proteger el patrimonio natural argentino.
+## 🌍 Por qué ForestGuard importa
 
-**Última actualización:** Enero 2025  
-**Versión:** 1.0.0
+Los incendios forestales ya no son eventos aislados: son **riesgo sistémico**. La transparencia ambiental es clave para políticas públicas efectivas. Los datos abiertos solo generan impacto cuando se transforman en **evidencia accionable**.
+
+**ForestGuard convierte datos en decisiones, y decisiones en responsabilidad.**
+
+---
+
+**Última actualización:** Enero 2026  
+**Versión:** 2.0.0  
+**Progreso:** 70% completado
+
+[![Star on GitHub](https://img.shields.io/github/stars/Nicolasgh91/wildfire-recovery-argentina?style=social)](https://github.com/Nicolasgh91/wildfire-recovery-argentina)
