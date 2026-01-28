@@ -32,7 +32,18 @@ class CertificateRequest(BaseModel):
     requester_email: str
 
 
-@router.post("/issue")
+@router.post(
+    "/issue",
+    summary="Issue wildfire certificate",
+    description="""
+    Creates a wildfire certificate record for a fire event and recipient.
+    The PDF is generated on demand during download.
+    
+    ---
+    Crea un registro de certificado de quema para un evento y un destinatario.
+    El PDF se genera bajo demanda al descargar.
+    """
+)
 async def issue_certificate(
     request: CertificateRequest,
     req: Request,
@@ -95,7 +106,16 @@ async def issue_certificate(
     }
 
 
-@router.get("/download/{certificate_number}")
+@router.get(
+    "/download/{certificate_number}",
+    summary="Download certificate PDF",
+    description="""
+    Generates and returns the certificate PDF for the provided certificate number.
+    
+    ---
+    Genera y devuelve el PDF del certificado para el número indicado.
+    """
+)
 def download_pdf(
     certificate_number: str, 
     req: Request, 
@@ -166,7 +186,18 @@ def download_pdf(
     )
 
 
-@router.get("/verify/{certificate_number}")
+@router.get(
+    "/verify/{certificate_number}",
+    summary="Verify certificate",
+    description="""
+    Public verification endpoint for QR scans. Confirms whether the certificate is valid
+    and returns key certificate metadata.
+    
+    ---
+    Endpoint público de verificación para QR. Confirma si el certificado es válido
+    y devuelve metadatos clave del certificado.
+    """
+)
 def verify_certificate(certificate_number: str, db: Session = Depends(get_db)):
     """
     Endpoint público que abre el celular al escanear el QR.

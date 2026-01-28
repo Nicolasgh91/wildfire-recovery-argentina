@@ -11,7 +11,19 @@ from app.schemas.fire import FireEventRead
 
 router = APIRouter()
 
-@router.get("/", response_model=List[FireEventRead])
+@router.get(
+    "/",
+    response_model=List[FireEventRead],
+    summary="List fire events",
+    description="""
+    Retrieves clustered wildfire events with optional filtering by date range,
+    significance, and province. Supports pagination via skip/limit.
+    
+    ---
+    Recupera eventos de incendios agrupados con filtros opcionales por fechas,
+    significancia y provincia. Soporta paginación con skip/limit.
+    """
+)
 def read_fires(
     db: Session = Depends(deps.get_db),
     skip: int = 0,
@@ -49,7 +61,18 @@ def read_fires(
     
     return fires
 
-@router.get("/stats", tags=["stats"])
+@router.get(
+    "/stats",
+    tags=["stats"],
+    summary="Fire statistics",
+    description="""
+    Returns aggregate fire statistics including total events, significant events,
+    and year-by-year counts.
+    
+    ---
+    Devuelve estadísticas agregadas de incendios: total, significativos y conteo por año.
+    """
+)
 def read_fire_stats(db: Session = Depends(deps.get_db)):
     """
     Estadísticas simples (Sin caché por ahora para probar en local)
@@ -69,7 +92,17 @@ def read_fire_stats(db: Session = Depends(deps.get_db)):
         "by_year": {int(year): count for year, count in years}
     }
 
-@router.get("/{fire_id}", response_model=FireEventRead)
+@router.get(
+    "/{fire_id}",
+    response_model=FireEventRead,
+    summary="Fire event detail",
+    description="""
+    Retrieves details for a single fire event by its ID.
+    
+    ---
+    Obtiene el detalle de un evento de incendio por su ID.
+    """
+)
 def read_fire_detail(
     fire_id: str,
     db: Session = Depends(deps.get_db)

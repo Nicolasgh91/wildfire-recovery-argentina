@@ -86,7 +86,16 @@ app.include_router(
 """
 
 # Health check endpoint
-@app.get("/health")
+@app.get(
+    "/health",
+    summary="Health check",
+    description="""
+    Returns service health metadata for monitoring and uptime checks.
+    
+    ---
+    Devuelve metadatos de salud del servicio para monitoreo y checks de uptime.
+    """
+)
 async def health_check():
     """Health check endpoint"""
     return {
@@ -97,7 +106,16 @@ async def health_check():
 
 
 # Root endpoint
-@app.get("/")
+@app.get(
+    "/",
+    summary="API root",
+    description="""
+    Returns basic API metadata and links to documentation and health endpoints.
+    
+    ---
+    Devuelve metadatos básicos de la API y enlaces a documentación y health.
+    """
+)
 async def root():
     """Root endpoint with API info"""
     return {
