@@ -44,3 +44,9 @@ Columna processing_error con etiqueta "ALERTA LEGAL: Afecta [Parque]".
 
 🛠️ Mantenimiento de Tablas Base
 Antes de correr el pipeline, asegúrate de que las tablas estáticas estén cargadas.
+
+
+## Productivo - Cambios en local y envio a produccion
+1. PC local → commit + push
+2. VM → git pull origin main
+3. VM → docker compose up -d --build

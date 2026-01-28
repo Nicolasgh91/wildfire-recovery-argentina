@@ -58,7 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_fire_detections_high_conf ON fire_detections(conf
 CREATE INDEX IF NOT EXISTS idx_fire_detections_unprocessed ON fire_detections(is_processed) 
     WHERE is_processed = FALSE;
 
-COMMENT ON TABLE fire_detections IS 'Detecciones individuales de focos de calor de NASA FIRMS (MODIS/VIIRS). Datos crudos sin procesar.';
+COMMENT ON TABLE fire_detections IS 'Detecciones individuales de focos de calor de NASA FIRMS (MODIS/VIIRS). Datos crudos sin procesar. RETENTION: Mantener toda la data histórica (crítico para análisis forense).';
 COMMENT ON COLUMN fire_detections.confidence_normalized IS 'Confianza normalizada 0-100. MODIS l/n/h -> 33/66/100, VIIRS usa valor directo.';
 
 -- =============================================================================
@@ -124,6 +124,23 @@ DROP TRIGGER IF EXISTS fire_events_updated_at ON fire_events;
 CREATE TRIGGER fire_events_updated_at 
     BEFORE UPDATE ON fire_events
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Data validation trigger: Ensure end_date >= start_date
+CREATE OR REPLACE FUNCTION validate_fire_event_dates()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.end_date < NEW.start_date THEN
+        RAISE EXCEPTION 'end_date (%) cannot be before start_date (%)', 
+            NEW.end_date, NEW.start_date;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS fire_events_validate_dates ON fire_events;
+CREATE TRIGGER fire_events_validate_dates
+    BEFORE INSERT OR UPDATE ON fire_events
+    FOR EACH ROW EXECUTE FUNCTION validate_fire_event_dates();
 
 -- FK de fire_detections a fire_events (después de crear fire_events)
 ALTER TABLE fire_detections 
@@ -243,7 +260,7 @@ CREATE TABLE IF NOT EXISTS climate_data (
 CREATE INDEX IF NOT EXISTS idx_climate_data_lookup ON climate_data(reference_date, spatial_cluster_id);
 CREATE INDEX IF NOT EXISTS idx_climate_data_date ON climate_data(reference_date DESC);
 
-COMMENT ON TABLE climate_data IS 'Datos climáticos históricos de ERA5-Land (Open-Meteo) para contexto forense.';
+COMMENT ON TABLE climate_data IS 'Datos climáticos históricos de ERA5-Land (Open-Meteo) para contexto forense. RETENTION: Indefinido (datos críticos para peritaje).';
 
 -- Relación fuego-clima
 CREATE TABLE IF NOT EXISTS fire_climate_associations (
@@ -301,7 +318,7 @@ CREATE INDEX IF NOT EXISTS idx_satellite_images_type ON satellite_images(image_t
 CREATE INDEX IF NOT EXISTS idx_satellite_images_quality ON satellite_images(quality_score) 
     WHERE quality_score IN ('excellent', 'good');
 
-COMMENT ON TABLE satellite_images IS 'Imágenes Sentinel-2 (pre/post fuego) almacenadas en Cloudflare R2.';
+COMMENT ON TABLE satellite_images IS 'Imágenes Sentinel-2 (pre/post fuego) almacenadas en Cloudflare R2. RETENTION: 5 años (archival a storage frío después).';
 
 -- Seguimiento de recuperación de vegetación (UC-06)
 CREATE TABLE IF NOT EXISTS vegetation_monitoring (
@@ -354,6 +371,9 @@ CREATE INDEX IF NOT EXISTS idx_vegetation_monitoring_fire ON vegetation_monitori
 CREATE INDEX IF NOT EXISTS idx_vegetation_monitoring_month ON vegetation_monitoring(month_number);
 CREATE INDEX IF NOT EXISTS idx_vegetation_monitoring_activity ON vegetation_monitoring(human_activity_detected) 
     WHERE human_activity_detected = TRUE;
+-- Performance optimization: Composite index for time-series queries
+CREATE INDEX IF NOT EXISTS idx_vegetation_monitoring_composite 
+    ON vegetation_monitoring(fire_event_id, monitoring_date DESC);
 
 COMMENT ON TABLE vegetation_monitoring IS 'Seguimiento mensual de recuperación de vegetación post-incendio (NDVI).';
 
@@ -454,7 +474,44 @@ CREATE INDEX IF NOT EXISTS idx_land_use_audits_date ON land_use_audits(queried_a
 CREATE INDEX IF NOT EXISTS idx_land_use_audits_violations ON land_use_audits(is_violation) WHERE is_violation = TRUE;
 CREATE INDEX IF NOT EXISTS idx_land_use_audits_ip ON land_use_audits(user_ip, queried_at);
 
-COMMENT ON TABLE land_use_audits IS 'UC-01: Log de consultas de usuarios sobre cambio de uso del suelo (auditoría legal).';
+COMMENT ON TABLE land_use_audits IS 'UC-01: Log de consultas de usuarios sobre cambio de uso del suelo (auditoría legal). RETENTION: 7 años (requisito legal).';
+
+-- =============================================================================
+-- UC-12: HISTORICAL REPORTS (Log de reportes generados)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS historical_report_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- Configuración del reporte
+    protected_area_id UUID REFERENCES protected_areas(id),
+    date_range_start DATE NOT NULL,
+    date_range_end DATE NOT NULL,
+    report_frequency VARCHAR(20) DEFAULT 'monthly', -- daily, monthly, annual
+    
+    -- Resultados
+    fires_found_count INTEGER,
+    affected_area_hectares NUMERIC,
+    
+    -- Output
+    report_pdf_url TEXT,
+    verification_hash VARCHAR(64),
+    
+    -- Metadata
+    requester_user_id UUID, -- Si hay auth
+    requested_at TIMESTAMPTZ DEFAULT NOW(),
+    generation_duration_ms INTEGER,
+    
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_hist_reports_area ON historical_report_requests(protected_area_id);
+CREATE INDEX IF NOT EXISTS idx_hist_reports_date ON historical_report_requests(requested_at DESC);
+-- Performance optimization: Composite index for date range queries
+CREATE INDEX IF NOT EXISTS idx_hist_reports_date_range 
+    ON historical_report_requests(date_range_start, date_range_end);
+
+COMMENT ON TABLE historical_report_requests IS 'UC-12: Log de solicitudes de reportes históricos de incendios (Evidence Reporting Service).';
 
 -- =============================================================================
 -- UC-07: LAND CERTIFICATES (Certificación legal)
@@ -769,6 +826,7 @@ ALTER TABLE protected_areas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE land_use_audits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE land_certificates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE citizen_reports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE historical_report_requests ENABLE ROW LEVEL SECURITY;
 
 -- Políticas de lectura pública para datos de incendios
 CREATE POLICY "fire_events_public_read" ON fire_events FOR SELECT USING (true);
@@ -781,6 +839,9 @@ CREATE POLICY "land_certificates_public_read" ON land_certificates FOR SELECT US
 
 -- Denuncias ciudadanas: solo las públicas son visibles
 CREATE POLICY "citizen_reports_public_read" ON citizen_reports FOR SELECT USING (is_public = true);
+
+-- Reportes históricos: lectura pública
+CREATE POLICY "historical_reports_public_read" ON historical_report_requests FOR SELECT USING (true);
 
 -- =============================================================================
 -- VERIFICACIÓN FINAL
