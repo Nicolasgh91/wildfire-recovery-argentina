@@ -677,7 +677,72 @@ Require new major version (e.g., `/api/v2/`):
 
 ---
 
-## ✅ Checklist de Implementación Completa
+## 🌐 Producción
+
+### Estado Actual
+- **Status**: ✅ LIVE EN PRODUCCIÓN
+- **URL Pública**: https://forestguard.freedynamicdns.org
+- **API Docs**: https://forestguard.freedynamicdns.org/docs
+- **Health Check**: https://forestguard.freedynamicdns.org/health
+
+### Infraestructura
+
+**Provider**: Oracle Cloud (Always Free Tier)  
+**Ubicación**: São Paulo (GRU)  
+**VM Shape**: Ampere A1 Compute (ARM64)  
+**Recursos**:  
+- 1 OCPU (Ampere CPU core)
+- 6 GB RAM
+- 50 GB Boot Volume
+- 10 TB Outbound Traffic/month (free)
+
+**Stack de Producción**:
+```
+Internet
+  │
+  │ HTTPS (443)
+  │ SSL: Let's Encrypt (auto-renewal)
+  ↓
+FreeDynamicDNS
+  │
+  ↓
+Nginx (Reverse Proxy)
+  │
+  │ Proxy pass to :8000
+  ↓
+Gunicorn + Uvicorn Workers
+  │
+  │ 4 workers (FastAPI)
+  ↓
+Supabase PostgreSQL (External)
+  │
+  │ PostGIS queries
+Cloudflare R2 (External)
+```
+
+### Monitoreo
+- **Process Manager**: systemd
+- **Logs**: journalctl -u forestguard -f
+- **Uptime Monitoring**: Manual (planned: UptimeRobot)
+- **Performance**: Nginx access logs
+
+### Deployment Pipeline
+```bash
+# Actualizar código
+cd /opt/forestguard
+git pull origin main
+
+# Reiniciar servicio
+sudo systemctl restart forestguard
+
+# Verificar status
+sudo systemctl status forestguard
+curl https://forestguard.freedynamicdns.org/health
+```
+
+---
+
+## 📋 Checklist de Implementación Completa
 
 - [x] Schema PostgreSQL v3.0
 - [x] Modelos SQLAlchemy

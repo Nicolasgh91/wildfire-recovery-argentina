@@ -20,6 +20,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Redis (Message Broker for Celery)
   redis:
@@ -34,6 +39,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # FastAPI Application
   api:
@@ -56,6 +66,11 @@ services:
       - ./scripts:/app/scripts
       - ./data:/app/data
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Celery Worker (Async tasks)
   worker:
@@ -76,6 +91,11 @@ services:
       - ./workers:/app/workers
       - ./data:/app/data
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Celery Beat (Scheduled tasks - optional)
   beat:
@@ -91,6 +111,11 @@ services:
     volumes:
       - ./workers:/app/workers
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Flower (Celery monitoring - optional)
   flower:
@@ -107,6 +132,11 @@ services:
       - redis
       - worker
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Nginx (Reverse Proxy)
   nginx:
@@ -119,6 +149,11 @@ services:
     depends_on:
       - api
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:

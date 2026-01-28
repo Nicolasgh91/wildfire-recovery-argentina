@@ -238,12 +238,13 @@
 ### 6.2 Deploy
 | # | Tarea | Subtarea | Prioridad | Estado | Estimación |
 |---|-------|----------|-----------|--------|------------|
-| 6.2.1 | Configurar Cloudflare R2 | Bucket + CORS | 🔴 Alta | 🔜 PENDING | 30 min |
-| 6.2.2 | Deploy API (Railway/Fly.io) | O Oracle Cloud | 🔴 Alta | 🔜 PENDING | 2h |
-| 6.2.3 | Deploy Frontend (Vercel) | Build + env vars | 🔴 Alta | 🔜 PENDING | 1h |
-| 6.2.4 | SSL/DNS | forestguard.ar | 🔴 Alta | 🔜 PENDING | 1h |
+| 6.2.1 | Configurar Cloudflare R2 | Bucket + CORS | 🔴 Alta | ✅ DONE | 30 min |
+| 6.2.2 | Deploy API (Oracle Cloud) | VM + Nginx + SSL | 🔴 Alta | ✅ DONE | 2h |
+| 6.2.3 | Configurar DNS | FreeDynamicDNS | 🔴 Alta | ✅ DONE | 30 min |
+| 6.2.4 | SSL/HTTPS | Let's Encrypt Certbot | 🔴 Alta | ✅ DONE | 1h |
 | 6.2.5 | GitHub Actions CI/CD | Lint + test + deploy | 🟡 Media | 🔜 PENDING | 2h |
-| 6.2.6 | Secrets Management | GEE credentials, API keys | 🔴 Alta | 🔜 PENDING | 30 min |
+| 6.2.6 | Secrets Management | GEE credentials, API keys | 🔴 Alta | ✅ DONE | 30 min |
+| 6.2.7 | Monitoreo producción | UptimeRobot, logs | 🟡 Media | 🔜 PENDING | 1h |
 
 ---
 
@@ -294,9 +295,9 @@
 | 3. API Core | 27 | 32h | 3-4 | ⏳ 50% DONE |
 | 4. Workers | 13 | 16h | 4-5 | ⏳ 40% DONE |
 | 5. Frontend | 24 | 34h | 5-6 | 🔜 0% DONE |
-| 6. Testing/Deploy | 11 | 18h | 6 | 🔜 0% DONE |
+| 6. Testing/Deploy | 13 | 19h | 6 | ✅ 90% DONE |
 | 7. Arquitectura/Validación | 22 | 16h | - | ✅ 100% DONE |
-| **TOTAL** | **127** | **138h** | **6 semanas** | **~70% completado** |
+| **TOTAL** | **133** | **144h** | **6 semanas** | **~75% completado** |
 
 ---
 
@@ -308,6 +309,12 @@
    └── ✅ Reporte de validación con 16 hallazgos
    └── ✅ Correcciones críticas aplicadas
    └── ✅ Mejoras operacionales implementadas
+
+2. ✅ DONE: Deploy a producción (Oracle Cloud)
+   └── ✅ VM configurada (Ampere A1, 1 OCPU, 6GB RAM)
+   └── ✅ Nginx + SSL (Let's Encrypt)
+   └── ✅ DNS (forestguard.freedynamicdns.org)
+   └── ✅ API Live: https://forestguard.freedynamicdns.org/docs
 
 2. ⏳ EN PROGRESO: Implementar VAE Service
    └── 🔜 vae_service.py con métodos core

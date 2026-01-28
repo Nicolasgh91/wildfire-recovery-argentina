@@ -6,7 +6,12 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688.svg)](https://fastapi.tiangolo.com/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-blue.svg)](https://www.postgresql.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Production](https://img.shields.io/badge/Production-Live-success.svg)](https://forestguard.freedynamicdns.org/docs)
 ![Progress](https://img.shields.io/badge/Progress-70%25-green.svg)
+
+> 🌐 **Live Production API**: [https://forestguard.freedynamicdns.org/docs](https://forestguard.freedynamicdns.org/docs)  
+> 🖥️ **Infrastructure**: Oracle Cloud Free Tier  
+> 📡 **Status**: Active & Monitoring
 
 ---
 
@@ -264,7 +269,7 @@ GET /api/v1/certificates/verify/{certificate_number}
 
 #### Health Check ✅
 ```bash
-GET /health
+GET https://forestguard.freedynamicdns.org/health
 ```
 
 Verifica estado de todos los componentes:
@@ -375,22 +380,63 @@ SECRET_KEY=tu_clave_secreta_aleatoria
 
 ## 🚢 Deploy
 
-### Docker (Recomendado)
+### 🌐 Producción (Oracle Cloud Free Tier) ✅
+
+**Status**: LIVE  
+**URL**: https://forestguard.freedynamicdns.org  
+**API Docs**: https://forestguard.freedynamicdns.org/docs  
+**Infrastructure**: Oracle Cloud VM (Always Free)  
+**DNS**: FreeDynamicDNS  
+**SSL**: Let's Encrypt (Auto-renewal)  
+
+**Deployment Stack**:
+- VM Shape: Ampere A1 (ARM) / 1 OCPU, 6GB RAM
+- OS: Ubuntu 22.04 LTS
+- Reverse Proxy: Nginx
+- Process Manager: systemd / PM2
+- Database: Supabase (PostgreSQL + PostGIS)
+- Storage: Cloudflare R2
+
+### Docker (Desarrollo Local)
 
 ```bash
 # Desarrollo
 docker-compose up -d
 
-# Producción
+# Producción local
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-### Oracle Cloud / Railway
+### Deploy Manual (Oracle Cloud)
 
-1. Conectar repositorio GitHub
-2. Configurar variables de entorno
-3. Deploy automático con Dockerfile
-4. Configurar DNS y SSL
+```bash
+# 1. Conectar a VM
+ssh ubuntu@<instance-ip>
+
+# 2. Clonar repo
+git clone https://github.com/Nicolasgh91/wildfire-recovery-argentina.git
+cd wildfire-recovery-argentina
+
+# 3. Setup environment
+cp .env.example .env
+vim .env  # Configurar credenciales
+
+# 4. Instalar dependencias
+pip install -r requirements.txt
+
+# 5. Configurar systemd service
+sudo cp deployment/forestguard.service /etc/systemd/system/
+sudo systemctl enable forestguard
+sudo systemctl start forestguard
+
+# 6. Configurar Nginx
+sudo cp deployment/nginx.conf /etc/nginx/sites-available/forestguard
+sudo ln -s /etc/nginx/sites-available/forestguard /etc/nginx/sites-enabled/
+sudo systemctl reload nginx
+
+# 7. SSL con Certbot
+sudo certbot --nginx -d forestguard.freedynamicdns.org
+```
 
 ---
 

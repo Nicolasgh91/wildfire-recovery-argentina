@@ -1,0 +1,112 @@
+[Unit]
+Description=ForestGuard API - Wildfire Recovery System
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/opt/forestguard
+ExecStart=/opt/forestguard/venv/bin/gunicorn app.main:app \
+    --workers 4 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:8000 \
+    --timeout 120 \
+    --access-logfile /var/log/forestguard/access.log \
+    --error-logfile /var/log/forestguard/error.log
+
+# =============================================================================
+# ENVIRONMENT VARIABLES (PRODUCTION)
+# =============================================================================
+
+# Application
+Environment="PROJECT_NAME=ForestGuard API"
+Environment="VERSION=2.0.0"
+Environment="ENVIRONMENT=production"
+Environment="DEBUG=false"
+Environment="LOG_LEVEL=INFO"
+Environment="API_V1_PREFIX=/api/v1"
+Environment="PUBLIC_BASE_URL=https://forestguard.freedynamicdns.org"
+
+# Server
+Environment="HOST=0.0.0.0"
+Environment="PORT=8000"
+Environment="WORKERS=4"
+
+# Database (Supabase PostgreSQL)
+Environment="DB_HOST=aws-0-us-west-2.pooler.supabase.com"
+Environment="DB_PORT=6543"
+Environment="DB_NAME=postgres"
+Environment="DB_USER=postgres.qkmuwmxifbahmcydteuj"
+Environment="DB_PASSWORD=REPLACE_WITH_YOUR_SUPABASE_PASSWORD"
+
+# Database Pool
+Environment="DB_POOL_SIZE=10"
+Environment="DB_MAX_OVERFLOW=20"
+Environment="DB_POOL_PRE_PING=true"
+
+# Supabase Keys
+Environment="SUPABASE_ANON_KEY=REPLACE_WITH_YOUR_ANON_KEY"
+Environment="SUPABASE_SERVICE_KEY=REPLACE_WITH_YOUR_SERVICE_KEY"
+Environment="SUPABASE_JWT_SECRET=REPLACE_WITH_YOUR_JWT_SECRET"
+
+# Security - CRITICAL: Generate new key with: python -c "import secrets; print(secrets.token_hex(32))"
+Environment="SECRET_KEY=REPLACE_WITH_GENERATED_SECRET_KEY"
+Environment="JWT_ALGORITHM=HS256"
+Environment="JWT_EXPIRE_MINUTES=1440"
+
+# CORS
+Environment="ALLOWED_ORIGINS=https://forestguard.freedynamicdns.org,https://forestguard.ar"
+
+# Rate Limiting
+Environment="RATE_LIMIT_PER_MINUTE=100"
+Environment="RATE_LIMIT_PER_HOUR=1000"
+
+# Redis (Celery)
+Environment="REDIS_URL=redis://localhost:6379/0"
+Environment="CELERY_BROKER_URL=redis://localhost:6379/1"
+Environment="CELERY_RESULT_BACKEND=redis://localhost:6379/2"
+
+# Cloudflare R2
+Environment="R2_ACCOUNT_ID=YOUR_CLOUDFLARE_ACCOUNT_ID"
+Environment="R2_ACCESS_KEY_ID=YOUR_R2_ACCESS_KEY"
+Environment="R2_SECRET_ACCESS_KEY=YOUR_R2_SECRET_KEY"
+Environment="R2_BUCKET_NAME=forestguard-images"
+Environment="R2_PUBLIC_URL=https://pub-xxxxxxxxxxxx.r2.dev"
+
+# NASA FIRMS
+Environment="FIRMS_API_KEY=YOUR_FIRMS_API_KEY"
+Environment="NASA_FIRMS_BASE_URL=https://firms.modaps.eosdis.nasa.gov"
+
+# Open-Meteo
+Environment="OPEN_METEO_BASE_URL=https://archive-api.open-meteo.com/v1/archive"
+
+# Google Earth Engine
+Environment="GEE_PROJECT_ID=forest-guard-484400"
+Environment="GEE_SERVICE_ACCOUNT_EMAIL=gee-service-account@forest-guard-484400.iam.gserviceaccount.com"
+Environment="GEE_PRIVATE_KEY_PATH=/opt/secrets/gee-service-account.json"
+
+# Monitoring
+Environment="SENTRY_DSN="
+
+# File Upload
+Environment="MAX_UPLOAD_SIZE_MB=5"
+
+# Certificates
+Environment="CERTIFICATE_VALID_DAYS=90"
+Environment="CERTIFICATE_PREFIX=FG-CERT"
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=forestguard
+
+[Install]
+WantedBy=multi-user.target
