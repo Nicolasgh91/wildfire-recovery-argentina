@@ -2,7 +2,7 @@
 
 Este documento define términos clave técnicos, conceptos de teledetección y terminología de dominio utilizada en toda la plataforma ForestGuard.
 
-## 🛰️ Teledetección y Fuentes de Datos
+## 🛰️ Teledetección y fuentes de datos
 
 ### NASA FIRMS
 **Fire Information for Resource Management System**. Un programa de la NASA que distribuye datos de incendios casi en tiempo real de los sensores MODIS y VIIRS.
@@ -39,7 +39,7 @@ Plataforma de análisis geoespacial en la nube que permite analizar imágenes sa
 
 ---
 
-## 🏗️ Arquitectura Técnica
+## 🏗️ Arquitectura técnica
 
 ### PostGIS
 Extensión de base de datos espacial para PostgreSQL.
@@ -64,12 +64,12 @@ Sistema de indexación geoespacial jerárquico hexagonal.
 
 ---
 
-## 🌲 Conceptos de Dominio
+## 🌲 Conceptos de dominio
 
-### Evento de Incendio (Fire Event)
+### Evento de incendio (Fire Event)
 Entidad consolidada que representa un incendio forestal, derivada de agrupar múltiples detecciones satelitales individuales (focos de calor) en espacio y tiempo. A diferencia de una detección cruda, un "Evento de Incendio" tiene fecha de inicio, fecha de fin, área estimada y duración total.
 
-### Auditoría de Uso del Suelo (UC-01)
+### Auditoría de uso del suelo (UC-01)
 Proceso de verificación formal para comprobar si una parcela específica de tierra intersecta con eventos de incendio históricos. Utilizado por profesionales legales para determinar si aplican "prohibiciones de fuego" (Ley de Manejo del Fuego) a una propiedad.
 
 ### VAE (Vegetation Analysis Engine)
@@ -78,8 +78,8 @@ Servicio interno (worker) responsable de analizar imágenes Satellite-2 para ras
 ### ERS (Evidence Reporting Service)
 Servicio interno que agrega datos de la BD, GEE y APIs climáticas para generar documentos legalmente robustos (PDFs) y paquetes de evidencia.
 
-### Hash del Certificado
+### Hash del certificado
 Firma criptográfica (SHA-256) agregada a cada certificado PDF generado por ForestGuard. Esto permite a cualquiera verificar que el documento no ha sido manipulado escaneando el código QR o comprobando el hash contra la API.
 
-### Área Protegida
+### Área protegida
 Tierra legalmente designada (Parques Nacionales, Reservas) donde la actividad humana está restringida. Los incendios en estas áreas activan alertas especiales de alta prioridad y prohibiciones permanentes de cambio de uso.

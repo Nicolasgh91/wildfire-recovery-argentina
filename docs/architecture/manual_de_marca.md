@@ -1,51 +1,51 @@
-# 🎨 Wildfire Recoveries in Argentina - Branding Guide
+# 🎨 Wildfire Recoveries in Argentina - Guía de Branding
 
-## Official color palette
+## Paleta de colores oficial
 
-### Primary colors
+### Colores primarios
 
-| Color | Hex | RGB | Typical Use |
-|-------|-----|-----|-------------|
-| **Fire Orange** | `#F66A23` | `rgb(246, 106, 35)` | Active fires, alerts, hotspots on map |
-| **Intense Red** | `#D93725` | `rgb(217, 55, 37)` | High risk, prohibitions, critical states |
-| **Dark Green** | `#4F9F4A` | `rgb(79, 159, 74)` | Protected areas, healthy vegetation |
-| **Light Green** | `#A8D875` | `rgb(168, 216, 117)` | Vegetation recovery, high NDVI |
+| Color | Hex | RGB | Uso Típico |
+|-------|-----|-----|------------|
+| **Naranja Fuego** | `#F66A23` | `rgb(246, 106, 35)` | Incendios activos, alertas, puntos de calor en mapa |
+| **Rojo Intenso** | `#D93725` | `rgb(217, 55, 37)` | Riesgo alto, prohibiciones, estados críticos |
+| **Verde Oscuro** | `#4F9F4A` | `rgb(79, 159, 74)` | Áreas protegidas, vegetación saludable |
+| **Verde Claro** | `#A8D875` | `rgb(168, 216, 117)` | Recuperación de vegetación, NDVI alto |
 
-### Neutral colors
+### Colores neutros
 
-| Color | Hex | RGB | Typical Use |
-|-------|-----|-----|-------------|
-| **Dark Gray** | `#323232` | `rgb(50, 50, 50)` | Main text, dark backgrounds |
-| **Light Gray** | `#E0E0E0` | `rgb(224, 224, 224)` | Secondary text, dividers, light backgrounds |
+| Color | Hex | RGB | Uso Típico |
+|-------|-----|-----|------------|
+| **Gris Oscuro** | `#323232` | `rgb(50, 50, 50)` | Texto principal, fondos oscuros |
+| **Gris Claro** | `#E0E0E0` | `rgb(224, 224, 224)` | Texto secundario, líneas divisorias, fondos claros |
 
-### Derived colors (for UI)
+### Colores derivados (para UI)
 
 ```css
-/* Calculated variants for hover states, etc */
---fire-orange-dark: #E45A13;    /* Orange -10% brightness */
---fire-orange-light: #F88A53;   /* Orange +10% brightness */
+/* Variantes calculadas para hover states, etc */
+--fire-orange-dark: #E45A13;    /* Naranja -10% brillo */
+--fire-orange-light: #F88A53;   /* Naranja +10% brillo */
 
---danger-red-dark: #C92715;     /* Red -10% brightness */
---danger-red-light: #E34735;    /* Red +10% brightness */
+--danger-red-dark: #C92715;     /* Rojo -10% brillo */
+--danger-red-light: #E34735;    /* Rojo +10% brillo */
 
---success-green-dark: #3F8F3A;  /* Dark green -10% */
---success-green-light: #5FAF5A; /* Dark green +10% */
+--success-green-dark: #3F8F3A;  /* Verde oscuro -10% */
+--success-green-light: #5FAF5A; /* Verde oscuro +10% */
 
---recovery-green-dark: #98C865; /* Light green -10% */
---recovery-green-light: #B8E085; /* Light green +10% */
+--recovery-green-dark: #98C865; /* Verde claro -10% */
+--recovery-green-light: #B8E085; /* Verde claro +10% */
 ```
 
 ---
 
-## 📁 Asset structure
+## 📁 Estructura de assets
 
 ```
 frontend/public/assets/
 ├── logos/
-│   ├── logo-horizontal.svg       # Main logo (for headers)
+│   ├── logo-horizontal.svg       # Logo principal (para headers)
 │   ├── logo-horizontal.png       # Fallback PNG
-│   ├── logo-horizontal-white.svg # Version for dark backgrounds
-│   ├── logo-icon.svg             # Icon only (favicon)
+│   ├── logo-horizontal-white.svg # Versión para fondos oscuros
+│   ├── logo-icon.svg             # Solo ícono (favicon)
 │   └── logo-icon.png             # 512x512px
 │
 ├── favicon/
@@ -55,14 +55,14 @@ frontend/public/assets/
 │   └── apple-touch-icon.png      # 180x180px
 │
 └── og/
-    └── og-image.png              # 1200x630px for social media
+    └── og-image.png              # 1200x630px para redes sociales
 ```
 
 ---
 
-## 🎨 Application in components
+## 🎨 Aplicación en componentes
 
-### 1. PDFs (certificates and judicial reports)
+### 1. PDFs (certificados y reportes judiciales)
 
 ```python
 # app/services/pdf_service.py
@@ -73,12 +73,12 @@ from jinja2 import Template
 class PDFService:
     
     COLORS = {
-        'primary': '#F66A23',       # Fire Orange
-        'danger': '#D93725',        # Intense Red
-        'success': '#4F9F4A',       # Dark Green
-        'recovery': '#A8D875',      # Light Green
-        'text_dark': '#323232',     # Dark Gray
-        'text_light': '#E0E0E0',    # Light Gray
+        'primary': '#F66A23',       # Naranja fuego
+        'danger': '#D93725',        # Rojo intenso
+        'success': '#4F9F4A',       # Verde oscuro
+        'recovery': '#A8D875',      # Verde claro
+        'text_dark': '#323232',     # Gris oscuro
+        'text_light': '#E0E0E0',    # Gris claro
         'white': '#FFFFFF'
     }
     
@@ -105,7 +105,7 @@ class PDFService:
                 line-height: 1.6;
             }
             
-            /* Gradient Header */
+            /* Header con degradado */
             .header {
                 background: linear-gradient(135deg, {{ colors.primary }} 0%, {{ colors.danger }} 100%);
                 padding: 30px;
@@ -317,38 +317,38 @@ class PDFService:
             <div class="logo-container">
                 <img src="{{ logo_path }}" alt="Wildfire Recoveries in Argentina" class="logo">
             </div>
-            <h1>Land Legal Status Certificate</h1>
-            <h2>Certificado de Condición Legal del Terreno</h2>
+            <h1>Certificado de Condición Legal del Terreno</h1>
+            <h2>Land Legal Status Certificate</h2>
             <div class="cert-number">{{ certificate_number }}</div>
         </div>
         
         <!-- Status Badge -->
         <div class="status-badge {% if is_prohibited %}status-prohibited{% else %}status-clear{% endif %}">
             {% if is_prohibited %}
-                ⛔ LEGALLY RESTRICTED LAND
+                ⛔ TERRENO CON RESTRICCIÓN LEGAL
             {% else %}
-                ✅ LAND WITHOUT RESTRICTIONS
+                ✅ TERRENO SIN RESTRICCIONES
             {% endif %}
         </div>
         
         <!-- Location Info -->
         <div class="section">
-            <div class="section-title">📍 Land Information</div>
+            <div class="section-title">📍 Información del Terreno</div>
             <div class="info-grid">
                 <div class="info-item">
-                    <div class="info-label">Coordinates</div>
+                    <div class="info-label">Coordenadas</div>
                     <div class="info-value">{{ latitude }}°, {{ longitude }}°</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Cadastral ID</div>
-                    <div class="info-value">{{ cadastral_id or 'Not specified' }}</div>
+                    <div class="info-label">ID Catastral</div>
+                    <div class="info-value">{{ cadastral_id or 'No especificado' }}</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Query Date</div>
+                    <div class="info-label">Fecha de Consulta</div>
                     <div class="info-value">{{ query_date }}</div>
                 </div>
                 <div class="info-item">
-                    <div class="info-label">Legal Status</div>
+                    <div class="info-label">Estado Legal</div>
                     <div class="info-value">{{ legal_status }}</div>
                 </div>
             </div>
@@ -357,14 +357,14 @@ class PDFService:
         <!-- Fire Events (if any) -->
         {% if fires|length > 0 %}
         <div class="section">
-            <div class="section-title">🔥 Historical Fires Detected</div>
+            <div class="section-title">🔥 Incendios Históricos Detectados</div>
             <table class="fire-table">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Intensity (FRP)</th>
-                        <th>Protected Area</th>
-                        <th>Prohibited Until</th>
+                        <th>Fecha</th>
+                        <th>Intensidad (FRP)</th>
+                        <th>Área Protegida</th>
+                        <th>Prohibido Hasta</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -387,29 +387,29 @@ class PDFService:
         
         <!-- Legal Disclaimer -->
         <div class="disclaimer">
-            <div class="disclaimer-title">⚖️ Legal Disclaimer</div>
+            <div class="disclaimer-title">⚖️ Aviso Legal</div>
             <p>
-                This certificate is based on NASA FIRMS (VIIRS/MODIS) satellite data with 375-1000m resolution
-                and current legislation (Law 26.815 Art. 22 bis). Climate data comes from ERA5-Land (ECMWF).
-                This document is for informational purposes only and does not replace formal legal consultations.
-                For official determinations, consult with competent authorities.
+                Este certificado se basa en datos satelitales de NASA FIRMS (VIIRS/MODIS) con resolución de 375-1000m 
+                y la legislación vigente (Ley 26.815 Art. 22 bis). Los datos climáticos provienen de ERA5-Land (ECMWF). 
+                Este documento es de carácter informativo y no reemplaza consultas legales formales. 
+                Para determinaciones oficiales, consulte con las autoridades competentes.
             </p>
         </div>
         
         <!-- Verification Footer -->
         <div class="footer">
             <div class="qr-container">
-                <img src="{{ qr_code_url }}" alt="Verification QR" class="qr-code">
-                <p>Scan to verify authenticity online</p>
+                <img src="{{ qr_code_url }}" alt="QR Verificación" class="qr-code">
+                <p>Escanee para verificar autenticidad en línea</p>
             </div>
             
             <div style="text-align: center; margin-top: 15px;">
-                <strong>Verification Hash:</strong>
+                <strong>Hash de Verificación:</strong>
                 <div class="verification-hash">{{ verification_hash }}</div>
             </div>
             
             <p style="text-align: center; margin-top: 20px;">
-                Issued: {{ issued_at }} | Valid until: {{ valid_until }}<br>
+                Emitido: {{ issued_at }} | Válido hasta: {{ valid_until }}<br>
                 Wildfire Recoveries in Argentina | https://wildfire-recoveries.ar
             </p>
         </div>
@@ -418,17 +418,17 @@ class PDFService:
     """
     
     def generate_certificate_pdf(self, certificate_data: dict, output_path: str):
-        """Generates certificate PDF with branding"""
+        """Genera PDF del certificado con branding"""
         
         template = Template(self.CERTIFICATE_TEMPLATE)
         
         html_content = template.render(
             colors=self.COLORS,
-            logo_path='file:///path/to/logo-horizontal.svg',  # Adjust path
+            logo_path='file:///path/to/logo-horizontal.svg',  # Ajustar ruta
             **certificate_data
         )
         
-        # Generator PDF
+        # Generar PDF
         HTML(string=html_content).write_pdf(output_path)
         
         return output_path
@@ -442,7 +442,7 @@ class PDFService:
 // frontend/src/theme/colors.js
 
 export const colors = {
-  // Brand primary colors
+  // Colores primarios de la marca
   primary: {
     fireOrange: '#F66A23',
     dangerRed: '#D93725',
@@ -450,7 +450,7 @@ export const colors = {
     recoveryGreen: '#A8D875',
   },
   
-  // Neutral colors
+  // Colores neutros
   neutral: {
     darkGray: '#323232',
     lightGray: '#E0E0E0',
@@ -458,7 +458,7 @@ export const colors = {
     black: '#000000',
   },
   
-  // UI States (derived)
+  // Estados de UI (derivados)
   status: {
     success: '#4F9F4A',
     warning: '#F66A23',
@@ -466,7 +466,7 @@ export const colors = {
     info: '#3B82F6',
   },
   
-  // Variants for hover/active
+  // Variantes para hover/active
   hover: {
     fireOrange: '#E45A13',
     dangerRed: '#C92715',
@@ -474,18 +474,18 @@ export const colors = {
     recoveryGreen: '#98C865',
   },
   
-  // Maps (Leaflet)
+  // Mapas (Leaflet)
   map: {
-    activeFire: '#F66A23',        // Active fire
-    highConfidence: '#D93725',    // High confidence
-    mediumConfidence: '#F66A23',  // Medium confidence
-    lowConfidence: '#FFA500',     // Low confidence
-    protectedArea: '#4F9F4A',     // Protected area
-    recovery: '#A8D875',          // Recovery
-    noData: '#E0E0E0',            // No data
+    activeFire: '#F66A23',        // Incendio activo
+    highConfidence: '#D93725',    // Alta confianza
+    mediumConfidence: '#F66A23',  // Media confianza
+    lowConfidence: '#FFA500',     // Baja confianza
+    protectedArea: '#4F9F4A',     // Área protegida
+    recovery: '#A8D875',          // Recuperación
+    noData: '#E0E0E0',            // Sin datos
   },
   
-  // Gradients
+  // Gradientes
   gradients: {
     fireIntensity: 'linear-gradient(135deg, #F66A23 0%, #D93725 100%)',
     recovery: 'linear-gradient(135deg, #4F9F4A 0%, #A8D875 100%)',
@@ -504,7 +504,7 @@ import colors from './colors'
 export const theme = {
   colors,
   
-  // Typography
+  // Tipografía
   fonts: {
     primary: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     monospace: "'Courier New', monospace",
@@ -520,7 +520,7 @@ export const theme = {
     '3xl': '48px',
   },
   
-  // Spacing
+  // Espaciado
   spacing: {
     xs: '4px',
     sm: '8px',
@@ -539,7 +539,7 @@ export const theme = {
     full: '9999px',
   },
   
-  // Shadows
+  // Sombras
   shadows: {
     sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
     md: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
@@ -560,7 +560,7 @@ export const theme = {
 
 ---
 
-### 3. Map Component (Leaflet with Colors)
+### 3. Componente de Mapa (Leaflet con Colores)
 
 ```jsx
 // frontend/src/components/FireMap.jsx
@@ -572,14 +572,14 @@ import { colors } from '../theme/colors'
 const FireMap = ({ fires }) => {
   
   const getFireColor = (fire) => {
-    // Color based on confidence
+    // Color basado en confianza
     if (fire.confidence >= 80) return colors.map.highConfidence
     if (fire.confidence >= 50) return colors.map.mediumConfidence
     return colors.map.lowConfidence
   }
   
   const getFireRadius = (fire) => {
-    // Radius based on FRP (intensity)
+    // Radio basado en FRP (intensidad)
     return Math.min(Math.max(fire.frp / 10, 5), 20)
   }
   
@@ -609,11 +609,11 @@ const FireMap = ({ fires }) => {
           <Popup>
             <div style={{ fontFamily: theme.fonts.primary }}>
               <h3 style={{ color: colors.primary.fireOrange, marginBottom: '8px' }}>
-                🔥 Fire {fire.date}
+                🔥 Incendio {fire.date}
               </h3>
               <p><strong>FRP:</strong> {fire.frp} MW</p>
-              <p><strong>Confidence:</strong> {fire.confidence}%</p>
-              <p><strong>Satellite:</strong> {fire.satellite}</p>
+              <p><strong>Confianza:</strong> {fire.confidence}%</p>
+              <p><strong>Satélite:</strong> {fire.satellite}</p>
             </div>
           </Popup>
         </CircleMarker>
@@ -627,7 +627,7 @@ export default FireMap
 
 ---
 
-### 4. Status badge component
+### 4. Componente de status badge
 
 ```jsx
 // frontend/src/components/StatusBadge.jsx
@@ -680,14 +680,14 @@ const StatusBadge = ({ variant, children }) => {
 
 export default StatusBadge
 
-// Usage:
-// <StatusBadge variant="prohibited">⛔ PROHIBITED</StatusBadge>
-// <StatusBadge variant="clear">✅ NO RESTRICTIONS</StatusBadge>
+// Uso:
+// <StatusBadge variant="prohibited">⛔ PROHIBIDO</StatusBadge>
+// <StatusBadge variant="clear">✅ SIN RESTRICCIONES</StatusBadge>
 ```
 
 ---
 
-## 📐 Logo usage
+## 📐 Uso de logo
 
 ```jsx
 // frontend/src/components/Header.jsx
@@ -723,12 +723,14 @@ const Header = () => {
 }
 ```
 
-## Pending tasks
 
-- [ ] Save horizontal logo in `frontend/public/assets/logos/logo-horizontal.svg`
-- [ ] Create white version of logo for dark backgrounds
-- [ ] Generate favicon (16x16, 32x32, 48x48)
-- [ ] Configure `theme.js` with color palette
-- [ ] Update PDF template with branding
-- [ ] Apply colors in map components
-- [ ] Configure meta tags with logo for social media
+
+## Tareas pendientes
+
+- [ ] Guardar logo horizontal en `frontend/public/assets/logos/logo-horizontal.svg`
+- [ ] Crear versión blanca del logo para fondos oscuros
+- [ ] Generar favicon (16x16, 32x32, 48x48)
+- [ ] Configurar `theme.js` con paleta de colores
+- [ ] Actualizar template de PDFs con branding
+- [ ] Aplicar colores en componentes de mapa
+- [ ] Configurar meta tags con logo para redes sociales

@@ -4,7 +4,7 @@ This document answers common questions about ForestGuard and addresses common my
 
 ---
 
-## 📌 Frequently Asked Questions
+## 📌 Frequently asked questions
 
 ### 1. Where do the fire data come from?
 
@@ -66,7 +66,7 @@ It is designed for public agencies, NGOs, companies, researchers, journalists, a
 
 ---
 
-## ⚖️ Myths vs. Reality
+## ⚖️ Myths vs. reality
 
 ### ❌ Myth: "Satellite data do not serve as evidence"
 
@@ -116,6 +116,6 @@ It is designed for public agencies, NGOs, companies, researchers, journalists, a
 
 ---
 
-## 📍 Final Note
+## 📍 Final note
 
 ForestGuard seeks to transform open data into **responsible decisions and reliable environmental evidence**, facilitating transparency and long-term control.

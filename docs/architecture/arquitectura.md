@@ -1,22 +1,22 @@
-# 🏗️ Wildfire Recoveries in Argentina - System Architecture
+# 🏗️ Wildfire Recoveries in Argentina - Arquitectura del sistema
 
-## Executive summary
+## Resumen ejecutivo
 
-Wildfire Recoveries implements a **hybrid API+Workers architecture** designed for:
+Wildfire Recoveries implementa una **arquitectura híbrida API+Workers** diseñada para:
 
-1. **Fast responses** to user queries (< 2 sec)
-2. **Heavy asynchronous processing** using Google Earth Engine
-3. **Horizontal scalability** via independent workers
-4. **$0 operating cost** using free tiers
+1. **Respuestas rápidas** a consultas de usuarios (< 2 seg)
+2. **Procesamiento pesado asíncrono** usando Google Earth Engine
+3. **Escalabilidad horizontal** mediante workers independientes
+4. **Costo operativo $0** utilizando capas gratuitas
 
 ---
 
-## 📐 High-level architecture diagram (updated with GEE)
+## 📐 Diagrama de arquitectura de alto nivel (actualizado con GEE)
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                           END USER                              │
-│  (Notaries, NGOs, Citizens, Prosecutors, Researchers)           │
+│                         USUARIO FINAL                            │
+│  (Escribanos, ONGs, Ciudadanos, Fiscales, Investigadores)       │
 └────────────────────┬────────────────────────────────────────────┘
                      │
                      │ HTTPS
@@ -25,7 +25,7 @@ Wildfire Recoveries implements a **hybrid API+Workers architecture** designed fo
 │                      CLOUDFLARE CDN                              │
 │  - SSL/TLS Termination                                           │
 │  - DDoS Protection                                               │
-│  - Rate Limiting (100 req/min per IP)                           │
+│  - Rate Limiting (100 req/min por IP)                           │
 └────────────────────┬────────────────────────────────────────────┘
                      │
                      ▼
@@ -44,8 +44,8 @@ Wildfire Recoveries implements a **hybrid API+Workers architecture** designed fo
 │   (Gunicorn +    │    │   (React + Leaflet)  │
 │    Uvicorn)      │    │                      │
 │                  │    │   - Dashboard        │
-│  - REST API      │    │   - Forms            │
-│  - Auth/RBAC     │    │   - Maps             │
+│  - REST API      │    │   - Formularios      │
+│  - Auth/RBAC     │    │   - Mapas            │
 │  - Validation    │    └──────────────────────┘
 │  - Logging       │
 │  - 🆕 Rate Limit │
@@ -64,7 +64,7 @@ Wildfire Recoveries implements a **hybrid API+Workers architecture** designed fo
 │   - climate_data (20k+ rows)                                    │
 │   - land_certificates, citizen_reports, etc.                    │
 │                                                                  │
-│  Limit: 500MB storage                                           │
+│  Límite: 500MB storage                                          │
 └─────────────────────────────────────────────────────────────────┘
          ▲
          │
@@ -110,12 +110,12 @@ Wildfire Recoveries implements a **hybrid API+Workers architecture** designed fo
 │              CLOUDFLARE R2 OBJECT STORAGE                        │
 │                                                                  │
 │  Buckets:                                                        │
-│   - wildfire-images/ (Thumbnails, visualizations)               │
+│   - wildfire-images/ (Thumbnails, visualizaciones)              │
 │   - wildfire-reports/ (PDFs, ZIPs)                              │
-│   - wildfire-certificates/ (Legal certificates)                 │
+│   - wildfire-certificates/ (Certificados legales)               │
 │                                                                  │
-│  Limit: 10GB storage                                            │
-│  Egress: UNLIMITED ($0 cost)                                    │
+│  Límite: 10GB storage                                           │
+│  Egreso: ILIMITADO (costo $0)                                   │
 └─────────────────────────────────────────────────────────────────┘
          ▲
          │
@@ -132,7 +132,7 @@ Wildfire Recoveries implements a **hybrid API+Workers architecture** designed fo
 │  │  - 20 years data │  │  - NDVI          │  │  - Wind        │ │
 │  │  - 375m resol.   │  │  - Server-side   │  │  - Drought idx │ │
 │  │                  │  │    processing    │  │                │ │
-│  │                  │  │  - FREE unlim.   │  │                │ │
+│  │                  │  │  - FREE ilimitado│  │                │ │
 │  └──────────────────┘  └──────────────────┘  └────────────────┘ │
 │                                                                  │
 │  🆕 Google Cloud Project: forest-guard-484400                    │
@@ -142,18 +142,18 @@ Wildfire Recoveries implements a **hybrid API+Workers architecture** designed fo
 
 ---
 
-## 🗂️ Project directory structure (updated)
+## 🗂️ Estructura de directorios del proyecto (actualizada)
 
 ```
 wildfire-recoveries/
 │
-├── app/                          # Main application code
+├── app/                          # Código principal de la aplicación
 │   ├── __init__.py
-│   ├── main.py                   # ✅ FastAPI Entry point
+│   ├── main.py                   # ✅ Entry point FastAPI
 │   │
-│   ├── api/                      # REST Endpoints
+│   ├── api/                      # Endpoints REST
 │   │   ├── __init__.py
-│   │   ├── deps.py               # ✅ Dependencies (DB sessions)
+│   │   ├── deps.py               # ✅ Dependencias (DB sessions)
 │   │   └── routes/
 │   │       ├── __init__.py
 │   │       ├── fires.py          # ✅ GET /fires, /fires/{id}
@@ -165,9 +165,9 @@ wildfire-recoveries/
 │   │       ├── historical.py     # UC-11: POST /reports/historical-fire
 │   │       └── health.py         # GET /health
 │   │
-│   ├── core/                     # Core configuration
+│   ├── core/                     # Configuración core
 │   │   ├── __init__.py
-│   │   ├── config.py             # ✅ Pydantic Settings (with GEE)
+│   │   ├── config.py             # ✅ Pydantic Settings (con GEE)
 │   │   ├── security.py           # ✅ Auth, API keys (APIKeyHeader)
 │   │   ├── rate_limiter.py       # ✅ IP Blocking + Email Alerts
 │   │   ├── logging.py            # ✅ Structured logging
@@ -191,10 +191,10 @@ wildfire-recoveries/
 │   │   ├── certificate.py        # CertificateRequest/Response
 │   │   └── report.py             # JudicialReportRequest
 │   │
-│   ├── services/                 # Business logic
+│   ├── services/                 # Lógica de negocio
 │   │   ├── __init__.py
 │   │   ├── firms_service.py      # ✅ NASA FIRMS logic
-│   │   ├── gee_service.py        # ✅ NEW: Google Earth Engine
+│   │   ├── gee_service.py        # ✅ NUEVO: Google Earth Engine
 │   │   ├── vae_service.py        # 🆕 Vegetation Analysis Engine (Shared)
 │   │   │   # Core methods:
 │   │   │   #  - fetch_ndvi_monthly(fire_event_id, date) -> NDVIResult
@@ -206,8 +206,8 @@ wildfire-recoveries/
 │   │   │   #  - create_verification_hash(pdf_bytes) -> str
 │   │   ├── climate_service.py    # Open-Meteo API wrapper
 │   │   ├── spatial_service.py    # PostGIS queries
-│   │   ├── certificate_service.py # Certificate generation
-│   │   └── pdf_composer.py       # PDF rendering engine
+│   │   ├── certificate_service.py # Generación certificados
+│   │   └── pdf_composer.py       # Engine renderizado PDFs
 │   │
 │   └── db/                       # Database utilities
 │       ├── __init__.py
@@ -223,7 +223,7 @@ wildfire-recoveries/
 │   │   ├── clustering.py         # ✅ cluster_detections
 │   │   ├── destruction.py        # 🆕 VAE: Check land use change (UC-08)
 │   │   ├── recovery.py           # 🆕 VAE: Check reforestation (UC-06)
-│   │   ├── imagery.py            # ✅ UPDATED: uses GEE
+│   │   ├── imagery.py            # ✅ ACTUALIZADO: usa GEE
 │   │   ├── climate.py            # enrich_with_climate
 │   │   └── monitoring.py         # DEPRECATED: Merged into VAE
 │   │
@@ -232,12 +232,12 @@ wildfire-recoveries/
 │       ├── geo_utils.py          # H3 hexagons
 │       └── retry.py              # Exponential backoff
 │
-├── scripts/                      # ✅ Data loading scripts
-│   ├── load_firms_history.py    # ✅ Load NASA FIRMS
-│   ├── load_protected_areas.py  # ✅ Load shapefiles
-│   ├── cluster_fire_events.py   # ✅ DBSCAN Clustering
-│   ├── seed_test_data.py        # Test data
-│   └── validate_data.py         # Integrity checks
+├── scripts/                      # ✅ Scripts de carga de datos
+│   ├── load_firms_history.py    # ✅ Carga NASA FIRMS
+│   ├── load_protected_areas.py  # ✅ Carga shapefiles
+│   ├── cluster_fire_events.py   # ✅ Clustering DBSCAN
+│   ├── seed_test_data.py        # Datos de prueba
+│   └── validate_data.py         # Checks de integridad
 │
 ├── db/
 │   ├── migrations/               # Alembic migrations
@@ -245,7 +245,7 @@ wildfire-recoveries/
 │   │   ├── versions/
 │   │   └── script.py.mako
 │   │
-│   └── schema_v3_final.sql       # ✅ Full Schema
+│   └── schema_v3_final.sql       # ✅ Schema completo
 │
 ├── tests/                        # Tests
 │   ├── __init__.py
@@ -262,14 +262,14 @@ wildfire-recoveries/
 │   └── e2e/                      
 │       └── test_full_audit_flow.py
 │
-├── docs/                         # ✅ Documentation
-│   ├── architecture/             # 🆕 Architecture subfolder
-│   │   ├── forestguard_use_cases.md # ✅ Full Use Cases
-│   │   ├── forestguard_architecture.md # ✅ This file
+├── docs/                         # ✅ Documentación
+│   ├── architecture/             # 🆕 Subcarpeta architecture
+│   │   ├── forestguard_use_cases.md # ✅ Casos de uso completos
+│   │   ├── forestguard_architecture.md # ✅ Este archivo
 │   │   ├── project_plan.md       # ✅ Plan
-│   │   └── wildfire_branding.md  # ✅ Branding Guide
-│   ├── manual_de_usuario.md      # ✅ User Guide
-│   └── ...                       # ✅ Other docs
+│   │   └── wildfire_branding.md  # ✅ Guía de branding
+│   ├── manual_de_usuario.md      # ✅ Guía usuario
+│   └── ...                       # ✅ Otros docs
 │
 ├── docker/                       # ✅ Dockerfiles
 │   ├── Dockerfile.api            # ✅ FastAPI image
@@ -280,28 +280,28 @@ wildfire-recoveries/
 │   └── workflows/
 │       └── ci.yml                # GitHub Actions CI/CD
 │
-├── gee-service-account.json      # 🆕 GEE credentials (DO NOT COMMIT)
-├── .env                          # ✅ Env variables (DO NOT COMMIT)
+├── gee-service-account.json      # 🆕 GEE credentials (NO COMMITEAR)
+├── .env                          # ✅ Variables de entorno (NO COMMITEAR)
 ├── .env.example                  # ✅ Template
 ├── .gitignore                    # ✅
 ├── .dockerignore                 # ✅
-├── docker-compose.yml            # ✅ Local orchestration
-├── docker-compose.prod.yml       # Production orchestration
-├── alembic.ini                   # ✅ Migrations config
-├── Makefile                      # ✅ Simplified commands
+├── docker-compose.yml            # ✅ Orquestación local
+├── docker-compose.prod.yml       # Orquestación producción
+├── alembic.ini                   # ✅ Config migraciones
+├── Makefile                      # ✅ Comandos simplificados
 ├── pyproject.toml                # ✅ Poetry dependencies
-├── requirements.txt              # ✅ Pip dependencies (with earthengine-api)
-├── README.md                     # ✅ Main documentation
-├── CONTRIBUTING.md               # Contribution guide
+├── requirements.txt              # ✅ Pip dependencies (con earthengine-api)
+├── README.md                     # ✅ Documentación principal
+├── CONTRIBUTING.md               # Guía de contribución
 ├── LICENSE                       # MIT License
-└── CHANGELOG.md                  # Version history
+└── CHANGELOG.md                  # Historial de versiones
 ```
 
 ---
 
-## 🔄 Data flow: UC-01 Audit with GEE
+## 🔄 Flujo de datos: UC-01 Auditoría con GEE
 
-**Example:** A notary verifies if a plot at `-27.4658, -58.8346` is prohibited.
+**Ejemplo:** Un escribano verifica si un terreno en `-27.4658, -58.8346` está prohibido.
 
 ```
 1. REQUEST → API
@@ -317,7 +317,7 @@ wildfire-recoveries/
 2. NGINX → FASTAPI
                     │
                     ▼
-3. FASTAPI VALIDATES REQUEST
+3. FASTAPI VALIDA REQUEST
    ┌────────────────────────────────────────────────┐
    │ app/api/routes/audit.py                        │
    │ - Validate lat/lon                             │
@@ -356,14 +356,14 @@ wildfire-recoveries/
    │ }                                              │
    └────────────────────────────────────────────────┘
 
-Time: < 2 seconds
+Tiempo: < 2 segundos
 ```
 
 ---
 
-## 🛰️ Async flow: Image download with GEE
+## 🛰️ Flujo asíncrono: Descarga de imágenes con GEE
 
-**Trigger:** New fire_event created without images
+**Trigger:** Nuevo fire_event creado sin imágenes
 
 ```
 1. TRIGGER (Celery Beat Scheduler)
@@ -392,7 +392,7 @@ Time: < 2 seconds
    ┌────────────────────────────────────────────────┐
    │ gee = GEEService()                             │
    │                                                │
-   │ # Search Sentinel-2 L2A images                 │
+   │ # Buscar imágenes Sentinel-2 L2A               │
    │ collection = ee.ImageCollection(               │
    │   'COPERNICUS/S2_SR_HARMONIZED'                │
    │ )                                              │
@@ -402,55 +402,55 @@ Time: < 2 seconds
    │   'CLOUDY_PIXEL_PERCENTAGE', 20                │
    │ ))                                             │
    │                                                │
-   │ # Get best image (least clouds)                │
+   │ # Obtener mejor imagen (menos nubes)           │
    │ image = collection.sort(                       │
    │   'CLOUDY_PIXEL_PERCENTAGE'                    │
    │ ).first()                                      │
    │                                                │
-   │ → Image found: 12% clouds                      │
+   │ → Imagen encontrada: 12% nubes                 │
    └────────────────┬───────────────────────────────┘
                     │
-5. 🆕 CALCULATE NDVI (SERVER-SIDE IN GEE)
+5. 🆕 CALCULAR NDVI (SERVER-SIDE en GEE)
    ┌────────────────────────────────────────────────┐
-   │ # Calculate NDVI in GEE (DO NOT download img)  │
+   │ # Calcular NDVI en GEE (NO descargar imagen)   │
    │ nir = image.select('B8')                       │
    │ red = image.select('B4')                       │
    │ ndvi = nir.subtract(red).divide(               │
    │   nir.add(red)                                 │
    │ ).rename('NDVI')                               │
    │                                                │
-   │ # Statistics over the area                     │
+   │ # Estadísticas sobre el área                   │
    │ stats = ndvi.reduceRegion(                     │
    │   reducer=ee.Reducer.mean(),                   │
    │   geometry=fire_area,                          │
    │   scale=10                                     │
    │ )                                              │
    │                                                │
-   │ ndvi_mean = 0.72 ← Calculated in GEE           │
+   │ ndvi_mean = 0.72 ← Calculado en GEE            │
    └────────────────┬───────────────────────────────┘
                     │
-6. 🆕 GENERATE VISUALIZATION URL
+6. 🆕 GENERAR URL DE VISUALIZACIÓN
    ┌────────────────────────────────────────────────┐
-   │ # Create RGB for visualization                 │
+   │ # Crear RGB para visualización                 │
    │ rgb = image.select(['B4', 'B3', 'B2'])         │
    │                                                │
-   │ # Get download URL (thumbnail only)            │
+   │ # Obtener URL de descarga (solo thumbnail)     │
    │ url = rgb.getDownloadURL({                     │
    │   'region': fire_bbox,                         │
-   │   'scale': 20,  # 20m (lighter)                │
+   │   'scale': 20,  # 20m (más liviano)            │
    │   'format': 'PNG'                              │
    │ })                                             │
    │                                                │
-   │ → Temporary GEE URL                            │
+   │ → URL temporal de GEE                          │
    └────────────────┬───────────────────────────────┘
                     │
 7. DOWNLOAD THUMBNAIL & UPLOAD TO R2
    ┌────────────────────────────────────────────────┐
-   │ # Download small thumbnail from GEE            │
+   │ # Descargar thumbnail pequeño de GEE           │
    │ response = requests.get(url)                   │
-   │ # Size: ~500KB (vs 700MB full image!)          │
+   │ # Size: ~500KB (vs 700MB imagen completa!)     │
    │                                                │
-   │ # Upload to Cloudflare R2                      │
+   │ # Subir a Cloudflare R2                        │
    │ s3_client.put_object(                          │
    │   Bucket='wildfire-images',                    │
    │   Key=f'fires/{fire_id}/post_fire.png',        │
@@ -468,56 +468,56 @@ Time: < 2 seconds
    │   acquisition_date=image_date,                 │
    │   cloud_cover_pct=12.0,                        │
    │   r2_url=r2_url,                               │
-   │   file_size_mb=0.5  # Only thumbnail!          │
+   │   file_size_mb=0.5  # Solo thumbnail!          │
    │ )                                              │
    │                                                │
    │ fire_event.has_satellite_imagery = TRUE        │
    │ db.commit()                                    │
    └────────────────────────────────────────────────┘
 
-Time: 30-60 seconds
-GEE Advantage: Does not download 700MB, only 500KB thumbnail!
+Tiempo: 30-60 segundos
+Ventaja GEE: No descarga 700MB, solo 500KB thumbnail!
 ```
 
 ---
 
-## 🔐 Security and authentication
+## 🔐 Seguridad y autenticación
 
-### Security model
+### Modelo de seguridad
 
-**Access Levels:**
+**Niveles de Acceso:**
 
-1. **Public (Unauthenticated)**
-   - ✅ GET /fires (public list)
+1. **Público (No autenticado)**
+   - ✅ GET /fires (lista pública)
    - ✅ GET /certificates/verify/{number}
    - ❌ POST /audit/land-use
    - ❌ POST /certificates/request
 
-2. **Registered User (API Key)**
-   - ✅ All public
-   - ✅ POST /audit/land-use (10/month)
-   - ✅ POST /certificates/request (10/month)
+2. **Usuario Registrado (API Key)**
+   - ✅ Todo lo público
+   - ✅ POST /audit/land-use (10/mes)
+   - ✅ POST /certificates/request (10/mes)
    - ✅ POST /citizen/report
 
-3. **Administrator**
-   - ✅ All of the above
-   - ✅ Review citizen reports
-   - ✅ Access metrics
+3. **Administrador**
+   - ✅ Todo lo anterior
+   - ✅ Revisar denuncias ciudadanas
+   - ✅ Acceso a métricas
 
-### 🔒 New Security Controls (v3.1)
-- **API Key**: `X-API-Key` header mandatory for sensitive endpoints.
+### 🔒 Nuevos Controles de Seguridad (v3.1)
+- **API Key**: Header `X-API-Key` obligatorio para endpoints sensibles.
 - **IP Rate Limiting**:
-  - Limit: 10 requests/day per IP (for protected endpoints).
-  - Action: Automatic block + Email Alert to Admin.
+  - Límite: 10 requests/día por IP (para endpoints protegidos).
+  - Acción: Bloqueo automático + Alerta Email al Admin.
 - **Error Handling**:
-  - Dev (DEBUG=True): Stack traces visible.
-  - Prod (DEBUG=False): Generic "Internal Server Error" message.
+  - Dev (DEBUG=True): Stack traces visibles.
+  - Prod (DEBUG=False): Mensaje genérico "Internal Server Error".
 
 ---
 
-## 🚨 Error handling strategy
+## 🚨 Error Handling Strategy
 
-### Retry policies
+### Retry Policies
 - **API Layer**: Exponential backoff for external API calls (GEE, Open-Meteo)
   - Max retries: 3 attempts
   - Backoff: 1s, 2s, 4s
@@ -531,7 +531,7 @@ GEE Advantage: Does not download 700MB, only 500KB thumbnail!
           raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
   ```
 
-### Dead letter queue
+### Dead Letter Queue
 Failed tasks after max retries are logged to `failed_tasks` table:
 - Task name, arguments, error traceback
 - Retry count and final failure timestamp
@@ -546,16 +546,16 @@ Failed tasks after max retries are logged to `failed_tasks` table:
 
 ---
 
-## 🔐 Security notes
+## 🔐 Security Notes
 
-### GEE service account
+### GEE Service Account
 **⚠️ CRITICAL**: Service account credentials (`gee-service-account.json`) must be secured:
 - **Development**: Store in `/secrets/` directory (outside project root)
 - **Production**: Use environment variable `GEE_SERVICE_ACCOUNT_JSON` (base64 encoded)
 - **Never commit** credentials to version control
 - **Rotate keys** every 90 days
 
-### API rate limiting
+### API Rate Limiting
 - **Per IP**: 100 requests/minute (Cloudflare)
 - **Authenticated Users**: 500 requests/minute
 - **Admin Users**: Unlimited
@@ -574,7 +574,7 @@ Failed tasks after max retries are logged to `failed_tasks` table:
 - r2_upload_bytes_total (counter)
 ```
 
-### Logging strategy
+### Logging Strategy
 - **Format**: Structured JSON logs
 - **Levels**:
   - INFO: API requests, task completions
@@ -583,7 +583,7 @@ Failed tasks after max retries are logged to `failed_tasks` table:
 - **Destination**: CloudWatch Logs / Loki
 - **Retention**: 30 days
 
-### Distributed tracing
+### Distributed Tracing
 - **Tool**: OpenTelemetry (optional for production)
 - **Spans**: Track request → worker → GEE → database round-trip
 
@@ -592,7 +592,7 @@ Failed tasks after max retries are logged to `failed_tasks` table:
 ## ⚖️ Resource limits & quotas
 
 ### Google Earth Engine
-**⚠️ Important**: Despite "FREE unlimited" label, GEE has quotas:
+**⚠️ Important**: Despite "FREE ilimitado" label, GEE has quotas:
 - **Requests**: 50,000/day (free tier)
 - **Compute**: 10 concurrent operations
 - **Implementation**: Rate limiter in `gee_service.py`:
@@ -645,7 +645,7 @@ Checks all critical dependencies:
 }
 ```
 
-**Status codes**:
+**Status Codes**:
 - `200`: All services healthy
 - `503`: At least one service degraded
 
@@ -653,11 +653,11 @@ Checks all critical dependencies:
 
 ## 🔄 API versioning strategy
 
-### Current version: v1
+### Current Version: v1
 - **Base Path**: `/api/v1/*`
 - **Compatibility**: Backward compatible for minor changes
 
-### Deprecation policy
+### Deprecation Policy
 1. **Announce**: 90 days before deprecation (via API headers)
    ```
    Deprecation: version="2026-04-30"
@@ -666,7 +666,7 @@ Checks all critical dependencies:
 2. **Sunset**: Remove deprecated endpoints 180 days after announcement
 3. **Version Support**: Maintain N-1 versions (e.g., v1 + v2 simultaneously)
 
-### Breaking changes
+### Breaking Changes
 Require new major version (e.g., `/api/v2/`):
 - Response schema changes (removing fields)
 - Authentication method changes
@@ -674,7 +674,7 @@ Require new major version (e.g., `/api/v2/`):
 
 ---
 
-## 📊 Performance metrics
+## 📊 Métricas de performance
 
 | Endpoint | P50 Latency | P95 Latency | P99 Latency |
 |----------|-------------|-------------|-------------|
@@ -683,33 +683,33 @@ Require new major version (e.g., `/api/v2/`):
 | `POST /certificates/request` | 1.2s | 2.5s | 4.0s |
 | `GET /health` | 10ms | 20ms | 50ms |
 
-**Worker performance:**
-- FIRMS Download (10k records): ~10 min
+**Worker Performance:**
+- Descarga FIRMS (10k records): ~10 min
 - Clustering (1 day): ~30 sec
-- GEE Image (1 fire): ~45 sec
+- Imagen GEE (1 fire): ~45 sec
 
 ---
 
-## 🌐 Production
+## 🌐 Producción
 
-### Current status
-- **Status**: ✅ LIVE IN PRODUCTION
-- **Public URL**: https://forestguard.freedynamicdns.org
+### Estado actual
+- **Status**: ✅ LIVE EN PRODUCCIÓN
+- **URL Pública**: https://forestguard.freedynamicdns.org
 - **API Docs**: https://forestguard.freedynamicdns.org/docs
 - **Health Check**: https://forestguard.freedynamicdns.org/health
 
-### Infrastructure
+### Infraestructura
 
 **Provider**: Oracle Cloud (Always Free Tier)  
-**Location**: São Paulo (GRU)  
+**Ubicación**: São Paulo (GRU)  
 **VM Shape**: Ampere A1 Compute (ARM64)  
-**Resources**:  
+**Recursos**:  
 - 1 OCPU (Ampere CPU core)
 - 6 GB RAM
 - 50 GB Boot Volume
 - 10 TB Outbound Traffic/month (free)
 
-**Production stack**:
+**Stack de Producción**:
 ```
 Internet
   │
@@ -733,51 +733,51 @@ Supabase PostgreSQL (External)
 Cloudflare R2 (External)
 ```
 
-### Monitoring
+### Monitoreo
 - **Process Manager**: systemd
 - **Logs**: journalctl -u forestguard -f
 - **Uptime Monitoring**: Manual (planned: UptimeRobot)
 - **Performance**: Nginx access logs
 - **Docker Log Rotation**: Configured to prevent disk exhaustion (max-size: 10m, max-file: 3)
 
-### Deployment pipeline
+### Deployment Pipeline
 ```bash
-# Update code
+# Actualizar código
 cd /opt/forestguard
 git pull origin main
 
-# Restart service
+# Reiniciar servicio
 sudo systemctl restart forestguard
 
-# Verify status
+# Verificar status
 sudo systemctl status forestguard
 curl https://forestguard.freedynamicdns.org/health
 ```
 
 ---
 
-## 📋 Full implementation checklist
+## 📋 Checklist de implementación completa
 
 - [x] Schema PostgreSQL v3.0
-- [x] SQLAlchemy Models
-- [x] Data loading scripts
-- [x] Configuration (config.py, .env)
+- [x] Modelos SQLAlchemy
+- [x] Scripts de carga de datos
+- [x] Configuración (config.py, .env)
 - [x] Docker Compose
 - [x] Makefile
-- [x] **Google Earth Engine Integration**
-- [x] **FastAPI Endpoints (fires, audit, certificates)**
-- [ ] Missing endpoints (reports, monitoring, citizen)
-- [ ] Unit tests
-- [ ] Integration tests
+- [x] **Integración Google Earth Engine**
+- [x] **Endpoints FastAPI (fires, audit, certificates)**
+- [ ] Endpoints faltantes (reports, monitoring, citizen)
+- [ ] Tests unitarios
+- [ ] Tests de integración
 - [ ] Frontend (React + Leaflet)
 - [ ] CI/CD (GitHub Actions)
-- [ ] API Documentation (OpenAPI)
-- [ ] Deploy to production
+- [ ] Documentación API (OpenAPI)
+- [ ] Deploy a producción
 
-**Progress:** 80% completed 🎉
+**Progreso:** 80% completado 🎉
 
 ---
 
-**Last updated:** 2025-01-24  
-**Version:** 3.0  
-**Status:** ✅ Active Development (Core Endpoints Implemented)
+**Última actualización:** 2025-01-24  
+**Versión:** 3.0  
+**Status:** ✅ En Desarrollo Activo (Endpoints Core Implementados)

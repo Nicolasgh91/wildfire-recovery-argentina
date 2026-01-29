@@ -6,40 +6,40 @@
 
 It combines satellite data (NASA FIRMS, Sentinel-2), climate data (ERA5-Land), and advanced AI analysis to provide accurate evidence for environmental protection laws.
 
-### Access the Platform
+### Access the platform
 - **Production URL**: [https://forestguard.freedynamicdns.org](https://forestguard.freedynamicdns.org)
 - **API Documentation**: [https://forestguard.freedynamicdns.org/docs](https://forestguard.freedynamicdns.org/docs)
 
 ---
 
-## 2. Default Public Access (No Login Required)
+## 2. Default public access (no login required)
 
 Any citizen can access basic information without registering.
 
-### 🔍 View Active Fires
+### 🔍 View active fires
 Browse the interactive map to see active fire hotspots detected in the last 24-48 hours.
 - **URL**: `Under construction`
 - **Data Source**: NASA FIRMS (VIIRS/MODIS)
 
-### ✅ Verify a Certificate
+### ✅ Verify a certificate
 If you have a customized ForestGuard certificate (PDF), you can verify its authenticity using its unique hash.
 - **Endpoint**: `GET /api/v1/certificates/verify/{certificate_number}`
 - **How to use**: Enter the alphanumeric code found at the bottom of the PDF.
 
 ---
 
-## 3. For Legal Professionals (Escribanos & Lawyers)
+## 3. For legal professionals (Escribanos & Lawyers)
 
 *Requires API Key or Account*
 
-### 📋 Land Use Audit (UC-01)
+### 📋 Land use audit (UC-01)
 The core feature for verifying if a plot of land has fire-related prohibitions (e.g., cannot be sold or changed in land use for 60 years).
 
-**How to Request:**
+**How to request:**
 1. Identify the coordinates (Latitude/Longitude) of the center of the plot.
 2. Send a request to the audit endpoint.
 
-**Example Request:**
+**Example request:**
 ```json
 POST /api/v1/audit/land-use
 {
@@ -49,12 +49,12 @@ POST /api/v1/audit/land-use
 }
 ```
 
-**Understanding the Result:**
+**Understanding the result:**
 - **is_prohibited**: `true` means fire was detected, and legal restrictions apply.
 - **prohibition_until**: The date when the restriction expires (usually 30-60 years).
 - **evidence**: List of fire events found intersecting the area.
 
-### 📜 Request Legal Certificate (UC-07)
+### 📜 Request legal certificate (UC-07)
 Generate a signed, downloadable PDF certificate summarizing the fire history of a specific location.
 
 **Usage:**
@@ -64,27 +64,27 @@ Generate a signed, downloadable PDF certificate summarizing the fire history of 
 
 ---
 
-## 4. For Administrators (Forestry Service)
+## 4. For administrators (Forestry Service)
 
-### 🌿 Vegetation Recovery Monitoring (UC-06)
+### 🌿 Vegetation recovery monitoring (UC-06)
 Monitor how burnt areas are recovering over time using Vegetation Analysis Engine (VAE).
 - **Metric**: NDVI (Normalized Difference Vegetation Index).
 - **Goal**: Ensure native forest is recovering and not being replaced by crops or livestock.
 - **Alerts**: The system flags areas with "Anomalous Recovery" (e.g., sudden drop in greenness indicating new clearing).
 
-### 🕵️ Illegal Land Use Detection (UC-08)
+### 🕵️ Illegal land use detection (UC-08)
 Automated scanning of protected areas to detect unauthorized land use changes after a fire.
 - **Mechanism**: The system compares pre-fire and post-fire satellite imagery.
 - **Action**: Generates a "Violation Alert" if agriculture is detected in a protected zone.
 
-### 📊 Historical Reports (UC-11)
+### 📊 Historical reports (UC-11)
 Generate aggregated reports for statistical analysis or court cases.
 - **Filters**: Date range, Province, Protected Area.
 - **Output**: CSV or Excel export of all fire events.
 
 ---
 
-## 5. API Usage Guide (For Developers)
+## 5. API usage guide (for developers)
 
 ### Authentication
 Include your API Key in the `Authorization` header:
@@ -92,11 +92,11 @@ Include your API Key in the `Authorization` header:
 Authorization: Bearer <your_access_token>
 ```
 
-### Rate Limits
+### Rate limits
 - **Public**: 100 requests per minute per IP.
 - **Authenticated**: 1000 requests per minute.
 
-### Common Endpoints
+### Common endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -112,7 +112,7 @@ Authorization: Bearer <your_access_token>
 | `GET` | `/api/v1/analysis/recurrence` | Analyze fire recurrence patterns |
 | `GET` | `/api/v1/analysis/trends` | Get historical fire trends |
 
-### Error Codes
+### Error codes
 - `400 Bad Request`: Invalid coordinates or parameters.
 - `401 Unauthorized`: Missing or invalid API Key.
 - `429 Too Many Requests`: Slow down, rate limit exceeded.
@@ -120,7 +120,7 @@ Authorization: Bearer <your_access_token>
 
 ---
 
-## 6. Email Notifications
+## 6. Email notifications
 
 ForestGuard sends email notifications for the following events:
 
@@ -130,7 +130,7 @@ ForestGuard sends email notifications for the following events:
 | Land Use Violation Detected | Administrators | UC-08 detects illegal activity |
 | Security Alert | Admin | Rate limit exceeded or suspicious activity |
 
-### Changing Email Recipients
+### Changing email recipients
 
 All email addresses are centralized in a single configuration file:
 

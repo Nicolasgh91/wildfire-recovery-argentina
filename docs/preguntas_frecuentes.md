@@ -4,7 +4,7 @@ Este documento responde las preguntas más habituales sobre ForestGuard y aborda
 
 ---
 
-## 📌 Preguntas Frecuentes
+## 📌 Preguntas frecuentes
 
 ### 1. ¿De dónde provienen los datos de incendios?
 
@@ -66,7 +66,7 @@ Está diseñado para organismos públicos, ONGs, empresas, investigadores, perio
 
 ---
 
-## ⚖️ Mitos vs Realidad
+## ⚖️ Mitos vs realidad
 
 ### ❌ Mito: “Los datos satelitales no sirven como evidencia”
 

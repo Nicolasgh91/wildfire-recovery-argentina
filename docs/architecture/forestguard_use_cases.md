@@ -1,45 +1,45 @@
-# 📋 ForestGuard API - Casos de Uso Completos
+# 📋 ForestGuard API - Complete Use Cases
 
-## Resumen Ejecutivo
+## Executive summary
 
-Este documento detalla los **11 casos de uso principales** que la API ForestGuard está diseñada para resolver. Cada caso de uso está vinculado a necesidades reales de fiscalización ambiental, transparencia institucional y defensa del patrimonio natural de Argentina bajo el marco de la Ley 26.815 (Manejo del Fuego).
+This document details the **11 main use cases** that the ForestGuard API is designed to solve. Each use case is linked to real needs for environmental oversight, institutional transparency, and defense of Argentina's natural heritage under the framework of Law 26.815 (Fire Management).
 
 ---
 
-## 🔴 Categoría: Fiscalización y Aplicación de la Ley
+## 🔴 Category: Oversight and law enforcement
 
-### UC-01: Auditoría de Cambio de Uso del Suelo Post-Incendio
+### UC-01: Post-fire land use change audit
 
-**Descripción:**  
-Determinar si una parcela específica fue afectada por un incendio y si existe prohibición legal para cambiar su uso del suelo (loteo, agricultura, construcción).
+**Description:**  
+Determine if a specific plot was affected by a fire and if there is a legal prohibition to change its land use (subdivision, agriculture, construction).
 
-**Actor Principal:** Escribanos, inspectores municipales, compradores de terrenos
+**Primary actor:** Notaries, municipal inspectors, land buyers
 
-**Flujo Principal:**
-1. Usuario ingresa coordenadas geográficas o ID catastral
-2. Sistema busca eventos de incendio en un radio de 500m (configurable)
-3. Sistema determina si la parcela intersecta con área protegida
-4. Sistema calcula fecha de prohibición según Ley 26.815 Art. 22 bis:
-   - 60 años para bosques nativos y áreas protegidas
-   - 30 años para zonas agrícolas/praderas
-5. Sistema retorna:
-   - Lista de incendios históricos
-   - Fechas de prohibición
-   - Imágenes satelitales pre/post fuego
-   - Status legal actual
+**Main flow:**
+1. User inputs geographic coordinates or cadastral ID
+2. System searches for fire events within a 500m radius (configurable)
+3. System determines if the plot intersects with a protected area
+4. System calculates prohibition date according to Law 26.815 Art. 22 bis:
+   - 60 years for native forests and protected areas
+   - 30 years for agricultural zones/grasslands
+5. System returns:
+   - List of historical fires
+   - Prohibition dates
+   - Pre/post fire satellite images
+   - Current legal status
 
-**Datos Requeridos:**
-- `fire_events` (eventos de incendio)
-- `protected_areas` (áreas protegidas)
-- `fire_protected_area_intersections` (cruces espaciales)
-- `satellite_images` (evidencia visual)
+**Data required:**
+- `fire_events` (fire events)
+- `protected_areas` (protected areas)
+- `fire_protected_area_intersections` (spatial intersections)
+- `satellite_images` (visual evidence)
 
 **Endpoint:**
 ```
 GET /api/v1/audit/land-use?lat={lat}&lon={lon}&radius={meters}
 ```
 
-**Respuesta Ejemplo:**
+**Example response:**
 ```json
 {
   "location": {"lat": -27.4658, "lon": -58.8346},
@@ -61,40 +61,40 @@ GET /api/v1/audit/land-use?lat={lat}&lon={lon}&radius={meters}
 }
 ```
 
-**Criterios de Éxito:**
-- ✅ Precisión espacial < 500m
-- ✅ Respuesta en < 2 segundos
-- ✅ Incluye evidencia visual verificable
+**Success criteria:**
+- ✅ Spatial precision < 500m
+- ✅ Response in < 2 seconds
+- ✅ Includes verifiable visual evidence
 
 ---
 
-### UC-02: Generación de Peritaje Judicial Forense
+### UC-02: Forensic judicial report generation
 
-**Descripción:**  
-Producir un informe técnico con contexto climático, cronología del evento y evidencia satelital para uso en procesos judiciales.
+**Description:**  
+Produce a technical report with climatic context, event chronology, and satellite evidence for use in judicial processes.
 
-**Actor Principal:** Peritos judiciales, fiscales ambientales, abogados
+**Primary actor:** Judicial experts, environmental prosecutors, lawyers
 
-**Flujo Principal:**
-1. Usuario solicita peritaje para un incendio específico (ID o coordenadas)
-2. Sistema recopila:
-   - Datos de detecciones satelitales (VIIRS/MODIS)
-   - Condiciones climáticas del día del evento (temperatura, viento, sequía)
-   - Imágenes satelitales antes/después
-   - Historial de incendios en la zona (recurrencia)
-3. Sistema genera PDF estructurado con:
-   - Cronología del evento
-   - Mapa de propagación
-   - Análisis de condiciones propicias
-   - Sección de "Hallazgos Clave"
-4. PDF incluye hash SHA256 para verificación de integridad
+**Main flow:**
+1. User requests a report for a specific fire (ID or coordinates)
+2. System collects:
+   - Satellite detection data (VIIRS/MODIS)
+   - Climatic conditions on the event day (temperature, wind, drought)
+   - Before/after satellite images
+   - Fire history in the area (recurrence)
+3. System generates structured PDF with:
+   - Event chronology
+   - Propagation map
+   - Analysis of propitious conditions
+   - "Key Findings" section
+4. PDF includes SHA256 hash for integrity verification
 
-**Datos Requeridos:**
-- `fire_detections` (detecciones individuales)
-- `fire_events` (evento agregado)
-- `climate_data` (contexto meteorológico)
-- `satellite_images` (evidencia visual)
-- `data_source_metadata` (transparencia de fuentes)
+**Data required:**
+- `fire_detections` (individual detections)
+- `fire_events` (aggregated event)
+- `climate_data` (meteorological context)
+- `satellite_images` (visual evidence)
+- `data_source_metadata` (source transparency)
 
 **Endpoint:**
 ```
@@ -104,11 +104,11 @@ Content-Type: application/json
 {
   "fire_event_id": "uuid-456",
   "report_type": "full_forensic",
-  "language": "es"
+  "language": "en"
 }
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "report_id": "FG-REPORT-2025-001",
@@ -119,35 +119,35 @@ Content-Type: application/json
 }
 ```
 
-**Criterios de Éxito:**
-- ✅ Incluye disclaimers sobre limitaciones de datos
-- ✅ Cita fuentes con precisión (NASA FIRMS, ERA5, Sentinel-2)
-- ✅ Formato admisible en tribunales
+**Success criteria:**
+- ✅ Includes disclaimers about data limitations
+- ✅ Cites sources accurately (NASA FIRMS, ERA5, Sentinel-2)
+- ✅ Format admissible in court
 
 ---
 
-### UC-07: Certificación de Condición Legal del Terreno
+### UC-07: Land legal condition certification
 
-**Descripción:**  
-Emitir un certificado digital verificable que indique si un terreno es legalmente explotable o tiene restricciones por incendios previos.
+**Description:**  
+Issue a verifiable digital certificate indicating whether a land is legally exploitable or has restrictions due to previous fires.
 
-**Actor Principal:** Inmobiliarias, escribanos, compradores, bancos (para hipotecas)
+**Primary actor:** Real estate agencies, notaries, buyers, banks (for mortgages)
 
-**Flujo Principal:**
-1. Usuario solicita certificado para coordenadas específicas
-2. Sistema ejecuta auditoría completa (UC-01)
-3. Sistema genera certificado con:
-   - Número único de certificado
-   - QR code para verificación online
-   - Status legal claro: `clear`, `prohibited`, `restricted`
-   - Vigencia del certificado (ej: 90 días)
-   - Hash SHA256 del contenido
-4. Certificado se guarda en `land_certificates` para auditoría
+**Main flow:**
+1. User requests certificate for specific coordinates
+2. System executes full audit (UC-01)
+3. System generates certificate with:
+   - Unique certificate number
+   - QR code for online verification
+   - Clear legal status: `clear`, `prohibited`, `restricted`
+   - Certificate validity (e.g., 90 days)
+   - SHA256 hash of content
+4. Certificate is saved in `land_certificates` for audit
 
-**Datos Requeridos:**
-- `land_use_audits` (log de la consulta)
-- `fire_events`, `protected_areas` (análisis)
-- `land_certificates` (registro del certificado)
+**Data required:**
+- `land_use_audits` (query log)
+- `fire_events`, `protected_areas` (analysis)
+- `land_certificates` (certificate registry)
 
 **Endpoint:**
 ```
@@ -162,7 +162,7 @@ Content-Type: application/json
 }
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "certificate_number": "FG-CERT-2025-001234",
@@ -177,73 +177,73 @@ Content-Type: application/json
 }
 ```
 
-**Criterios de Éxito:**
-- ✅ Certificado verificable públicamente
-- ✅ Hash anti-falsificación
-- ✅ Lenguaje claro y no técnico
-- ✅ Aceptado por instituciones financieras
+**Success criteria:**
+- ✅ Publicly verifiable certificate
+- ✅ Anti-forgery hash
+- ✅ Clear and non-technical language
+- ✅ Accepted by financial institutions
 
 ---
 
-## 🟡 Categoría: Detección y Alertas
+## 🟡 Category: Detection and alerts
 
-### UC-03: Análisis de Recurrencia y Patrones
+### UC-03: Recurrence and pattern analysis
 
-**Descripción:**  
-Identificar zonas con incendios recurrentes para detectar patrones sospechosos de cambio de uso del suelo sistemático.
+**Description:**  
+Identify zones with recurrent fires to detect suspicious patterns of systematic land use change.
 
-**Actor Principal:** ONGs ambientales, fiscalías especializadas, investigadores
+**Primary actor:** Environmental NGOs, specialized prosecutors, researchers
 
-**Flujo Principal:**
-1. Usuario define área de interés (polígono o radio)
-2. Sistema busca todos los incendios en los últimos N años
-3. Sistema calcula:
-   - Densidad de incendios por km²
-   - Temporalidad (estacional vs fuera de temporada)
-   - Superposiciones (fuegos en la misma área)
-4. Sistema clasifica zonas como:
-   - `low_risk`: < 1 incendio cada 5 años
-   - `medium_risk`: 1-3 incendios cada 5 años
-   - `high_risk`: > 3 incendios cada 5 años (sospechoso)
-5. Genera mapa de calor (heatmap) de recurrencia
+**Main flow:**
+1. User defines area of interest (polygon or radius)
+2. System searches for all fires in the last N years
+3. System calculates:
+   - Fire density per km²
+   - Temporality (seasonal vs off-season)
+   - Overlaps (fires in the same area)
+4. System classifies zones as:
+   - `low_risk`: < 1 fire every 5 years
+   - `medium_risk`: 1-3 fires every 5 years
+   - `high_risk`: > 3 fires every 5 years (suspicious)
+5. Generates recurrence heatmap
 
-**Datos Requeridos:**
-- `fire_events` (histórico completo)
-- `fire_detections` (para análisis temporal fino)
+**Data required:**
+- `fire_events` (full history)
+- `fire_detections` (for fine temporal analysis)
 
 **Endpoint:**
 ```
 GET /api/v1/analysis/recurrence?bbox={minLon},{minLat},{maxLon},{maxLat}&years=10
 ```
 
-**Criterios de Éxito:**
-- ✅ Identifica zonas con > 3 incendios/5 años
-- ✅ Visualización clara de patrones
-- ✅ Exportable como GeoJSON para SIG
+**Success criteria:**
+- ✅ Identifies zones with > 3 fires/5 years
+- ✅ Clear visualization of patterns
+- ✅ Exportable as GeoJSON for GIS
 
 ---
 
-### UC-04: Alerta Temprana por Capacidad de Carga en Áreas Protegidas
+### UC-04: Early warning for park carrying capacity
 
-**Descripción:**  
-Correlacionar afluencia de visitantes en parques con riesgo de incendio para emitir alertas preventivas.
+**Description:**  
+Correlate visitor influx in parks with fire risk to issue preventive alerts.
 
-**Actor Principal:** APN (Administración de Parques Nacionales), guardaparques
+**Primary actor:** APN (National Parks Administration), rangers
 
-**Flujo Principal:**
-1. Sistema recibe datos de visitantes (tickets vendidos, estimaciones)
-2. Sistema calcula capacidad de carga vs ocupación real
-3. Sistema cruza con:
-   - Historial de incendios en la misma temporada
-   - Condiciones climáticas actuales (sequía, viento)
-4. Si capacidad > 80% + condiciones de alto riesgo → Alerta
-5. Notificación a guardaparques para reforzar vigilancia
+**Main flow:**
+1. System receives visitor data (tickets sold, estimates)
+2. System calculates carrying capacity vs real occupancy
+3. System cross-references with:
+   - Fire history in the same season
+   - Current climatic conditions (drought, wind)
+4. If capacity > 80% + high risk conditions → Alert
+5. Notification to rangers to reinforce surveillance
 
-**Datos Requeridos:**
-- `protected_areas` (parques)
-- `fire_events` (historial)
-- `climate_data` (condiciones actuales)
-- Datos externos: afluencia de visitantes (API de APN o manual)
+**Data required:**
+- `protected_areas` (parks)
+- `fire_events` (history)
+- `climate_data` (current conditions)
+- External data: visitor influx (APN API or manual)
 
 **Endpoint:**
 ```
@@ -257,36 +257,36 @@ Content-Type: application/json
 }
 ```
 
-**Criterios de Éxito:**
-- ✅ Alerta emitida con > 12 horas de anticipación
-- ✅ Tasa de falsos positivos < 20%
+**Success criteria:**
+- ✅ Alert issued with > 12 hours anticipation
+- ✅ False positive rate < 20%
 
 ---
 
-### UC-08: Detección de Cambio de Uso Post-Incendio
+### UC-08: Post-fire land use change detection
 
-**Descripción:**  
-Monitorear automáticamente áreas quemadas para detectar actividad humana (construcción, agricultura, minería) que viole la prohibición legal.
+**Description:**  
+Automatically monitor burnt areas to detect human activity (construction, agriculture, mining) that violates the legal prohibition.
 
-**Actor Principal:** Fiscales ambientales, ONGs, ciudadanos vigilantes
+**Primary actor:** Environmental prosecutors, NGOs, vigilant citizens
 
-**Flujo Principal:**
-1. Sistema (VAE Service) procesa imágenes mensuales de áreas quemadas
-2. Calcula NDVI y detecta anomalías:
-   - Caída drástica de NDVI sin recuperación → `bare_soil`
-   - Patrones geométricos → `construction_detected`, `roads_detected`
-   - Vegetación en cuadrícula → `agriculture_detected`
-3. Si detección positiva → Crea registro en `land_use_changes`
-4. Sistema notifica a revisores humanos
-5. Si se confirma → Genera alerta a autoridades
+**Main flow:**
+1. System (VAE Service) processes monthly images of burnt areas
+2. Calculates NDVI and detects anomalies:
+   - Drastic drop in NDVI without recovery → `bare_soil`
+   - Geometric patterns → `construction_detected`, `roads_detected`
+   - Grid vegetation → `agriculture_detected`
+3. If positive detection → Creates record in `land_use_changes`
+4. System notifies human reviewers
+5. If confirmed → Generates alert to authorities
 
-**Datos Requeridos:**
-- `fire_events` (eventos base)
-- `vegetation_monitoring` (NDVI mensual)
-- `satellite_images` (pre/post comparación)
-- `land_use_changes` (detecciones)
+**Data required:**
+- `fire_events` (base events)
+- `vegetation_monitoring` (monthly NDVI)
+- `satellite_images` (pre/post comparison)
+- `land_use_changes` (detections)
 
-**Endpoint (Worker automático):**
+**Endpoint (Automatic Worker):**
 ```
 POST /api/v1/workers/detect-land-use-change
 Content-Type: application/json
@@ -297,7 +297,7 @@ Content-Type: application/json
 }
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "change_detected": true,
@@ -310,81 +310,81 @@ Content-Type: application/json
 }
 ```
 
-**Criterios de Éxito:**
-- ✅ Detección automática > 75% de casos reales
-- ✅ Falsos positivos < 30%
-- ✅ Alerta generada en < 48 horas desde adquisición de imagen
+**Success criteria:**
+- ✅ Automatic detection > 75% of real cases
+- ✅ False positives < 30%
+- ✅ Alert generated in < 48 hours from image acquisition
 
 ---
 
-## 🟢 Categoría: Análisis y Reportes
+## 🟢 Category: Analysis and reports
 
-### UC-05: Tendencias Históricas y Proyecciones
+### UC-05: Historical trends and projections
 
-**Descripción:**  
-Analizar patrones temporales de incendios para identificar tendencias de largo plazo y zonas de riesgo emergente.
+**Description:**  
+Analyze temporal fire patterns to identify long-term trends and emerging risk zones.
 
-**Actor Principal:** Investigadores, planificadores territoriales, medios de comunicación
+**Primary actor:** Researchers, territorial planners, media
 
-**Flujo Principal:**
-1. Usuario selecciona rango temporal (ej: 2004-2024)
-2. Usuario define filtros:
-   - Provincia/región
-   - Tipo de área (protegida, agrícola, urbana)
-   - Temporada (invierno, verano)
-3. Sistema calcula:
-   - Número de incendios por año
-   - Hectáreas afectadas totales
-   - Intensidad promedio (FRP)
-   - Distribución espacial (migración de zonas calientes)
-4. Sistema genera:
-   - Gráficos de serie temporal
-   - Mapas de evolución espacial
-   - Predicción básica de tendencia (regresión lineal)
+**Main flow:**
+1. User selects time range (e.g., 2004-2024)
+2. User defines filters:
+   - Province/region
+   - Area type (protected, agricultural, urban)
+   - Season (winter, summer)
+3. System calculates:
+   - Number of fires per year
+   - Total affected hectares
+   - Average intensity (FRP)
+   - Spatial distribution (hotspot migration)
+4. System generates:
+   - Time series charts
+   - Spatial evolution maps
+   - Basic trend prediction (linear regression)
 
-**Datos Requeridos:**
-- `fire_events` (histórico completo 2004-2024)
-- `protected_areas` (clasificación de zonas)
+**Data required:**
+- `fire_events` (full history 2004-2024)
+- `protected_areas` (zone classification)
 
 **Endpoint:**
 ```
 GET /api/v1/analysis/trends?start_year=2004&end_year=2024&province=Corrientes
 ```
 
-**Criterios de Éxito:**
-- ✅ Visualización interactiva
-- ✅ Exportable como CSV/JSON
-- ✅ Incluye intervalos de confianza en proyecciones
+**Success criteria:**
+- ✅ Interactive visualization
+- ✅ Exportable as CSV/JSON
+- ✅ Includes confidence intervals in projections
 
 ---
 
-### UC-06: Seguimiento de Recuperación de Vegetación (Reforestación)
+### UC-06: Vegetation recovery tracking (reforestation)
 
-**Descripción:**  
-Monitorear la recuperación natural de áreas quemadas mediante índices de vegetación (NDVI) durante 36 meses post-incendio.
+**Description:**  
+Monitor natural recovery of burnt areas using vegetation indices (NDVI) for 36 months post-fire.
 
-**Actor Principal:** Ecólogos, ONGs de reforestación, APN
+**Primary actor:** Ecologists, reforestation NGOs, APN
 
-**Flujo Principal:**
-1. Sistema identifica áreas quemadas
-2. Sistema (VAE Service) procesa mensualmente imagen Sentinel-2
-3. Calcula NDVI promedio del área quemada
-4. Compara con NDVI pre-fuego (baseline) detectando tasa de recuperación
-5. Calcula % de recuperación
-6. Almacena en `vegetation_monitoring`
-7. Genera gráfico de evolución temporal
+**Main flow:**
+1. System identifies burnt areas
+2. System (VAE Service) processes monthly Sentinel-2 image
+3. Calculates average NDVI of the burnt area
+4. Compares with pre-fire NDVI (baseline) detecting recovery rate
+5. Calculates % recovery
+6. Stores in `vegetation_monitoring`
+7. Generates temporal evolution chart
 
-**Datos Requeridos:**
-- `fire_events` (área base)
-- `satellite_images` (imágenes mensuales)
-- `vegetation_monitoring` (serie temporal de NDVI)
+**Data required:**
+- `fire_events` (base area)
+- `satellite_images` (monthly images)
+- `vegetation_monitoring` (NDVI time series)
 
 **Endpoint:**
 ```
 GET /api/v1/monitoring/recovery/{fire_event_id}
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "fire_event_id": "uuid-456",
@@ -398,42 +398,42 @@ GET /api/v1/monitoring/recovery/{fire_event_id}
 }
 ```
 
-**Criterios de Éxito:**
-- ✅ Imágenes sin nubes > 80% de los meses
-- ✅ Detección de "no recuperación" (posible uso ilegal)
+**Success criteria:**
+- ✅ Cloud-free images > 80% of months
+- ✅ Detection of "non-recovery" (possible illegal use)
 
 ---
 
-### UC-10: Evaluación de Confiabilidad del Dato
+### UC-10: Data reliability assessment
 
-**Descripción:**  
-Proveer métricas de calidad y confiabilidad de cada evento de incendio para uso en peritajes y análisis científicos.
+**Description:**  
+Provide quality and reliability metrics for each fire event for use in expert reports and scientific analysis.
 
-**Actor Principal:** Peritos, investigadores, periodistas de datos
+**Primary actor:** Experts, researchers, data journalists
 
-**Flujo Principal:**
-1. Usuario consulta evento específico o conjunto de eventos
-2. Sistema calcula "Reliability Score" (0-100) basado en:
-   - Confianza promedio de detecciones (40%)
-   - Disponibilidad de imágenes satelitales (20%)
-   - Datos climáticos disponibles (20%)
-   - Número de detecciones independientes (20%)
-3. Sistema clasifica como: `high`, `medium`, `low` reliability
-4. Sistema expone metadata de fuentes:
-   - Resolución espacial (VIIRS 375m, Sentinel-2 10m)
-   - Limitaciones conocidas
-   - Admisibilidad legal
+**Main flow:**
+1. User queries specific event or set of events
+2. System calculates "Reliability Score" (0-100) based on:
+   - Average detection confidence (40%)
+   - Satellite imagery availability (20%)
+   - Climate data available (20%)
+   - Number of independent detections (20%)
+3. System classifies as: `high`, `medium`, `low` reliability
+4. System exposes source metadata:
+   - Spatial resolution (VIIRS 375m, Sentinel-2 10m)
+   - Known limitations
+   - Legal admissibility
 
-**Datos Requeridos:**
-- `fire_event_quality_metrics` (vista)
-- `data_source_metadata` (tabla de fuentes)
+**Data required:**
+- `fire_event_quality_metrics` (view)
+- `data_source_metadata` (source table)
 
 **Endpoint:**
 ```
 GET /api/v1/quality/fire-event/{fire_event_id}
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "fire_event_id": "uuid-789",
@@ -461,41 +461,41 @@ GET /api/v1/quality/fire-event/{fire_event_id}
 }
 ```
 
-**Criterios de Éxito:**
-- ✅ Transparencia total de fuentes
-- ✅ Score reproducible y documentado
-- ✅ Útil para defensa legal
+**Success criteria:**
+- ✅ Total source transparency
+- ✅ Reproducible and documented score
+- ✅ Useful for legal defense
 
 ---
 
-### UC-11: Búsqueda y Generación de Reportes Históricos en Áreas Protegidas
+### UC-11: Historical report search and generation in protected areas
 
-**Descripción:**  
-Implementar funcionalidad que permita la identificación, validación y monitoreo de eventos de incendio históricos en áreas protegidas, con la capacidad de generar reportes detallados en formato PDF.
+**Description:**  
+Implement functionality to identify, validate, and monitor historical fire events in protected areas, with the capability to generate detailed PDF reports.
 
-**Actor Principal:** Guardaparques, Investigadores, Autoridades de aplicación
+**Primary actor:** Rangers, Researchers, Enforcement authorities
 
-**Flujo Principal:**
-1. Usuario configura búsqueda de imágenes de incendio por periodo de tiempo.
-2. Usuario selecciona un área protegida específica.
-3. Sistema muestra la cantidad de áreas afectadas por los eventos identificados.
-4. Usuario solicita generación de reporte PDF.
-5. Sistema obtiene imágenes Pre-Fuego (baja nubosidad, ventana 30 días previos).
-6. Sistema obtiene imágenes Post-Fuego (frecuencia configurable diaria/mensual/anual, hasta 1 año post-fuego, máx 12 imágenes).
-7. Sistema (ERS) genera PDF incluyendo:
-   - Grilla de imágenes
-   - Metadatos, hash y código QR de verificación
-   - Logo del proyecto y branding oficial
+**Main flow:**
+1. User configures fire image search by time period.
+2. User selects a specific protected area.
+3. System shows the amount of areas affected by identified events.
+4. User requests PDF report generation.
+5. System obtains Pre-Fire images (low cloudiness, 30 days prior window).
+6. System obtains Post-Fire images (configurable frequency daily/monthly/yearly, up to 1 year post-fire, max 12 images).
+7. System (ERS) generates PDF including:
+   - Image grid
+   - Metadata, hash, and verification QR code
+   - Project logo and official branding
 
-**Datos Requeridos:**
+**Data required:**
 - `protected_areas`
-- `sentinel_2_imagery` (vía STAC Copernicus/Planetary Computer)
+- `sentinel_2_imagery` (via STAC Copernicus/Planetary Computer)
 - `fire_events_metadata`
 
-**Requerimientos Técnicos:**
-- **Calidad de Imagen**: Resolución suficiente para identificar construcciones, caminos, vegetación (Sentinel-2 viable).
-- **Eficiencia**: Queries optimizadas (lightweight) y caching con TTL (Redis).
-- **Almacenamiento**: No guardar imágenes/reportes pesados en BD, solo metadatos.
+**Technical requirements:**
+- **Image Quality**: Sufficient resolution to identify constructions, roads, vegetation (Sentinel-2 viable).
+- **Efficiency**: Optimized lightweight queries and caching with TTL (Redis).
+- **Storage**: Do not store heavy images/reports in DB, only metadata.
 
 **Endpoint:**
 ```
@@ -512,43 +512,43 @@ Content-Type: application/json
 }
 ```
 
-**Criterios de Éxito:**
-- ✅ Identificación clara de elementos en terreno
-- ✅ Reporte PDF generado con branding correcto
-- ✅ Uso eficiente de API STAC (imágenes recortadas al AOI)
+**Success criteria:**
+- ✅ Clear identification of elements on the ground
+- ✅ PDF report generated with correct branding
+- ✅ Efficient use of STAC API (images cropped to AOI)
 
 ---
 
-## 🔵 Categoría: Participación Ciudadana
+## 🔵 Category: Citizen participation
 
-### UC-09: Soporte a Denuncias Ciudadanas
+### UC-09: Citizen reporting support
 
-**Descripción:**  
-Permitir que ciudadanos, ONGs y comunidades reporten actividad sospechosa en áreas quemadas y reciban un paquete de evidencia satelital automático.
+**Description:**  
+Allow citizens, NGOs, and communities to report suspicious activity in burnt areas and receive an automatic satellite evidence package.
 
-**Actor Principal:** Ciudadanos, ONGs, comunidades indígenas, medios
+**Primary actor:** Citizens, NGOs, indigenous communities, media
 
-**Flujo Principal:**
-1. Usuario accede a formulario web (anónimo o con registro)
-2. Usuario marca ubicación en mapa y describe:
-   - Tipo de actividad (construcción, desmonte, etc)
-   - Fecha observada
-   - Fotos opcionales (subidas a R2)
-3. Sistema automáticamente:
-   - Busca incendios históricos en 1km de radio
-   - Busca áreas protegidas cercanas
-   - Genera paquete de evidencia usando Evidence Reporting Service (ERS):
-     - Imágenes satelitales pre/post fuego
-     - Cronología de incendios
-     - Status legal del área
-4. Denuncia queda registrada en `citizen_reports`
-5. Sistema notifica a revisores (ONGs, autoridades)
-6. Si se verifica → Se marca como `forwarded_to_authorities`
+**Main flow:**
+1. User accesses web form (anonymous or registered)
+2. User marks location on map and describes:
+   - Activity type (construction, clearing, etc.)
+   - Date observed
+   - Optional photos (uploaded to R2)
+3. System automatically:
+   - Searches historical fires in 1km radius
+   - Searches nearby protected areas
+   - Generates evidence package using Evidence Reporting Service (ERS):
+     - Pre/post fire satellite images
+     - Fire chronology
+     - Legal status of the area
+4. Report is registered in `citizen_reports`
+5. System notifies reviewers (NGOs, authorities)
+6. If verified → Marked as `forwarded_to_authorities`
 
-**Datos Requeridos:**
-- `citizen_reports` (denuncias)
-- `fire_events`, `protected_areas` (cruce automático)
-- `satellite_images` (evidencia)
+**Data required:**
+- `citizen_reports` (reports)
+- `fire_events`, `protected_areas` (automatic cross-reference)
+- `satellite_images` (evidence)
 
 **Endpoint:**
 ```
@@ -559,14 +559,14 @@ Content-Type: application/json
   "latitude": -27.1234,
   "longitude": -55.4567,
   "report_type": "construction_in_prohibited_area",
-  "description": "Se observan movimientos de suelo y maquinaria en zona quemada en 2022",
+  "description": "Soil movement and machinery observed in 2022 burnt zone",
   "observed_date": "2025-01-20",
-  "reporter_email": "ciudadano@example.com",
+  "reporter_email": "citizen@example.com",
   "is_anonymous": false
 }
 ```
 
-**Respuesta:**
+**Response:**
 ```json
 {
   "report_id": "uuid-report-123",
@@ -578,64 +578,64 @@ Content-Type: application/json
 }
 ```
 
-**Criterios de Éxito:**
-- ✅ Formulario simple (< 5 minutos completar)
-- ✅ Evidencia generada automáticamente en < 1 minuto
-- ✅ Opción de anonimato respetada
-- ✅ Integración con canal de Telegram/WhatsApp para ONGs
+**Success criteria:**
+- ✅ Simple form (< 5 minutes to complete)
+- ✅ Evidence generated automatically in < 1 minute
+- ✅ Anonymity option respected
+- ✅ Integration with Telegram/WhatsApp channel for NGOs
 
 ---
 
-## 📊 Matriz de Casos de Uso
+## 📊 Use case matrix
 
-| UC | Nombre | Prioridad | Complejidad | Impacto Legal | Impacto Social |
-|----|--------|-----------|-------------|---------------|----------------|
-| UC-01 | Auditoría Anti-Loteo | 🔴 ALTA | Media | ⚖️ Alto | 🏘️ Alto |
-| UC-02 | Peritaje Judicial | 🔴 ALTA | Alta | ⚖️ Muy Alto | 📜 Medio |
-| UC-03 | Recurrencia | 🟡 MEDIA | Media | ⚖️ Medio | 🔍 Alto |
-| UC-04 | Alerta Temprana | 🟡 MEDIA | Baja | ⚖️ Bajo | 🚨 Medio |
-| UC-05 | Tendencias | 🟢 BAJA | Media | ⚖️ Bajo | 📊 Alto |
-| UC-06 | Reforestación | 🟡 MEDIA | Alta | ⚖️ Medio | 🌳 Alto |
-| UC-07 | Certificación | 🔴 ALTA | Media | ⚖️ Muy Alto | 💼 Alto |
-| UC-08 | Cambio de Uso | 🔴 ALTA | Muy Alta | ⚖️ Alto | 🚧 Alto |
-| UC-09 | Denuncias | 🟡 MEDIA | Baja | ⚖️ Medio | 🧑‍🤝‍🧑 Muy Alto |
-| UC-10 | Calidad Dato | 🔴 ALTA | Baja | ⚖️ Alto | 🔬 Medio |
-| UC-11 | Reportes Hist. | 🟡 MEDIA | Media | ⚖️ Medio | 📊 Alto |
-
----
-
-## 🎯 Roadmap de Implementación
-
-### Fase 1: MVP Core (Semanas 1-6)
-- ✅ UC-01: Auditoría Anti-Loteo
-- ✅ UC-02: Peritaje Judicial
-- ✅ UC-06: Reforestación (básico)
-- ✅ UC-10: Calidad del Dato
-- ✅ UC-11: Reportes Históricos (MVP)
-
-### Fase 2: Certificación y Alertas (Semanas 7-8)
-- ✅ UC-07: Certificación Legal
-- ✅ UC-09: Denuncias Ciudadanas
-- ⚠️ UC-08: Cambio de Uso (reglas básicas)
-
-### Fase 3: Post-MVP (Después del lanzamiento)
-- 🔜 UC-03: Análisis de Recurrencia
-- 🔜 UC-04: Alertas por Capacidad
-- 🔜 UC-05: Tendencias Históricas
-- 🔜 UC-08: Cambio de Uso (ML avanzado)
-- 🔜 UC-11: Reportes Históricos (v2)
+| UC | Name | Priority | Complexity | Legal Impact | Social Impact |
+|----|------|----------|------------|--------------|---------------|
+| UC-01 | Anti-Loteo Audit | 🔴 HIGH | Medium | ⚖️ High | 🏘️ High |
+| UC-02 | Judicial Report | 🔴 HIGH | High | ⚖️ Very High | 📜 Medium |
+| UC-03 | Recurrence | 🟡 MEDIUM | Medium | ⚖️ Medium | 🔍 High |
+| UC-04 | Early Warning | 🟡 MEDIUM | Low | ⚖️ Low | 🚨 Medium |
+| UC-05 | Trends | 🟢 LOW | Medium | ⚖️ Low | 📊 High |
+| UC-06 | Reforestation | 🟡 MEDIUM | High | ⚖️ Medium | 🌳 High |
+| UC-07 | Certification | 🔴 HIGH | Medium | ⚖️ Very High | 💼 High |
+| UC-08 | Land Use Change | 🔴 HIGH | Very High | ⚖️ High | 🚧 High |
+| UC-09 | Reporting | 🟡 MEDIUM | Low | ⚖️ Medium | 🧑‍🤝‍🧑 Very High |
+| UC-10 | Data Quality | 🔴 HIGH | Low | ⚖️ High | 🔬 Medium |
+| UC-11 | Hist. Reports | 🟡 MEDIUM | Medium | ⚖️ Medium | 📊 High |
 
 ---
 
-## 📞 Contacto y Feedback
+## 🎯 Implementation roadmap
 
-Para sugerencias de nuevos casos de uso o mejoras:
+### Phase 1: Core MVP (weeks 1-6)
+- ✅ UC-01: Anti-Loteo Audit
+- ✅ UC-02: Judicial Report
+- ✅ UC-06: Reforestation (basic)
+- ✅ UC-10: Data Quality
+- ✅ UC-11: Historical Reports (MVP)
+
+### Phase 2: Certification and alerts (weeks 7-8)
+- ✅ UC-07: Legal Certification
+- ✅ UC-09: Citizen Reporting
+- ⚠️ UC-08: Land Use Change (basic rules)
+
+### Phase 3: Post-MVP (after launch)
+- 🔜 UC-03: Recurrence Analysis
+- 🔜 UC-04: Building Capacity Alerts
+- 🔜 UC-05: Historical Trends
+- 🔜 UC-08: Land Use Change (advanced ML)
+- 🔜 UC-11: Historical Reports (v2)
+
+---
+
+## 📞 Contact and feedback
+
+For new use case suggestions or improvements:
 - GitHub Issues: `github.com/forestguard/api/issues`
 - Email: `contact@forestguard.ar`
 - Community: `discord.gg/forestguard`
 
 ---
 
-**Versión:** 3.0  
-**Última actualización:** 2025-01-24  
-**Autores:** ForestGuard Team
+**Version:** 3.0  
+**Last updated:** 2025-01-24  
+**Authors:** ForestGuard Team
