@@ -1,4 +1,8 @@
 # Exportar todos los routers
-from . import fires, audit, certificates
+from . import fires, audit, certificates, monitoring, reports, citizen, quality, analysis, historical
 
-__all__ = ["fires", "audit", "certificates"]
+__all__ = [
+    "fires", "audit", "certificates", "monitoring", 
+    "reports", "citizen", "quality", "analysis", "historical"
+]
+

@@ -104,6 +104,13 @@ Authorization: Bearer <your_access_token>
 | `POST` | `/api/v1/audit/land-use` | Verificar prohibiciones de fuego |
 | `GET` | `/api/v1/fires/{id}` | Obtener detalles de un incendio |
 | `POST` | `/api/v1/certificates/request` | Generar certificado PDF |
+| `GET` | `/api/v1/monitoring/recovery/{fire_id}` | Obtener línea de tiempo de recuperación |
+| `POST` | `/api/v1/reports/judicial` | Generar reporte pericial forense |
+| `POST` | `/api/v1/reports/historical` | Generar reporte histórico de incendios |
+| `POST` | `/api/v1/citizen/submit` | Enviar denuncia ciudadana |
+| `GET` | `/api/v1/quality/fire-event/{id}` | Obtener métricas de calidad de datos |
+| `GET` | `/api/v1/analysis/recurrence` | Analizar patrones de recurrencia |
+| `GET` | `/api/v1/analysis/trends` | Obtener tendencias históricas |
 
 ### Códigos de Error
 - `400 Bad Request`: Coordenadas o parámetros inválidos.
@@ -113,4 +120,37 @@ Authorization: Bearer <your_access_token>
 
 ---
 
+## 6. Notificaciones por Email
+
+ForestGuard envía notificaciones por email para los siguientes eventos:
+
+| Evento | Destinatarios | Disparador |
+|--------|---------------|------------|
+| Denuncia Ciudadana Recibida | Administradores | Nueva denuncia UC-09 recibida |
+| Violación de Uso de Suelo Detectada | Administradores | UC-08 detecta actividad ilegal |
+| Alerta de Seguridad | Admin | Límite de tasa excedido o actividad sospechosa |
+
+### Cambiar Destinatarios de Email
+
+Todas las direcciones de email están centralizadas en un único archivo de configuración:
+
+```
+app/core/email_config.py
+```
+
+Para actualizar los destinatarios, modifique la variable correspondiente en este archivo:
+
+```python
+# Ejemplo: Cambiar email de administrador
+ADMIN_EMAIL = "tu-email@dominio.com"
+
+# Ejemplo: Agregar múltiples destinatarios para denuncias ciudadanas
+CITIZEN_REPORTS_NOTIFY = ["email1@dominio.com", "email2@dominio.com"]
+```
+
+Después de modificar, reinicie la aplicación para que los cambios surtan efecto.
+
+---
+
 **Soporte**: contacto@forestguard.ar
+

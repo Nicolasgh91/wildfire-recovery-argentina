@@ -9,7 +9,10 @@ from app.core.logging import setup_logging
 from app.core.errors import register_exception_handlers
 from app.core.security import verify_api_key
 from app.core.rate_limiter import check_ip_rate_limit
-from app.api.routes import fires, certificates, audit #, reports, monitoring, citizen
+from app.api.routes import (
+    fires, certificates, audit,
+    reports, monitoring, citizen, quality, analysis
+)
 
 # Setup logging
 logger = setup_logging()
@@ -58,7 +61,6 @@ app.include_router(
     prefix=f"{settings.API_V1_PREFIX}/fires",
     tags=["fires"]
 )
-# COMENTADO POR MVP, faltan actualizaciones en otros módulos
 
 app.include_router(
     audit.router,
@@ -66,32 +68,49 @@ app.include_router(
     tags=["audit"],
     dependencies=[Depends(verify_api_key), Depends(check_ip_rate_limit)]
 )
-"""
-app.include_router(
-    reports.router,
-    prefix=f"{settings.API_V1_PREFIX}/reports",
-    tags=["reports"]
-)
-"""
+
 app.include_router(
     certificates.router,
     prefix=f"{settings.API_V1_PREFIX}/certificates",
     tags=["certificates"],
     dependencies=[Depends(verify_api_key), Depends(check_ip_rate_limit)]
 )
-"""
+
+# UC-06: Vegetation Recovery Monitoring
 app.include_router(
     monitoring.router,
     prefix=f"{settings.API_V1_PREFIX}/monitoring",
     tags=["monitoring"]
 )
 
+# UC-02, UC-11: Reports (Judicial, Historical)
+app.include_router(
+    reports.router,
+    prefix=f"{settings.API_V1_PREFIX}/reports",
+    tags=["reports"],
+    dependencies=[Depends(verify_api_key)]
+)
+
+# UC-09: Citizen Reports (no API key required for submission)
 app.include_router(
     citizen.router,
     prefix=f"{settings.API_V1_PREFIX}/citizen",
     tags=["citizen"]
 )
-"""
+
+# UC-10: Data Quality Metrics
+app.include_router(
+    quality.router,
+    prefix=f"{settings.API_V1_PREFIX}/quality",
+    tags=["quality"]
+)
+
+# UC-03, UC-05: Analysis (Recurrence, Trends)
+app.include_router(
+    analysis.router,
+    prefix=f"{settings.API_V1_PREFIX}/analysis",
+    tags=["analysis"]
+)
 
 # Health check endpoint
 @app.get(

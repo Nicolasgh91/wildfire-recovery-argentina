@@ -2,7 +2,7 @@
 
 **Plataforma de inteligencia geoespacial para fiscalización legal de incendios forestales en Argentina**
 
-> 🌍 **Read in English**: [Jump to English Version](#-forestguard-api-english-version)
+> 🌍 **Read in English**: [Jump to English version](#-forestguard-api-english-version)
 
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -12,8 +12,8 @@
 [![Production](https://img.shields.io/badge/Production-Live-success.svg)](https://forestguard.freedynamicdns.org/docs)
 ![Progress](https://img.shields.io/badge/Progress-70%25-green.svg)
 
-> 🌐 **Live Production API**: [https://forestguard.freedynamicdns.org/docs](https://forestguard.freedynamicdns.org/docs)  
-> 🖥️ **Infrastructure**: Oracle Cloud Free Tier  
+> 🌐 **Live production API**: [https://forestguard.freedynamicdns.org/docs](https://forestguard.freedynamicdns.org/docs)  
+> 🖥️ **Infrastructure**: Oracle Cloud free tier  
 > 📡 **Status**: Active & Monitoring
 
 ---
@@ -22,7 +22,7 @@
 
 **ForestGuard** es una plataforma de inteligencia ambiental diseñada para **detectar, analizar, auditar y documentar incendios forestales en Argentina**, transformando datos satelitales crudos en **información accionable, trazable y legalmente verificable**.
 
-El proyecto nace para resolver un problema concreto: **los datos sobre incendios existen, pero están fragmentados, son difíciles de interpretar y casi nunca se convierten en evidencia útil para la toma de decisiones, la rendición de cuentas o procesos legales**.
+El proyecto nace para resolver un problema concreto: **los datos sobre incendios existen, pero están fragmentados, son difíciles de interpretar y casi nunca se convierten en evidencia útil para la toma de decisiones o procesos legales**.
 
 ForestGuard transforma datos satelitales en **evidencia legal** para aplicar el artículo 22 bis de la Ley 26.815, que prohíbe el cambio de uso del suelo en terrenos afectados por incendios durante 30-60 años.
 
@@ -36,7 +36,7 @@ Hoy, en Argentina:
 
   * consolide detecciones en **eventos reales**,
   * permita **auditar zonas específicas**,
-  * genere **evidencia verificable** para organismos, ONGs o ciudadanos.
+  * genere **evidencia verificable** para organismos, ONGs o personas interesadas.
 
 **ForestGuard cierra esa brecha entre datos abiertos y decisiones reales.**
 
@@ -49,35 +49,36 @@ ForestGuard convierte millones de detecciones satelitales en:
 * 🌱 **Monitoreo de recuperación** de vegetación post-incendio
 * 🚧 **Detección de cambios ilegales** de uso del suelo
 
-Todo con una arquitectura moderna, escalable y orientada a APIs.
+
+
 
 ## 📚 Documentación
 
-Guías detalladas para todos los perfiles de usuario:
+Guías detalladas:
 
-### 📘 Manuales de Usuario
-- **Español**: [Manual de Usuario](docs/MANUAL_DE_USUARIO.md)
-- **English**: [User Manual](docs/USER_MANUAL.md)
+### 📘 Manuales de usuario
+- **Español**: [Manual de usuario](docs/MANUAL_DE_USUARIO.md)
+- **English**: [User manual](docs/USER_MANUAL.md)
 
-### ❓ Preguntas Frecuentes
-- **Español**: [Preguntas Frecuentes (FAQ)](docs/preguntas_frecuentes.md)
+### ❓ Preguntas frecuentes
+- **Español**: [Preguntas frecuentes (FAQ)](docs/preguntas_frecuentes.md)
 - **English**: [Frequently Asked Questions](docs/faq.md)
 
-### 📖 Glosario Técnico
+### 📖 Glosario técnico
 - **Español**: [Glosario](docs/glosario.md)
 - **English**: [Glossary](docs/glossary.md)
 
-### 📐 Arquitectura y Diseño
-- [Documentación de Arquitectura](Architecture/forestguard_architecture.md)
+### 📐 Arquitectura y diseño
+- [Documentación de arquitectura](Architecture/forestguard_architecture.md)
 - [Casos de Uso Detallados](Architecture/forestguard_use_cases.md)
 - [Plan del Proyecto](Architecture/PROJECT_PLAN.md)
 - [Manual de Marca (Branding)](Architecture/wildfire_branding.md)
 
 ---
 
-## 🧩 Casos de Uso (11 implementados)
+## 🧩 Casos de uso (11 implementados)
 
-### Lista Completa de Funcionalidades
+### Lista completa de funcionalidades
 
 | UC | Categoría | Nombre | Descripción | Estado |
 |---|---|---|---|---|
@@ -95,7 +96,7 @@ Guías detalladas para todos los perfiles de usuario:
 
 ---
 
-## 🏗️ Arquitectura Unificada
+## 🏗️ Arquitectura unificada
 
 ForestGuard utiliza una **arquitectura híbrida API + Workers** con módulos compartidos para eliminar redundancias:
 
@@ -138,16 +139,16 @@ ForestGuard utiliza una **arquitectura híbrida API + Workers** con módulos com
       └──────────────┘    └──────────────┘    └──────────────┘
 ```
 
-### 🆕 Módulos Compartidos (Unified Architecture)
+### 🆕 Módulos compartidos (unified architecture)
 
-#### Vegetation Analysis Engine (VAE)
+#### Vegetation analysis engine (VAE)
 Módulo centralizado para análisis de vegetación usando NDVI:
 - **UC-06**: Monitoreo de recuperación (reforestación)
 - **UC-08**: Detección de cambios ilegales de uso
 
 **Ventajas**: Evita duplicación de procesamiento GEE, mantiene consistencia metodológica.
 
-#### Evidence Reporting Service (ERS)
+#### Evidence reporting service (ERS)
 Motor unificado para generación de reportes verificables:
 - **UC-09**: Paquetes de evidencia para denuncias
 - **UC-11**: Reportes históricos en áreas protegidas
@@ -157,7 +158,7 @@ Motor unificado para generación de reportes verificables:
 
 ---
 
-## 🛠️ Stack Tecnológico
+## 🛠️ Stack tecnológico
 
 ### Backend
 | Componente | Tecnología | Versión |
@@ -167,15 +168,15 @@ Motor unificado para generación de reportes verificables:
 | Async Tasks | Celery + Redis | 5.3+ |
 | PDF Generation | WeasyPrint | - |
 
-### Database & Storage
+### Database & storage
 | Componente | Tecnología | Límites |
 |------------|------------|---------|
 | Database | PostgreSQL 14 + PostGIS 3.0 | 500 MB (Supabase free) |
-| Object Storage | Cloudflare R2 | 10 GB free |
-| Cache/Queue | Redis | - |
+| Object storage | Cloudflare R2 | 10 GB free |
+| Cache/queue | Redis | - |
 
-### Data Sources
-| Fuente | Propósito | Frecuencia |
+### Data sources
+| Source | Purpose | Frequency |
 |--------|-----------|------------|
 | NASA FIRMS (VIIRS/MODIS) | Detección de incendios | Diaria |
 | Google Earth Engine (GEE) | Imágenes Sentinel-2, NDVI | Mensual |
@@ -190,7 +191,7 @@ Motor unificado para generación de reportes verificables:
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick start
 
 ### Requisitos
 
@@ -200,11 +201,11 @@ Motor unificado para generación de reportes verificables:
 - Cuenta en [Supabase](https://supabase.com) (base de datos)
 - Cuenta Google Cloud con Earth Engine API habilitada
 
-### Instalación Local
+### Instalación local
 
 ```bash
 # 1. Clonar repositorio
-git clone https://github.com/Nicolasgh91/wildfire-recovery-argentina.git
+git clone https://github.com/nicolasgabrielh91/wildfire-recovery-argentina.git
 cd wildfire-recovery-argentina
 
 # 2. Crear entorno virtual
@@ -244,11 +245,11 @@ open http://localhost:8000/docs
 
 ---
 
-## 📚 API Endpoints
+## 📚 API endpoints
 
-### Core Endpoints
+### Core endpoints
 
-#### Auditoría Legal (UC-01) ✅
+#### Legal audit (UC-01) ✅
 ```bash
 POST /api/v1/audit/land-use
 ```
@@ -287,7 +288,7 @@ GET /api/v1/certificates/download/{certificate_number}
 GET /api/v1/certificates/verify/{certificate_number}
 ```
 
-#### Health Check ✅
+#### Health check ✅
 ```bash
 GET https://forestguard.freedynamicdns.org/health
 ```
@@ -300,7 +301,7 @@ Verifica estado de todos los componentes:
 
 ---
 
-## 📁 Estructura del Proyecto
+## 📁 Estructura del proyecto
 
 ```
 wildfire-recovery-argentina/
@@ -344,7 +345,7 @@ wildfire-recovery-argentina/
 
 ## 🔧 Configuración
 
-### Variables de Entorno Requeridas
+### Variables de entorno requeridas
 
 ```bash
 # Base de datos (Supabase)
@@ -377,9 +378,9 @@ DEBUG=false
 SECRET_KEY=tu_clave_secreta_aleatoria
 ```
 
-### Obtener Credenciales
+### Obtener credenciales
 
-#### NASA FIRMS API Key
+#### NASA FIRMS API key
 1. Ir a https://firms.modaps.eosdis.nasa.gov/api/area/
 2. Registrarse (gratis)
 3. Copiar el API key
@@ -409,15 +410,15 @@ SECRET_KEY=tu_clave_secreta_aleatoria
 **DNS**: FreeDynamicDNS  
 **SSL**: Let's Encrypt (Auto-renewal)  
 
-**Deployment Stack**:
+**Deployment stack**:
 - VM Shape: Ampere A1 (ARM) / 1 OCPU, 6GB RAM
 - OS: Ubuntu 22.04 LTS
-- Reverse Proxy: Nginx
-- Process Manager: systemd / PM2
+- Reverse proxy: Nginx
+- Process manager: systemd / PM2
 - Database: Supabase (PostgreSQL + PostGIS)
 - Storage: Cloudflare R2
 
-### Docker (Desarrollo Local)
+### Docker (desarrollo local)
 
 ```bash
 # Desarrollo
@@ -427,14 +428,14 @@ docker-compose up -d
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-### Deploy Manual (Oracle Cloud)
+### Deploy manual (Oracle Cloud)
 
 ```bash
 # 1. Conectar a VM
 ssh ubuntu@<instance-ip>
 
 # 2. Clonar repo
-git clone https://github.com/Nicolasgh91/wildfire-recovery-argentina.git
+git clone https://github.com/nicolasgabrielh91/wildfire-recovery-argentina.git
 cd wildfire-recovery-argentina
 
 # 3. Setup environment
@@ -460,9 +461,9 @@ sudo certbot --nginx -d forestguard.freedynamicdns.org
 
 ---
 
-## 📊 Scripts de Mantenimiento
+## 📊 Scripts de mantenimiento
 
-### Carga Incremental de Datos
+### Carga incremental de datos
 
 ```bash
 # Descargar últimos 2 días de FIRMS
@@ -477,7 +478,7 @@ python workers/tasks/climate.py --days 7
 
 ---
 
-## 📜 Marco Legal
+## 📜 Marco legal
 
 ### Ley 26.815 Art. 22 bis
 
@@ -509,7 +510,7 @@ pytest tests/e2e/test_audit_flow.py
 
 ---
 
-## 📈 Roadmap & Estado
+## 📈 Roadmap & estado
 
 ### ✅ Completado (70%)
 
@@ -526,7 +527,7 @@ pytest tests/e2e/test_audit_flow.py
 - [x] Docker setup
 - [x] Security hardening & RLS policies
 
-### ⏳ En Desarrollo (20%)
+### ⏳ En desarrollo (20%)
 
 - [ ] VAE Service (UC-06, UC-08)
 - [ ] ERS Service (UC-09, UC-11)
@@ -546,24 +547,24 @@ pytest tests/e2e/test_audit_flow.py
 
 ## 🔒 Seguridad
 
-### Mejores Prácticas Implementadas
+### Mejores prácticas implementadas
 
-- ✅ **RLS Policies**: Row Level Security en Supabase
-- ✅ **Rate Limiting**: 
+- ✅ **RLS policies**: Row Level Security en Supabase
+- ✅ **Rate limiting**: 
   - **Global**: 100 req/min por IP (Cloudflare/Nginx)
-  - **App-Level**: Bloqueo automático de IP tras 10 intentos fallidos/día + Alerta por Email opcional
+  - **App-level**: Bloqueo automático de IP tras 10 intentos fallidos/día + Alerta por Email opcional
 - ✅ **Authentication**: 
   - API Key requerida para endpoints críticos (`/audit`, `/certificates`)
   - Header: `X-API-Key: <tu-clave>`
-- ✅ **GEE Credentials**: Never committed, env variables only
-- ✅ **API Versioning**: `/api/v1/` con deprecation policy
-- ✅ **Health Checks**: Componente-level monitoring
-- ✅ **Error Handling**: Mensajes sanitizados en producción (sin stack traces)
+- ✅ **GEE credentials**: Never committed, env variables only
+- ✅ **API versioning**: `/api/v1/` con deprecation policy
+- ✅ **Health checks**: Componente-level monitoring
+- ✅ **Error handling**: Mensajes sanitizados en producción (sin stack traces)
 
-### Rate Limits Externos
+### Rate limits externos
 
-| Servicio | Límite Free Tier |
-|----------|------------------|
+| Service | Free tier limit |
+|---------|------------------|
 | Google Earth Engine | 50,000 requests/day |
 | Supabase | 500 MB storage, 60 connections |
 | Cloudflare R2 | 10 GB storage, unlimited egress |
@@ -597,7 +598,7 @@ MIT License - Ver [LICENSE](LICENSE) para detalles.
 **Nicolás Gabriel Hruszczak**  
 Business Analyst / Full-Stack Developer
 
-📧 Email: nicolasgh91@gmail.com  
+📧 Email: nicolasgabrielh91@gmail.com  
 🔗 GitHub: [@Nicolasgh91](https://github.com/Nicolasgh91)  
 💼 LinkedIn: [Nicolas Hruszczak](https://www.linkedin.com/in/nicolas-hruszczak/)
 
@@ -606,16 +607,15 @@ Business Analyst / Full-Stack Developer
 ## 🙏 Agradecimientos
 
 - **NASA FIRMS** - Datos abiertos de detección de incendios
-- **Google Earth Engine** - Procesamiento satelital server-side
-- **Supabase** - Base de datos PostgreSQL + PostGIS
-- **FastAPI** - Framework web moderno
+- **Google Earth Engine** - Procesamiento satelital server-side, gratuito mediante cuenta educativa
+- **Supabase** - Base de datos PostgreSQL + PostGIS - Free tier
+- **FastAPI** - Framework web moderno con documentación auto-generada
 - **Cloudflare** - CDN y object storage (R2)
-
 ---
 
 ## 🌍 Por qué ForestGuard importa
 
-Los incendios forestales ya no son eventos aislados: son **riesgo sistémico**. La transparencia ambiental es clave para políticas públicas efectivas. Los datos abiertos solo generan impacto cuando se transforman en **evidencia accionable**.
+Los incendios forestales ya no son eventos aislados: son **riesgo sistémico**. La transparencia ambiental es clave para políticas públicas efectivas. Los datos abiertos solo generan impacto cuando se transforman en **evidencia accionable**. Su propósito es intentar prevenir y proporcionar información sobre los incendios forestales en Argentina.
 
 **ForestGuard convierte datos en decisiones, y decisiones en responsabilidad.**
 
@@ -625,15 +625,15 @@ Los incendios forestales ya no son eventos aislados: son **riesgo sistémico**. 
 **Versión:** 2.0.0  
 **Progreso:** 70% completado
 
-[![Star on GitHub](https://img.shields.io/github/stars/Nicolasgh91/wildfire-recovery-argentina?style=social)](https://github.com/Nicolasgh91/wildfire-recovery-argentina)
+[![Star on GitHub](https://img.shields.io/github/stars/nicolasgabrielh91/wildfire-recovery-argentina?style=social)](https://github.com/nicolasgabrielh91/wildfire-recovery-argentina)
 
 ---
 
-# 🌲 ForestGuard API (English Version)
+# 🌲 ForestGuard API (English version)
 
 **Geospatial intelligence platform for legal enforcement of wildfire recovery in Argentina**
 
-> 🌍 **Leer en Español**: [Ir a la versión en Español](#-forestguard-api)
+> 🌍 **Read in spanish**: [Go to the spanish version](#-forestguard-api)
 
 ## ✨ Mission
 
@@ -643,7 +643,7 @@ The project was born to solve a concrete problem: **fire data exists, but it is 
 
 ForestGuard transforms satellite data into **legal evidence** to enforce Article 22 bis of Law 26.815, which prohibits land use changes in fire-affected areas for 30-60 years.
 
-## 🎯 Problem Solved
+## 🎯 Problem solved
 
 Today, in Argentina:
 * Wildfires are detected late or analyzed reactively.
@@ -667,27 +667,27 @@ ForestGuard converts millions of satellite detections into:
 
 We have prepared detailed guides for all user profiles:
 
-### 📘 User Manuals
-- **English**: [User Manual](docs/USER_MANUAL.md)
-- **Español**: [Manual de Usuario](docs/MANUAL_DE_USUARIO.md)
+### 📘 User manuals
+- **English**: [User manual](docs/USER_MANUAL.md)
+- **Spanish**: [Manual de usuario](docs/MANUAL_DE_USUARIO.md)
 
 ### ❓ FAQ
 - **English**: [Frequently Asked Questions](docs/faq.md)
-- **Español**: [Preguntas Frecuentes](docs/preguntas_frecuentes.md)
+- **Spanish**: [Preguntas frecuentes](docs/preguntas_frecuentes.md)
 
 ### 📖 Glossary
 - **English**: [Glossary](docs/glossary.md)
-- **Español**: [Glosario](docs/glosario.md)
+- **Spanish**: [Glosario](docs/glosario.md)
 
-### 📐 Architecture & Design
+### 📐 Architecture & design
 - [Architecture Documentation](Architecture/forestguard_architecture.md)
 - [Detailed Use Cases](Architecture/forestguard_use_cases.md)
 - [Project Plan](Architecture/PROJECT_PLAN.md)
 - [Branding Guidelines](Architecture/wildfire_branding.md)
 
-## 🧩 Use Cases (11 Implemented)
+## 🧩 Use cases (11 implemented)
 
-### Full Feature List
+### Full feature list
 
 | UC | Category | Name | Description | Status |
 |---|---|---|---|---|
@@ -703,17 +703,17 @@ We have prepared detailed guides for all user profiles:
 | **UC-10** | Analysis | Data Quality | Reliability metrics for forensics | 🔜 PENDING |
 | **UC-11** | Analysis | Historical Reports | PDFs of fires in protected areas | 🔜 PENDING |
 
-## 🏗️ Unified Architecture
+## 🏗️ Unified architecture
 
 ForestGuard uses a **hybrid API + Workers architecture** with shared modules to eliminate redundancy.
 
 *(See Spanish section for detailed diagrams)*
 
-### 🆕 Shared Modules
-*   **Vegetation Analysis Engine (VAE)**: Centralized vegetation analysis using NDVI.
-*   **Evidence Reporting Service (ERS)**: Unified engine for verifiable report generation.
+### 🆕 Shared modules
+*   **Vegetation analysis engine (VAE)**: Centralized vegetation analysis using NDVI.
+*   **Evidence reporting service (ERS)**: Unified engine for verifiable report generation.
 
-## 🚀 Quick Start
+## 🚀 Quick start
 
 ### Requirements
 *   Python 3.11+
@@ -722,11 +722,11 @@ ForestGuard uses a **hybrid API + Workers architecture** with shared modules to 
 *   Supabase Account (Database)
 *   Google Cloud Account with Earth Engine API enabled
 
-### Local Installation
+### Local installation
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/Nicolasgh91/wildfire-recovery-argentina.git
+git clone https://github.com/nicolasgabrielh91/wildfire-recovery-argentina.git
 cd wildfire-recovery-argentina
 
 # 2. Create virtual environment
@@ -761,10 +761,10 @@ uvicorn app.main:app --reload --port 8000
 
 ## 🔒 Security
 
-### Implemented Controls
+### Implemented controls
 - **Authentication**: `X-API-Key` header required for `/audit` and `/certificates`.
-- **Rate Limiting**: IPs blocked after 10 requests/day. Optional alerts via email.
-- **Error Handling**: Production-safe error messages (no stack traces).
+- **Rate limiting**: IPs blocked after 10 requests/day. Optional alerts via email.
+- **Error handling**: Production-safe error messages (no stack traces).
 - **SSL/TLS**: Mandatory HTTPS via Let's Encrypt.
 
 ## 📄 License

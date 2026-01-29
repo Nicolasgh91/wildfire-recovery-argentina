@@ -70,3 +70,6 @@ class Settings(BaseSettings):
         return f"postgresql://{user}:{password}@{host}:{port}/{db}"
 
 settings = Settings()
+
+# Import centralized email configuration
+from app.core.email_config import email_config

@@ -104,6 +104,13 @@ Authorization: Bearer <your_access_token>
 | `POST` | `/api/v1/audit/land-use` | Check fire prohibitions |
 | `GET` | `/api/v1/fires/{id}` | Get details of a specific fire |
 | `POST` | `/api/v1/certificates/request` | Generate PDF certificate |
+| `GET` | `/api/v1/monitoring/recovery/{fire_id}` | Get vegetation recovery timeline |
+| `POST` | `/api/v1/reports/judicial` | Generate forensic judicial report |
+| `POST` | `/api/v1/reports/historical` | Generate historical fire report |
+| `POST` | `/api/v1/citizen/submit` | Submit citizen report |
+| `GET` | `/api/v1/quality/fire-event/{id}` | Get data quality metrics |
+| `GET` | `/api/v1/analysis/recurrence` | Analyze fire recurrence patterns |
+| `GET` | `/api/v1/analysis/trends` | Get historical fire trends |
 
 ### Error Codes
 - `400 Bad Request`: Invalid coordinates or parameters.
@@ -113,4 +120,37 @@ Authorization: Bearer <your_access_token>
 
 ---
 
+## 6. Email Notifications
+
+ForestGuard sends email notifications for the following events:
+
+| Event | Recipients | Trigger |
+|-------|------------|---------|
+| Citizen Report Submitted | Administrators | New UC-09 report received |
+| Land Use Violation Detected | Administrators | UC-08 detects illegal activity |
+| Security Alert | Admin | Rate limit exceeded or suspicious activity |
+
+### Changing Email Recipients
+
+All email addresses are centralized in a single configuration file:
+
+```
+app/core/email_config.py
+```
+
+To update notification recipients, modify the appropriate variable in this file:
+
+```python
+# Example: Change admin email
+ADMIN_EMAIL = "your-email@domain.com"
+
+# Example: Add multiple citizen report recipients
+CITIZEN_REPORTS_NOTIFY = ["email1@domain.com", "email2@domain.com"]
+```
+
+After modifying, restart the application for changes to take effect.
+
+---
+
 **Support**: contact@forestguard.ar
+

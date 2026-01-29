@@ -1,338 +1,984 @@
 """
-Servicio para interactuar con Google Earth Engine.
+Google Earth Engine Service para ForestGuard.
 
-Funcionalidades:
-    - Buscar imágenes Sentinel-2 sin nubes
-    - Descargar subsets de imágenes (RGB, NIR)
-    - Calcular NDVI pre/post incendio
-    - Exportar a Cloud Storage o R2
+Este módulo proporciona la capa base de acceso a Google Earth Engine (GEE)
+para obtener imágenes Sentinel-2, calcular índices de vegetación (NDVI),
+y generar visualizaciones para los casos de uso UC-06, UC-08, UC-11/12.
+
+Arquitectura:
+    GEE Service (Base) → VAE Service (Análisis) → ERS Service (Reportes)
+
+Límites Free Tier:
+    - 50,000 requests/día
+    - 10 operaciones concurrentes
+    - Rate limit implementado: 1 req/segundo
+
+Autor: ForestGuard Dev Team
+Versión: 1.0.0
+Última actualización: 2025-01-29
 """
 
-import logging
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
 import ee
+import logging
+import hashlib
 import requests
-from app.core.config import settings
+from io import BytesIO
+from pathlib import Path
+from datetime import datetime, date, timedelta
+from typing import Optional, Dict, Any, List, Tuple, Union
+from dataclasses import dataclass
+from functools import lru_cache
+from time import sleep
 
+# Rate limiting
+try:
+    from ratelimit import limits, sleep_and_retry
+    RATELIMIT_AVAILABLE = True
+except ImportError:
+    RATELIMIT_AVAILABLE = False
+    # Fallback decorator que no hace nada
+    def sleep_and_retry(func):
+        return func
+    def limits(calls, period):
+        def decorator(func):
+            return func
+        return decorator
+
+# Configuración de logging
 logger = logging.getLogger(__name__)
 
+# =============================================================================
+# CONFIGURACIÓN Y CONSTANTES
+# =============================================================================
+
+# Colecciones de GEE
+SENTINEL2_COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"  # Surface Reflectance L2A
+SENTINEL2_CLOUD_PROB = "COPERNICUS/S2_CLOUD_PROBABILITY"
+
+# Bandas Sentinel-2
+BANDS = {
+    "RGB": ["B4", "B3", "B2"],           # True Color (10m)
+    "NIR": ["B8"],                        # Near Infrared (10m)
+    "SWIR": ["B11", "B12"],              # Short-wave Infrared (20m)
+    "RED_EDGE": ["B5", "B6", "B7"],      # Red Edge (20m)
+    "ALL_10M": ["B2", "B3", "B4", "B8"], # Todas las bandas 10m
+}
+
+# Parámetros de visualización
+VIS_PARAMS = {
+    "RGB": {"bands": ["B4", "B3", "B2"], "min": 0, "max": 3000, "gamma": 1.2},
+    "FALSE_COLOR": {"bands": ["B8", "B4", "B3"], "min": 0, "max": 4000},
+    "NDVI": {"min": -0.2, "max": 0.8, "palette": ["brown", "yellow", "green", "darkgreen"]},
+    "BURN_SEVERITY": {"min": -0.5, "max": 0.5, "palette": ["green", "yellow", "orange", "red"]},
+}
+
+# Rate limits (respetando cuota GEE)
+CALLS_PER_SECOND = 1
+CALLS_PER_DAY = 50000
+
+
+# =============================================================================
+# DATA CLASSES
+# =============================================================================
+
+@dataclass
+class ImageMetadata:
+    """Metadata de una imagen Sentinel-2."""
+    image_id: str
+    acquisition_date: date
+    cloud_cover_percent: float
+    satellite: str
+    tile_id: str
+    sun_elevation: float
+    processing_level: str = "L2A"
+
+@dataclass
+class NDVIResult:
+    """Resultado del cálculo de NDVI."""
+    mean: float
+    min: float
+    max: float
+    std_dev: float
+    valid_pixels_percent: float
+    acquisition_date: date
+
+@dataclass
+class ImageResult:
+    """Resultado de obtener una imagen."""
+    thumbnail_url: str
+    download_url: Optional[str]
+    metadata: ImageMetadata
+    bbox: Dict[str, float]
+    scale_meters: int
+
+
+# =============================================================================
+# EXCEPCIONES PERSONALIZADAS
+# =============================================================================
+
+class GEEError(Exception):
+    """Excepción base para errores de GEE."""
+    pass
+
+class GEEAuthenticationError(GEEError):
+    """Error de autenticación con GEE."""
+    pass
+
+class GEEImageNotFoundError(GEEError):
+    """No se encontró imagen que cumpla los criterios."""
+    pass
+
+class GEERateLimitError(GEEError):
+    """Se excedió el límite de requests."""
+    pass
+
+
+# =============================================================================
+# SERVICIO PRINCIPAL
+# =============================================================================
 
 class GEEService:
-    """Servicio de Google Earth Engine"""
+    """
+    Servicio de acceso a Google Earth Engine.
     
-    def __init__(self):
-        self._initialize_ee()
+    Proporciona métodos para:
+    - Autenticación con service account
+    - Búsqueda de imágenes Sentinel-2
+    - Cálculo de NDVI y otros índices
+    - Generación de thumbnails y URLs de descarga
     
-    def _initialize_ee(self):
-        """Inicializa conexión con Earth Engine"""
-        try:
-            # Autenticar con service account
-            credentials = ee.ServiceAccountCredentials(
-                email=settings.GEE_SERVICE_ACCOUNT_EMAIL,
-                key_file=str(settings.gee_credentials_path)
-            )
-            
-            ee.Initialize(
-                credentials,
-                project=settings.GEE_PROJECT_ID
-            )
-            
-            logger.info(f"✅ Google Earth Engine inicializado (Proyecto: {settings.GEE_PROJECT_ID})")
-            
-        except Exception as e:
-            logger.error(f"❌ Error al inicializar GEE: {e}")
-            raise
-    
-    def search_sentinel2_images(
-        self,
-        bbox: Tuple[float, float, float, float],  # (min_lon, min_lat, max_lon, max_lat)
-        start_date: datetime,
-        end_date: datetime,
-        max_cloud_cover: int = 20
-    ) -> ee.ImageCollection:
-        """
-        Busca imágenes Sentinel-2 L2A (corrección atmosférica).
+    Ejemplo de uso:
+        gee = GEEService()
+        gee.authenticate()
         
-        Args:
-            bbox: Bounding box (min_lon, min_lat, max_lon, max_lat)
-            start_date: Fecha inicio
-            end_date: Fecha fin
-            max_cloud_cover: % máximo de nubes (0-100)
-        
-        Returns:
-            ImageCollection de Sentinel-2
-        """
-        # Crear geometría del área de interés
-        aoi = ee.Geometry.Rectangle(list(bbox))
-        
-        # Filtrar colección Sentinel-2 L2A
-        collection = (
-            ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')  # Surface Reflectance (L2A)
-            .filterBounds(aoi)
-            .filterDate(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
-            .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', max_cloud_cover))
-            .sort('CLOUDY_PIXEL_PERCENTAGE')  # Ordenar por menor nubosidad
-        )
-        
-        count = collection.size().getInfo()
-        logger.info(f"Imágenes encontradas: {count} (nubes < {max_cloud_cover}%)")
-        
-        return collection
-    
-    def get_best_image(
-        self,
-        bbox: Tuple[float, float, float, float],
-        target_date: datetime,
-        search_window_days: int = 30,
-        max_cloud_cover: int = 20
-    ) -> Optional[ee.Image]:
-        """
-        Obtiene la mejor imagen (menos nubes) cercana a una fecha objetivo.
-        
-        Args:
-            bbox: Área de interés
-            target_date: Fecha objetivo
-            search_window_days: Ventana de búsqueda en días
-            max_cloud_cover: % máximo de nubes
-        
-        Returns:
-            ee.Image o None si no hay imágenes
-        """
-        start_date = target_date - timedelta(days=search_window_days // 2)
-        end_date = target_date + timedelta(days=search_window_days // 2)
-        
-        collection = self.search_sentinel2_images(bbox, start_date, end_date, max_cloud_cover)
-        
-        # Obtener primera imagen (ya está ordenada por menor nubosidad)
-        if collection.size().getInfo() > 0:
-            image = collection.first()
-            
-            # Log metadata
-            image_info = image.getInfo()
-            image_id = image_info['id']
-            cloud_pct = image.get('CLOUDY_PIXEL_PERCENTAGE').getInfo()
-            
-            logger.info(f"Mejor imagen: {image_id} (nubes: {cloud_pct:.1f}%)")
-            
-            return image
-        else:
-            logger.warning(f"No se encontraron imágenes sin nubes para {target_date}")
-            return None
-    
-    def calculate_ndvi(self, image: ee.Image) -> ee.Image:
-        """
-        Calcula NDVI (Normalized Difference Vegetation Index).
-        
-        NDVI = (NIR - RED) / (NIR + RED)
-        
-        Sentinel-2 L2A bands:
-            - B4: Red (665 nm)
-            - B8: NIR (842 nm)
-        """
-        nir = image.select('B8')
-        red = image.select('B4')
-        
-        ndvi = nir.subtract(red).divide(nir.add(red)).rename('NDVI')
-        
-        return ndvi
-    
-    def get_rgb_visualization(self, image: ee.Image) -> ee.Image:
-        """
-        Prepara imagen RGB para visualización.
-        
-        Sentinel-2 L2A RGB bands:
-            - B4: Red
-            - B3: Green
-            - B2: Blue
-        """
-        rgb = image.select(['B4', 'B3', 'B2'])
-        
-        # Normalizar valores (0-3000 a 0-255)
-        rgb_vis = rgb.divide(3000).multiply(255).clamp(0, 255).uint8()
-        
-        return rgb_vis
-    
-    def export_to_url(
-        self,
-        image: ee.Image,
-        bbox: Tuple[float, float, float, float],
-        scale: int = 10,  # Resolución en metros
-        format: str = 'GEO_TIFF'
-    ) -> str:
-        """
-        Genera URL de descarga para una imagen.
-        
-        Args:
-            image: Imagen de Earth Engine
-            bbox: Área de interés
-            scale: Resolución espacial (10m para Sentinel-2)
-            format: GEO_TIFF o PNG
-        
-        Returns:
-            URL de descarga
-        """
-        aoi = ee.Geometry.Rectangle(list(bbox))
-        
-        # Generar URL de descarga
-        url = image.getDownloadURL({
-            'region': aoi,
-            'scale': scale,
-            'format': format,
-            'crs': 'EPSG:4326'
-        })
-        
-        logger.info(f"URL de descarga generada: {url[:100]}...")
-        
-        return url
-    
-    def download_image_to_file(
-        self,
-        image: ee.Image,
-        bbox: Tuple[float, float, float, float],
-        output_path: Path,
-        scale: int = 10
-    ) -> Path:
-        """
-        Descarga imagen a archivo local.
-        
-        Args:
-            image: Imagen de Earth Engine
-            bbox: Área de interés
-            output_path: Ruta donde guardar la imagen
-            scale: Resolución
-        
-        Returns:
-            Path del archivo descargado
-        """
-        url = self.export_to_url(image, bbox, scale)
-        
-        logger.info(f"Descargando imagen a: {output_path}")
-        
-        # Descargar con requests
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-        
-        # Guardar archivo
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(output_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        
-        file_size_mb = output_path.stat().st_size / (1024 * 1024)
-        logger.info(f"✅ Descargado: {output_path} ({file_size_mb:.2f} MB)")
-        
-        return output_path
-    
-    def get_fire_analysis(
-        self,
-        fire_lat: float,
-        fire_lon: float,
-        fire_date: datetime,
-        buffer_meters: int = 5000
-    ) -> Dict:
-        """
-        Análisis completo de un incendio:
-            - Imagen pre-fuego
-            - Imagen post-fuego
-            - NDVI antes/después
-            - Cambio en vegetación
-        
-        Args:
-            fire_lat: Latitud del incendio
-            fire_lon: Longitud del incendio
-            fire_date: Fecha del incendio
-            buffer_meters: Radio de análisis en metros
-        
-        Returns:
-            Dict con URLs y estadísticas
-        """
-        # Crear buffer alrededor del punto
-        point = ee.Geometry.Point([fire_lon, fire_lat])
-        aoi = point.buffer(buffer_meters).bounds()
-        bbox_coords = aoi.coordinates().getInfo()[0]
-        
-        # Extraer min/max lat/lon
-        lons = [coord[0] for coord in bbox_coords]
-        lats = [coord[1] for coord in bbox_coords]
-        bbox = (min(lons), min(lats), max(lons), max(lats))
-        
-        # Buscar imagen PRE-fuego (30 días antes)
-        pre_fire_date = fire_date - timedelta(days=30)
-        pre_fire_image = self.get_best_image(
-            bbox,
-            pre_fire_date,
-            search_window_days=60,
+        # Buscar imágenes
+        images = gee.get_sentinel_collection(
+            bbox={"west": -58.5, "south": -27.5, "east": -58.4, "north": -27.4},
+            start_date=date(2023, 1, 1),
+            end_date=date(2023, 12, 31),
             max_cloud_cover=20
         )
         
-        # Buscar imagen POST-fuego (7 días después)
-        post_fire_date = fire_date + timedelta(days=7)
-        post_fire_image = self.get_best_image(
-            bbox,
-            post_fire_date,
-            search_window_days=30,
-            max_cloud_cover=30  # Más permisivo post-fuego
-        )
+        # Obtener mejor imagen
+        best = gee.get_best_image(images, target_date=date(2023, 6, 15))
+        
+        # Calcular NDVI
+        ndvi = gee.calculate_ndvi(best, bbox)
+    
+    Attributes:
+        _initialized: bool indicando si GEE está inicializado
+        _project_id: ID del proyecto de Google Cloud
+        _request_count: Contador de requests para monitoreo
+    """
+    
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls, *args, **kwargs):
+        """Singleton pattern para reutilizar autenticación."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def __init__(
+        self,
+        service_account_json: Optional[str] = None,
+        project_id: Optional[str] = None
+    ):
+        """
+        Inicializa el servicio GEE.
+        
+        Args:
+            service_account_json: Ruta al archivo JSON de service account.
+                                  Si no se proporciona, busca en variable de entorno.
+            project_id: ID del proyecto GCP. Si no se proporciona, se obtiene del JSON.
+        """
+        if self._initialized:
+            return
+            
+        self._service_account_json = service_account_json
+        self._project_id = project_id
+        self._request_count = 0
+        self._last_request_time = None
+    
+    def authenticate(self) -> bool:
+        """
+        Autentica con Google Earth Engine usando service account.
+        
+        Busca credenciales en el siguiente orden:
+        1. Parámetro service_account_json del constructor
+        2. Variable de entorno GEE_SERVICE_ACCOUNT_JSON (path o JSON string)
+        3. Autenticación interactiva (solo para desarrollo)
+        
+        Returns:
+            bool: True si la autenticación fue exitosa
+            
+        Raises:
+            GEEAuthenticationError: Si no se puede autenticar
+        """
+        if self._initialized:
+            logger.debug("GEE ya está autenticado")
+            return True
+        
+        import os
+        import json
+        
+        try:
+            # Opción 1: JSON path del constructor
+            if self._service_account_json and Path(self._service_account_json).exists():
+                credentials = ee.ServiceAccountCredentials(
+                    None,  # Se obtiene del JSON
+                    self._service_account_json
+                )
+                ee.Initialize(credentials, project=self._project_id)
+                logger.info(f"GEE autenticado con service account file: {self._service_account_json}")
+                self._initialized = True
+                return True
+            
+            # Opción 2: Variable de entorno
+            gee_env = os.environ.get("GEE_SERVICE_ACCOUNT_JSON")
+            if gee_env:
+                # Puede ser path o JSON string
+                if Path(gee_env).exists():
+                    credentials = ee.ServiceAccountCredentials(None, gee_env)
+                    ee.Initialize(credentials, project=self._project_id)
+                else:
+                    # Intentar como JSON string
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                        f.write(gee_env)
+                        temp_path = f.name
+                    credentials = ee.ServiceAccountCredentials(None, temp_path)
+                    ee.Initialize(credentials, project=self._project_id)
+                    Path(temp_path).unlink()  # Limpiar
+                
+                logger.info("GEE autenticado con variable de entorno")
+                self._initialized = True
+                return True
+            
+            # Opción 3: Autenticación por defecto (para desarrollo)
+            ee.Initialize()
+            logger.warning("GEE autenticado con credenciales por defecto (solo dev)")
+            self._initialized = True
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error autenticando GEE: {e}")
+            raise GEEAuthenticationError(f"No se pudo autenticar con GEE: {e}")
+    
+    def _ensure_authenticated(self) -> None:
+        """Verifica que GEE esté autenticado, si no, intenta autenticar."""
+        if not self._initialized:
+            self.authenticate()
+    
+    @sleep_and_retry
+    @limits(calls=CALLS_PER_SECOND, period=1)
+    def _rate_limited_request(self, func, *args, **kwargs):
+        """
+        Ejecuta una función con rate limiting.
+        
+        Máximo 1 request por segundo para mantenerse bajo el límite diario.
+        """
+        self._request_count += 1
+        if self._request_count % 100 == 0:
+            logger.info(f"GEE requests hoy: {self._request_count}")
+        return func(*args, **kwargs)
+    
+    # =========================================================================
+    # MÉTODOS DE BÚSQUEDA DE IMÁGENES
+    # =========================================================================
+    
+    def get_sentinel_collection(
+        self,
+        bbox: Dict[str, float],
+        start_date: date,
+        end_date: date,
+        max_cloud_cover: float = 20.0
+    ) -> ee.ImageCollection:
+        """
+        Obtiene colección de imágenes Sentinel-2 filtrada.
+        
+        Args:
+            bbox: Bounding box con keys 'west', 'south', 'east', 'north'
+            start_date: Fecha inicio de búsqueda
+            end_date: Fecha fin de búsqueda
+            max_cloud_cover: Máximo porcentaje de nubes (0-100)
+            
+        Returns:
+            ee.ImageCollection: Colección filtrada
+            
+        Example:
+            collection = gee.get_sentinel_collection(
+                bbox={"west": -58.5, "south": -27.5, "east": -58.4, "north": -27.4},
+                start_date=date(2023, 1, 1),
+                end_date=date(2023, 12, 31),
+                max_cloud_cover=20
+            )
+        """
+        self._ensure_authenticated()
+        
+        # Crear geometría
+        geometry = ee.Geometry.Rectangle([
+            bbox["west"], bbox["south"], 
+            bbox["east"], bbox["north"]
+        ])
+        
+        # Formatear fechas
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
+        
+        # Query con rate limiting
+        def _query():
+            collection = (
+                ee.ImageCollection(SENTINEL2_COLLECTION)
+                .filterBounds(geometry)
+                .filterDate(start_str, end_str)
+                .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", max_cloud_cover))
+                .sort("CLOUDY_PIXEL_PERCENTAGE")
+            )
+            return collection
+        
+        return self._rate_limited_request(_query)
+    
+    def get_collection_info(self, collection: ee.ImageCollection) -> List[ImageMetadata]:
+        """
+        Obtiene metadata de todas las imágenes en una colección.
+        
+        Args:
+            collection: Colección de GEE
+            
+        Returns:
+            Lista de ImageMetadata con información de cada imagen
+        """
+        self._ensure_authenticated()
+        
+        def _get_info():
+            # Limitar a 100 imágenes para no sobrecargar
+            info = collection.limit(100).getInfo()
+            features = info.get("features", [])
+            
+            results = []
+            for feat in features:
+                props = feat.get("properties", {})
+                results.append(ImageMetadata(
+                    image_id=feat.get("id", ""),
+                    acquisition_date=datetime.strptime(
+                        props.get("DATATAKE_IDENTIFIER", "")[:8], 
+                        "%Y%m%d"
+                    ).date() if props.get("DATATAKE_IDENTIFIER") else None,
+                    cloud_cover_percent=props.get("CLOUDY_PIXEL_PERCENTAGE", 0),
+                    satellite=props.get("SPACECRAFT_NAME", "Sentinel-2"),
+                    tile_id=props.get("MGRS_TILE", ""),
+                    sun_elevation=props.get("MEAN_SOLAR_ZENITH_ANGLE", 0),
+                ))
+            return results
+        
+        return self._rate_limited_request(_get_info)
+    
+    def get_best_image(
+        self,
+        collection: ee.ImageCollection,
+        target_date: Optional[date] = None,
+        prefer_low_cloud: bool = True
+    ) -> ee.Image:
+        """
+        Obtiene la mejor imagen de la colección.
+        
+        Criterios de selección:
+        1. Si target_date: imagen más cercana a esa fecha con nubes < 30%
+        2. Si prefer_low_cloud: imagen con menor cobertura de nubes
+        
+        Args:
+            collection: Colección de imágenes
+            target_date: Fecha objetivo (opcional)
+            prefer_low_cloud: Priorizar baja nubosidad
+            
+        Returns:
+            ee.Image: Mejor imagen según criterios
+            
+        Raises:
+            GEEImageNotFoundError: Si no hay imágenes disponibles
+        """
+        self._ensure_authenticated()
+        
+        def _get_best():
+            if target_date:
+                # Ordenar por distancia a la fecha objetivo
+                target_millis = ee.Date(target_date.strftime("%Y-%m-%d")).millis()
+                
+                def add_date_diff(image):
+                    diff = ee.Number(image.date().millis()).subtract(target_millis).abs()
+                    return image.set("date_diff", diff)
+                
+                sorted_collection = (
+                    collection
+                    .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 30))
+                    .map(add_date_diff)
+                    .sort("date_diff")
+                )
+            else:
+                # Ordenar por nubosidad
+                sorted_collection = collection.sort("CLOUDY_PIXEL_PERCENTAGE")
+            
+            first = sorted_collection.first()
+            
+            # Verificar que existe
+            info = first.getInfo()
+            if not info:
+                raise GEEImageNotFoundError("No se encontraron imágenes que cumplan los criterios")
+            
+            return first
+        
+        return self._rate_limited_request(_get_best)
+    
+    def get_image_by_id(self, image_id: str) -> ee.Image:
+        """
+        Obtiene una imagen específica por su ID.
+        
+        Args:
+            image_id: ID completo de la imagen (ej: COPERNICUS/S2_SR/20230615T140051_...)
+            
+        Returns:
+            ee.Image: Imagen de GEE
+        """
+        self._ensure_authenticated()
+        return ee.Image(image_id)
+    
+    # =========================================================================
+    # MÉTODOS DE CÁLCULO DE ÍNDICES
+    # =========================================================================
+    
+    def calculate_ndvi(
+        self,
+        image: ee.Image,
+        bbox: Dict[str, float],
+        scale: int = 10
+    ) -> NDVIResult:
+        """
+        Calcula NDVI (Normalized Difference Vegetation Index) para una imagen.
+        
+        NDVI = (NIR - RED) / (NIR + RED)
+        Valores: -1 a 1 (mayor = más vegetación)
+        
+        Args:
+            image: Imagen Sentinel-2
+            bbox: Bounding box para calcular estadísticas
+            scale: Resolución en metros (default 10m)
+            
+        Returns:
+            NDVIResult con estadísticas del NDVI
+        """
+        self._ensure_authenticated()
+        
+        def _calc_ndvi():
+            # Calcular NDVI
+            nir = image.select("B8")  # NIR - 10m
+            red = image.select("B4")  # RED - 10m
+            ndvi = nir.subtract(red).divide(nir.add(red)).rename("NDVI")
+            
+            # Geometría para estadísticas
+            geometry = ee.Geometry.Rectangle([
+                bbox["west"], bbox["south"],
+                bbox["east"], bbox["north"]
+            ])
+            
+            # Calcular estadísticas
+            stats = ndvi.reduceRegion(
+                reducer=ee.Reducer.mean()
+                    .combine(ee.Reducer.min(), "", True)
+                    .combine(ee.Reducer.max(), "", True)
+                    .combine(ee.Reducer.stdDev(), "", True)
+                    .combine(ee.Reducer.count(), "", True),
+                geometry=geometry,
+                scale=scale,
+                maxPixels=1e9
+            ).getInfo()
+            
+            # Obtener fecha de adquisición
+            props = image.getInfo().get("properties", {})
+            acq_date = None
+            if props.get("system:time_start"):
+                acq_date = datetime.fromtimestamp(
+                    props["system:time_start"] / 1000
+                ).date()
+            
+            # Calcular porcentaje de píxeles válidos
+            total_pixels = stats.get("NDVI_count", 0)
+            area_km2 = (bbox["east"] - bbox["west"]) * (bbox["north"] - bbox["south"]) * 111 * 111
+            expected_pixels = (area_km2 * 1e6) / (scale * scale)
+            valid_percent = (total_pixels / expected_pixels * 100) if expected_pixels > 0 else 0
+            
+            return NDVIResult(
+                mean=stats.get("NDVI_mean", 0) or 0,
+                min=stats.get("NDVI_min", 0) or 0,
+                max=stats.get("NDVI_max", 0) or 0,
+                std_dev=stats.get("NDVI_stdDev", 0) or 0,
+                valid_pixels_percent=min(valid_percent, 100),
+                acquisition_date=acq_date
+            )
+        
+        return self._rate_limited_request(_calc_ndvi)
+    
+    def calculate_nbr(
+        self,
+        image: ee.Image,
+        bbox: Dict[str, float],
+        scale: int = 20
+    ) -> Dict[str, float]:
+        """
+        Calcula NBR (Normalized Burn Ratio) para detectar áreas quemadas.
+        
+        NBR = (NIR - SWIR2) / (NIR + SWIR2)
+        Valores bajos/negativos = área quemada
+        
+        Args:
+            image: Imagen Sentinel-2
+            bbox: Bounding box
+            scale: Resolución (20m para SWIR)
+            
+        Returns:
+            Dict con mean, min, max del NBR
+        """
+        self._ensure_authenticated()
+        
+        def _calc_nbr():
+            nir = image.select("B8A")   # NIR - 20m
+            swir2 = image.select("B12") # SWIR2 - 20m
+            nbr = nir.subtract(swir2).divide(nir.add(swir2)).rename("NBR")
+            
+            geometry = ee.Geometry.Rectangle([
+                bbox["west"], bbox["south"],
+                bbox["east"], bbox["north"]
+            ])
+            
+            stats = nbr.reduceRegion(
+                reducer=ee.Reducer.mean().combine(ee.Reducer.min(), "", True).combine(ee.Reducer.max(), "", True),
+                geometry=geometry,
+                scale=scale,
+                maxPixels=1e9
+            ).getInfo()
+            
+            return {
+                "mean": stats.get("NBR_mean", 0) or 0,
+                "min": stats.get("NBR_min", 0) or 0,
+                "max": stats.get("NBR_max", 0) or 0,
+            }
+        
+        return self._rate_limited_request(_calc_nbr)
+    
+    # =========================================================================
+    # MÉTODOS DE VISUALIZACIÓN Y DESCARGA
+    # =========================================================================
+    
+    def get_thumbnail_url(
+        self,
+        image: ee.Image,
+        bbox: Dict[str, float],
+        vis_type: str = "RGB",
+        dimensions: int = 512,
+        format: str = "png"
+    ) -> str:
+        """
+        Genera URL de thumbnail para una imagen.
+        
+        Args:
+            image: Imagen de GEE
+            bbox: Bounding box
+            vis_type: Tipo de visualización ('RGB', 'FALSE_COLOR', 'NDVI')
+            dimensions: Tamaño máximo en píxeles
+            format: Formato de salida ('png', 'jpg')
+            
+        Returns:
+            str: URL del thumbnail (válida por ~2 horas)
+        """
+        self._ensure_authenticated()
+        
+        def _get_url():
+            geometry = ee.Geometry.Rectangle([
+                bbox["west"], bbox["south"],
+                bbox["east"], bbox["north"]
+            ])
+            
+            # Seleccionar visualización
+            if vis_type == "NDVI":
+                nir = image.select("B8")
+                red = image.select("B4")
+                vis_image = nir.subtract(red).divide(nir.add(red))
+                vis_params = VIS_PARAMS["NDVI"].copy()
+            elif vis_type in VIS_PARAMS:
+                vis_image = image.select(VIS_PARAMS[vis_type]["bands"])
+                vis_params = {k: v for k, v in VIS_PARAMS[vis_type].items() if k != "bands"}
+            else:
+                vis_image = image.select(BANDS["RGB"])
+                vis_params = {"min": 0, "max": 3000}
+            
+            # Generar thumbnail
+            url = vis_image.getThumbURL({
+                "region": geometry,
+                "dimensions": dimensions,
+                "format": format,
+                **vis_params
+            })
+            
+            return url
+        
+        return self._rate_limited_request(_get_url)
+    
+    def get_download_url(
+        self,
+        image: ee.Image,
+        bbox: Dict[str, float],
+        bands: List[str] = None,
+        scale: int = 10,
+        format: str = "GEO_TIFF"
+    ) -> str:
+        """
+        Genera URL de descarga para imagen completa.
+        
+        ADVERTENCIA: Las URLs de descarga de GEE tienen límite de tamaño.
+        Para áreas grandes, usar export_to_drive().
+        
+        Args:
+            image: Imagen de GEE
+            bbox: Bounding box
+            bands: Lista de bandas (default: RGB)
+            scale: Resolución en metros
+            format: Formato ('GEO_TIFF', 'NPY')
+            
+        Returns:
+            str: URL de descarga
+        """
+        self._ensure_authenticated()
+        
+        def _get_download_url():
+            geometry = ee.Geometry.Rectangle([
+                bbox["west"], bbox["south"],
+                bbox["east"], bbox["north"]
+            ])
+            
+            selected_bands = bands or BANDS["RGB"]
+            download_image = image.select(selected_bands)
+            
+            url = download_image.getDownloadURL({
+                "region": geometry,
+                "scale": scale,
+                "format": format,
+                "crs": "EPSG:4326"
+            })
+            
+            return url
+        
+        return self._rate_limited_request(_get_download_url)
+    
+    def download_thumbnail(
+        self,
+        image: ee.Image,
+        bbox: Dict[str, float],
+        vis_type: str = "RGB",
+        dimensions: int = 1024
+    ) -> bytes:
+        """
+        Descarga thumbnail como bytes.
+        
+        Útil para guardar en R2 o incluir en PDFs.
+        
+        Args:
+            image: Imagen de GEE
+            bbox: Bounding box
+            vis_type: Tipo de visualización
+            dimensions: Tamaño en píxeles
+            
+        Returns:
+            bytes: Contenido de la imagen PNG
+        """
+        url = self.get_thumbnail_url(image, bbox, vis_type, dimensions)
+        
+        response = requests.get(url, timeout=60)
+        response.raise_for_status()
+        
+        return response.content
+    
+    # =========================================================================
+    # MÉTODOS DE SERIES TEMPORALES (PARA UC-06, UC-11/12)
+    # =========================================================================
+    
+    def get_temporal_series(
+        self,
+        bbox: Dict[str, float],
+        start_date: date,
+        end_date: date,
+        interval_months: int = 1,
+        max_cloud_cover: float = 30.0
+    ) -> List[Tuple[date, Optional[ee.Image]]]:
+        """
+        Obtiene serie temporal de imágenes para un período.
+        
+        Ideal para UC-11/12: secuencia pre-incendio + post-incendio anual.
+        
+        Args:
+            bbox: Bounding box
+            start_date: Fecha inicio
+            end_date: Fecha fin
+            interval_months: Intervalo entre imágenes (1=mensual, 12=anual)
+            max_cloud_cover: Máximo porcentaje de nubes
+            
+        Returns:
+            Lista de tuplas (fecha_target, imagen o None si no hay disponible)
+        """
+        self._ensure_authenticated()
+        
+        results = []
+        current_date = start_date
+        
+        while current_date <= end_date:
+            # Ventana de búsqueda: ±15 días del target
+            window_start = current_date - timedelta(days=15)
+            window_end = current_date + timedelta(days=15)
+            
+            try:
+                collection = self.get_sentinel_collection(
+                    bbox=bbox,
+                    start_date=window_start,
+                    end_date=window_end,
+                    max_cloud_cover=max_cloud_cover
+                )
+                
+                image = self.get_best_image(collection, target_date=current_date)
+                results.append((current_date, image))
+                
+            except GEEImageNotFoundError:
+                logger.warning(f"No hay imagen disponible para {current_date}")
+                results.append((current_date, None))
+            
+            # Avanzar al siguiente intervalo
+            if interval_months == 1:
+                # Siguiente mes
+                if current_date.month == 12:
+                    current_date = date(current_date.year + 1, 1, current_date.day)
+                else:
+                    try:
+                        current_date = date(current_date.year, current_date.month + 1, current_date.day)
+                    except ValueError:
+                        # Día no existe en el mes (ej: 31 de febrero)
+                        current_date = date(current_date.year, current_date.month + 1, 28)
+            else:
+                # Avanzar N meses
+                new_month = current_date.month + interval_months
+                new_year = current_date.year + (new_month - 1) // 12
+                new_month = ((new_month - 1) % 12) + 1
+                try:
+                    current_date = date(new_year, new_month, current_date.day)
+                except ValueError:
+                    current_date = date(new_year, new_month, 28)
+        
+        return results
+    
+    def get_annual_series_for_fire(
+        self,
+        bbox: Dict[str, float],
+        fire_date: date,
+        years_after: int = 5,
+        pre_fire_days: int = 30
+    ) -> Dict[str, Any]:
+        """
+        Obtiene serie anual de imágenes para seguimiento post-incendio.
+        
+        Específico para UC-11/12: 
+        - 1 imagen pre-incendio
+        - 1 imagen por año post-incendio
+        
+        Args:
+            bbox: Bounding box del área quemada
+            fire_date: Fecha del incendio
+            years_after: Años a monitorear post-incendio
+            pre_fire_days: Días antes del incendio para imagen pre-fuego
+            
+        Returns:
+            Dict con:
+                - pre_fire: imagen pre-incendio (o None)
+                - post_fire: lista de (año, imagen) para cada año posterior
+                - metadata: información adicional
+        """
+        self._ensure_authenticated()
         
         result = {
-            'fire_location': {'lat': fire_lat, 'lon': fire_lon},
-            'fire_date': fire_date.isoformat(),
-            'analysis_area_km2': (buffer_meters / 1000) ** 2 * 3.14159,
-            'pre_fire': None,
-            'post_fire': None,
-            'ndvi_change': None
+            "pre_fire": None,
+            "post_fire": [],
+            "metadata": {
+                "fire_date": fire_date.isoformat(),
+                "bbox": bbox,
+                "years_monitored": years_after
+            }
         }
         
-        if pre_fire_image:
-            # RGB
-            pre_rgb = self.get_rgb_visualization(pre_fire_image)
-            result['pre_fire'] = {
-                'image_id': pre_fire_image.getInfo()['id'],
-                'date': pre_fire_image.date().format('YYYY-MM-dd').getInfo(),
-                'cloud_cover': pre_fire_image.get('CLOUDY_PIXEL_PERCENTAGE').getInfo(),
-                'rgb_url': self.export_to_url(pre_rgb, bbox, scale=10, format='PNG')
-            }
+        # Imagen pre-incendio
+        try:
+            pre_start = fire_date - timedelta(days=pre_fire_days)
+            pre_end = fire_date - timedelta(days=1)
             
-            # NDVI
-            pre_ndvi = self.calculate_ndvi(pre_fire_image)
-            ndvi_stats_pre = pre_ndvi.reduceRegion(
-                reducer=ee.Reducer.mean(),
-                geometry=aoi,
-                scale=10
-            ).getInfo()
-            
-            result['pre_fire']['ndvi_mean'] = ndvi_stats_pre.get('NDVI')
+            pre_collection = self.get_sentinel_collection(
+                bbox=bbox,
+                start_date=pre_start,
+                end_date=pre_end,
+                max_cloud_cover=25
+            )
+            result["pre_fire"] = self.get_best_image(pre_collection)
+            logger.info(f"Imagen pre-incendio encontrada")
+        except GEEImageNotFoundError:
+            logger.warning(f"No hay imagen pre-incendio disponible")
         
-        if post_fire_image:
-            # RGB
-            post_rgb = self.get_rgb_visualization(post_fire_image)
-            result['post_fire'] = {
-                'image_id': post_fire_image.getInfo()['id'],
-                'date': post_fire_image.date().format('YYYY-MM-dd').getInfo(),
-                'cloud_cover': post_fire_image.get('CLOUDY_PIXEL_PERCENTAGE').getInfo(),
-                'rgb_url': self.export_to_url(post_rgb, bbox, scale=10, format='PNG')
-            }
+        # Imágenes anuales post-incendio
+        for year_offset in range(1, years_after + 1):
+            target_date = date(fire_date.year + year_offset, fire_date.month, fire_date.day)
             
-            # NDVI
-            post_ndvi = self.calculate_ndvi(post_fire_image)
-            ndvi_stats_post = post_ndvi.reduceRegion(
-                reducer=ee.Reducer.mean(),
-                geometry=aoi,
-                scale=10
-            ).getInfo()
+            # No buscar fechas futuras
+            if target_date > date.today():
+                break
             
-            result['post_fire']['ndvi_mean'] = ndvi_stats_post.get('NDVI')
-        
-        # Calcular cambio en NDVI
-        if result['pre_fire'] and result['post_fire']:
-            ndvi_change = result['post_fire']['ndvi_mean'] - result['pre_fire']['ndvi_mean']
-            result['ndvi_change'] = {
-                'absolute': ndvi_change,
-                'percentage': (ndvi_change / result['pre_fire']['ndvi_mean']) * 100 if result['pre_fire']['ndvi_mean'] else None
-            }
+            try:
+                # Ventana de ±30 días
+                collection = self.get_sentinel_collection(
+                    bbox=bbox,
+                    start_date=target_date - timedelta(days=30),
+                    end_date=target_date + timedelta(days=30),
+                    max_cloud_cover=30
+                )
+                image = self.get_best_image(collection, target_date=target_date)
+                result["post_fire"].append((target_date.year, image))
+                logger.info(f"Imagen año {target_date.year} encontrada")
+            except GEEImageNotFoundError:
+                logger.warning(f"No hay imagen disponible para año {target_date.year}")
+                result["post_fire"].append((target_date.year, None))
         
         return result
+    
+    # =========================================================================
+    # UTILIDADES
+    # =========================================================================
+    
+    def get_image_metadata(self, image: ee.Image) -> ImageMetadata:
+        """Extrae metadata de una imagen."""
+        self._ensure_authenticated()
+        
+        def _get_metadata():
+            info = image.getInfo()
+            props = info.get("properties", {})
+            
+            # Parsear fecha
+            acq_date = None
+            if props.get("system:time_start"):
+                acq_date = datetime.fromtimestamp(
+                    props["system:time_start"] / 1000
+                ).date()
+            
+            return ImageMetadata(
+                image_id=info.get("id", ""),
+                acquisition_date=acq_date,
+                cloud_cover_percent=props.get("CLOUDY_PIXEL_PERCENTAGE", 0),
+                satellite=props.get("SPACECRAFT_NAME", "Sentinel-2"),
+                tile_id=props.get("MGRS_TILE", ""),
+                sun_elevation=90 - props.get("MEAN_SOLAR_ZENITH_ANGLE", 0),
+            )
+        
+        return self._rate_limited_request(_get_metadata)
+    
+    def health_check(self) -> Dict[str, Any]:
+        """
+        Verifica el estado de la conexión con GEE.
+        
+        Returns:
+            Dict con status y detalles
+        """
+        try:
+            self._ensure_authenticated()
+            
+            # Test simple: obtener info de una imagen conocida
+            test_image = ee.Image("COPERNICUS/S2_SR_HARMONIZED/20230101T140051_20230101T140045_T20HNH")
+            info = test_image.getInfo()
+            
+            return {
+                "status": "healthy",
+                "authenticated": True,
+                "requests_today": self._request_count,
+                "test_image": info.get("id", "unknown") if info else "failed"
+            }
+        except Exception as e:
+            return {
+                "status": "unhealthy",
+                "authenticated": self._initialized,
+                "error": str(e)
+            }
+    
+    def get_request_count(self) -> int:
+        """Retorna el número de requests realizados en esta sesión."""
+        return self._request_count
+    
+    def reset_request_count(self) -> None:
+        """Resetea el contador de requests (para nuevo día)."""
+        self._request_count = 0
+
+
+# =============================================================================
+# FUNCIONES DE CONVENIENCIA
+# =============================================================================
+
+def get_gee_service() -> GEEService:
+    """
+    Factory function para obtener instancia de GEEService.
+    
+    Usar como dependency injection en FastAPI:
+        @router.get("/imagery")
+        def get_imagery(gee: GEEService = Depends(get_gee_service)):
+            ...
+    """
+    service = GEEService()
+    service.authenticate()
+    return service
+
+
+# =============================================================================
+# EJEMPLO DE USO
+# =============================================================================
+
+if __name__ == "__main__":
+    """Ejemplo de uso del servicio."""
+    
+    # Configurar logging
+    logging.basicConfig(level=logging.INFO)
+    
+    # Inicializar servicio
+    gee = GEEService()
+    
+    # Health check
+    status = gee.health_check()
+    print(f"Status: {status}")
+    
+    if status["status"] == "healthy":
+        # Ejemplo: buscar imágenes para un área en Chaco
+        bbox = {
+            "west": -60.5,
+            "south": -27.0,
+            "east": -60.3,
+            "north": -26.8
+        }
+        
+        # Buscar imágenes de 2023
+        collection = gee.get_sentinel_collection(
+            bbox=bbox,
+            start_date=date(2023, 6, 1),
+            end_date=date(2023, 8, 31),
+            max_cloud_cover=20
+        )
+        
+        # Obtener mejor imagen
+        best_image = gee.get_best_image(collection)
+        metadata = gee.get_image_metadata(best_image)
+        print(f"Mejor imagen: {metadata}")
+        
+        # Calcular NDVI
+        ndvi = gee.calculate_ndvi(best_image, bbox)
+        print(f"NDVI: mean={ndvi.mean:.3f}, range=[{ndvi.min:.3f}, {ndvi.max:.3f}]")
+        
+        # Obtener thumbnail URL
+        thumb_url = gee.get_thumbnail_url(best_image, bbox, vis_type="RGB")
+        print(f"Thumbnail: {thumb_url}")
