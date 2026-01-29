@@ -263,12 +263,13 @@ wildfire-recoveries/
 │       └── test_full_audit_flow.py
 │
 ├── docs/                         # ✅ Documentación
-│   ├── USE_CASES.md              # ✅ Casos de uso completos
-│   ├── ARCHITECTURE.md           # ✅ Este archivo
-│   ├── TEST_CASES.md             # ✅ Casos de prueba
-│   ├── BRANDING_GUIDE.md         # ✅ Guía de branding
-│   ├── SCRIPTS_README.md         # ✅ Guía de scripts
-│   └── API_REFERENCE.md          # OpenAPI spec
+│   ├── architecture/             # 🆕 Subcarpeta architecture
+│   │   ├── forestguard_use_cases.md # ✅ Casos de uso completos
+│   │   ├── forestguard_architecture.md # ✅ Este archivo
+│   │   ├── project_plan.md       # ✅ Plan
+│   │   └── wildfire_branding.md  # ✅ Guía de branding
+│   ├── manual_de_usuario.md      # ✅ Guía usuario
+│   └── ...                       # ✅ Otros docs
 │
 ├── docker/                       # ✅ Dockerfiles
 │   ├── Dockerfile.api            # ✅ FastAPI image

@@ -2,7 +2,7 @@
 
 **Plataforma de inteligencia geoespacial para fiscalización legal de incendios forestales en Argentina**
 
-> 🌍 **Read in English**: [Jump to English version](#-forestguard-api-english-version)
+> 🌍 **Read in english**: [Jump to english version](#-forestguard-api-english-version)
 
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -57,8 +57,8 @@ ForestGuard convierte millones de detecciones satelitales en:
 Guías detalladas:
 
 ### 📘 Manuales de usuario
-- **Español**: [Manual de usuario](docs/MANUAL_DE_USUARIO.md)
-- **English**: [User manual](docs/USER_MANUAL.md)
+- **Español**: [Manual de usuario](docs/manual_de_usuario.md)
+- **English**: [User manual](docs/user_manual.md)
 
 ### ❓ Preguntas frecuentes
 - **Español**: [Preguntas frecuentes (FAQ)](docs/preguntas_frecuentes.md)
@@ -69,10 +69,10 @@ Guías detalladas:
 - **English**: [Glossary](docs/glossary.md)
 
 ### 📐 Arquitectura y diseño
-- [Documentación de arquitectura](Architecture/forestguard_architecture.md)
-- [Casos de Uso Detallados](Architecture/forestguard_use_cases.md)
-- [Plan del Proyecto](Architecture/PROJECT_PLAN.md)
-- [Manual de Marca (Branding)](Architecture/wildfire_branding.md)
+- [Documentación de arquitectura](docs/architecture/forestguard_architecture.md)
+- [Casos de Uso Detallados](docs/architecture/forestguard_use_cases.md)
+- [Plan del Proyecto](docs/architecture/project_plan.md)
+- [Manual de Marca (Branding)](docs/architecture/wildfire_branding.md)
 
 ---
 
@@ -334,10 +334,13 @@ wildfire-recovery-argentina/
 ├── database/
 │   ├── schema_v0.1.sql          # ✅ Schema completo (14 tablas)
 │   └── supabase.sql             # ✅ RLS policies
-├── Architecture/                 # 📖 Documentación
-│   ├── forestguard_use_cases.md # ✅ 11 casos de uso
-│   ├── forestguard_architecture.md # ✅ Arquitectura técnica
-│   └── PROJECT_PLAN.md          # ✅ Roadmap (70% complete)
+├── docs/                         # 📖 Documentación
+│   ├── architecture/             # 🏗️ Arquitectura
+│   │   ├── forestguard_use_cases.md # ✅ 11 casos de uso
+│   │   ├── forestguard_architecture.md # ✅ Arquitectura técnica
+│   │   └── project_plan.md       # ✅ Roadmap (70% complete)
+│   ├── manual_de_usuario.md
+│   └── ...
 └── docker/                       # Docker configs
 ```
 
@@ -668,8 +671,8 @@ ForestGuard converts millions of satellite detections into:
 We have prepared detailed guides for all user profiles:
 
 ### 📘 User manuals
-- **English**: [User manual](docs/USER_MANUAL.md)
-- **Spanish**: [Manual de usuario](docs/MANUAL_DE_USUARIO.md)
+- **English**: [User manual](docs/user_manual.md)
+- **Spanish**: [Manual de usuario](docs/manual_de_usuario.md)
 
 ### ❓ FAQ
 - **English**: [Frequently Asked Questions](docs/faq.md)
@@ -680,10 +683,10 @@ We have prepared detailed guides for all user profiles:
 - **Spanish**: [Glosario](docs/glosario.md)
 
 ### 📐 Architecture & design
-- [Architecture Documentation](Architecture/forestguard_architecture.md)
-- [Detailed Use Cases](Architecture/forestguard_use_cases.md)
-- [Project Plan](Architecture/PROJECT_PLAN.md)
-- [Branding Guidelines](Architecture/wildfire_branding.md)
+- [Architecture Documentation](docs/architecture/forestguard_architecture.md)
+- [Detailed Use Cases](docs/architecture/forestguard_use_cases.md)
+- [Project Plan](docs/architecture/project_plan.md)
+- [Branding Guidelines](docs/architecture/wildfire_branding.md)
 
 ## 🧩 Use cases (11 implemented)
 
