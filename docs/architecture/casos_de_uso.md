@@ -2,7 +2,7 @@
 
 ## Resumen ejecutivo
 
-Este documento detalla los **11 casos de uso principales** que la API ForestGuard está diseñada para resolver. Cada caso de uso está vinculado a necesidades reales de fiscalización ambiental, transparencia institucional y defensa del patrimonio natural de Argentina bajo el marco de la Ley 26.815 (Manejo del Fuego).
+Este documento detalla los **13 casos de uso principales** que la API ForestGuard está diseñada para resolver. Cada caso de uso está vinculado a necesidades reales de fiscalización ambiental, transparencia institucional y defensa del patrimonio natural de Argentina bajo el marco de la Ley 26.815 (Manejo del Fuego).
 
 ---
 
@@ -519,6 +519,120 @@ Content-Type: application/json
 
 ---
 
+### UC-13: Visualización y filtrado de grilla de incendios
+
+**Descripción:**  
+Construir una página de grilla/lista para consultar incendios registrados y filtrar por atributos clave, soportando consultas típicas (por provincia, área protegida, fechas y estado).
+
+**Actor principal:** Usuarios generales, analistas, operadores
+
+**Flujo principal:**
+1. Usuario accede a la sección "Incendios"
+2. Visualiza grilla paginada con columnas clave:
+   - ID de evento / ID de detección
+   - Última detección / Fecha de inicio
+   - Provincia
+   - Área protegida (sí/no + nombre)
+   - Estado/Categoría
+   - Confianza (normalizada)
+   - Severidad (FRP total, detecciones, área estimada)
+3. Aplica filtros:
+   - Provincia
+   - Categoría/Estado (ej: Sospechado/Confirmado/Controlado)
+   - Área Protegida
+   - Rango de fechas
+   - "Solo incendios actuales"
+4. Ordena por fecha/severidad
+5. Abre detalle del incendio (opcional) para ver línea de tiempo/mapa
+
+**Reglas de negocio:**
+- RB-01: La grilla debe paginar desde la BD (no cargar todo en memoria)
+- RB-02: Los filtros deben traducirse a consultas eficientes (índices)
+- RB-03: "Incendios actuales" definido por ventana de tiempo (ej: detección en últimos N días) o campo `is_active`
+
+**Datos requeridos:**
+- `fire_events` (eventos consolidados)
+- `fire_detections` (detecciones agregadas)
+
+**Endpoint:**
+```
+GET /api/v1/fires?province[]={province}&protected_area_id={id}&from={date}&to={date}&status={status}&active={bool}&min_confidence={float}&page={n}&page_size={n}&sort={field}
+GET /api/v1/fires/{id}
+GET /api/v1/fires/export?... (opcional CSV/XLSX)
+```
+
+**Criterios de éxito:**
+- ✅ Rendimiento: respuesta < 1-2s con paginación
+- ✅ Observabilidad: logs para consultas lentas
+- ✅ Seguridad: proteger filtros administrativos por rol
+
+---
+
+### UC-12: Registro digital de visitantes para refugios de montaña (Offline-first)
+
+**Descripción:**  
+Digitalizar el registro diario de visitantes (entradas y pernoctes) en refugios de montaña, reemplazando registros en papel con un sistema **mobile-first**, **offline-first**, seguro y auditable con sincronización automática y generación de estadísticas/exportación.
+
+**Actor principal:** Operadores de refugio, administradores de APN, auditores
+
+**Flujo principal:**
+1. Operador abre la app (web/PWA)
+2. Selecciona "Nuevo Registro"
+3. Completa:
+   - Refugio
+   - Fecha (default: hoy)
+   - Tipo de registro: Entrada de día / Pernocte
+4. Completa datos del **líder del grupo**
+5. Agrega acompañantes vía **lista dinámica**:
+   - Nombre completo
+   - Edad o rango de edad
+   - Documento (opcional)
+6. Sistema calcula automáticamente el total de personas
+7. Guarda el registro:
+   - Si online → sincroniza con backend
+   - Si offline → guardado local (IndexedDB)
+8. Cuando se restablece la conectividad, el sistema sincroniza automáticamente
+9. Operador puede editar el registro **hasta 30 minutos** después de la primera sincronización
+10. Administrador puede consultar estadísticas y exportar datos
+
+**Reglas de negocio:**
+- RB-01 (Offline-first): El sistema debe permitir crear y almacenar registros sin conexión
+- RB-02 (Sincronización): Los registros locales se sincronizan automáticamente cuando hay conectividad
+- RB-03 (Edición limitada): Un registro solo puede editarse hasta **30 minutos** después de `first_submitted_at`
+- RB-04 (Auditoría): Cada edición genera una revisión histórica
+- RB-05 (Seguridad): Acceso restringido por roles (RLS / JWT)
+- RB-06 (Exportación): Los datos pueden exportarse en CSV o XLSX
+
+**Datos requeridos:**
+- `shelters` (catálogo de refugios)
+- `visitor_logs` (registros de visitas)
+- `visitor_log_companions` (detalles de acompañantes)
+- `visitor_log_revisions` (historial de ediciones)
+
+**Endpoints:**
+```
+POST /api/v1/visitor-logs
+PATCH /api/v1/visitor-logs/{id} (valida ventana de 30 min)
+GET /api/v1/visitor-logs?shelter_id=&from=&to=
+GET /api/v1/visitor-logs/export?from=&to=&province=&shelter_id= (CSV/XLSX)
+GET /api/v1/shelters?province=&q=
+```
+
+**Stack Frontend (Offline-first):**
+- Vite + React + TypeScript
+- Tailwind CSS (branding)
+- TanStack Query (cache persistence + offline mutation queue)
+- IndexedDB / LocalForage
+- PWA (Service Worker, asset caching, instalable)
+
+**Criterios de éxito:**
+- ✅ Elimina registros en papel
+- ✅ Mejora trazabilidad y calidad de datos
+- ✅ Habilita análisis estadístico histórico
+- ✅ Base para correlación con riesgo ambiental y emergencias
+
+---
+
 ## 🔵 Categoría: Participación ciudadana
 
 ### UC-09: Soporte a denuncias ciudadanas
@@ -601,6 +715,8 @@ Content-Type: application/json
 | UC-09 | Denuncias | 🟡 MEDIA | Baja | ⚖️ Medio | 🧑‍🤝‍🧑 Muy Alto |
 | UC-10 | Calidad Dato | 🔴 ALTA | Baja | ⚖️ Alto | 🔬 Medio |
 | UC-11 | Reportes Hist. | 🟡 MEDIA | Media | ⚖️ Medio | 📊 Alto |
+| UC-12 | Registro Visitantes | 🟡 MEDIA | Media | ⚖️ Bajo | 🏔️ Alto |
+| UC-13 | Grilla Incendios | 🟢 BAJA | Baja | ⚖️ Bajo | 📋 Medio |
 
 ---
 
@@ -624,6 +740,8 @@ Content-Type: application/json
 - 🔜 UC-05: Tendencias Históricas
 - 🔜 UC-08: Cambio de Uso (ML avanzado)
 - 🔜 UC-11: Reportes Históricos (v2)
+- 🔜 UC-12: Registro de Visitantes (PWA + offline)
+- 🔜 UC-13: Grilla de Incendios (básico)
 
 ---
 
@@ -636,6 +754,6 @@ Para sugerencias de nuevos casos de uso o mejoras:
 
 ---
 
-**Versión:** 3.0  
-**Última actualización:** 2025-01-24  
+**Versión:** 4.0  
+**Última actualización:** 2026-01-29  
 **Autores:** ForestGuard Team

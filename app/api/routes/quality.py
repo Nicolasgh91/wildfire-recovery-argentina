@@ -434,7 +434,7 @@ async def batch_quality_assessment(
             start_date,
             province,
             avg_confidence,
-            detection_count
+            total_detections
         FROM fire_events
         WHERE (:province IS NULL OR province = :province)
         ORDER BY start_date DESC
@@ -452,8 +452,8 @@ async def batch_quality_assessment(
     legal_count = 0
     
     for row in results:
-        avg_conf = row.avg_confidence or 0
-        det_count = row.detection_count or 1
+        avg_conf = float(row.avg_confidence or 0)
+        det_count = int(row.total_detections or 1)
         
         score = calculate_reliability_score(avg_conf, det_count, False, False)
         grade = get_reliability_grade(score)

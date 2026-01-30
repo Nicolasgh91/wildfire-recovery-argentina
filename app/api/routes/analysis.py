@@ -481,7 +481,10 @@ async def analyze_trends(
             "province": province
         }).fetchall()
     except Exception:
-        # Simplified fallback
+        # Rollback failed transaction before fallback query
+        db.rollback()
+        
+        # Simplified fallback without JOIN
         query = text("""
             SELECT 
                 EXTRACT(YEAR FROM start_date)::int as year,

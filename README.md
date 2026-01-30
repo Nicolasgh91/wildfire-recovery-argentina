@@ -76,7 +76,7 @@ Guías detalladas:
 
 ---
 
-## 🧩 Casos de uso (11 implementados)
+## 🧩 Casos de uso (13 implementados)
 
 ### Lista completa de funcionalidades
 
@@ -93,6 +93,8 @@ Guías detalladas:
 | **UC-09** | Participación | Denuncias Ciudadanas | Reportes públicos con evidencia satelital | 🔜 PENDING |
 | **UC-10** | Análisis | Calidad del Dato | Métricas de confiabilidad para peritajes | 🔜 PENDING |
 | **UC-11** | Análisis | Reportes Históricos | PDFs de incendios en áreas protegidas | 🔜 PENDING |
+| **UC-12** | Operacional | Registro de Visitantes | Registro digital offline-first para refugios | 🔜 PENDING |
+| **UC-13** | Análisis | Grilla de Incendios | Visualización y filtrado de eventos | 🔜 PENDING |
 
 ---
 
@@ -688,7 +690,7 @@ We have prepared detailed guides for all user profiles:
 - [Project Plan](docs/architecture/project_plan.md)
 - [Branding Guidelines](docs/architecture/wildfire_branding.md)
 
-## 🧩 Use cases (11 implemented)
+## 🧩 Use cases (13 implemented)
 
 ### Full feature list
 
@@ -705,6 +707,8 @@ We have prepared detailed guides for all user profiles:
 | **UC-09** | Participation | Citizen Reporting | Public reports with satellite evidence | 🔜 PENDING |
 | **UC-10** | Analysis | Data Quality | Reliability metrics for forensics | 🔜 PENDING |
 | **UC-11** | Analysis | Historical Reports | PDFs of fires in protected areas | 🔜 PENDING |
+| **UC-12** | Operational | Visitor Registration | Offline-first digital registration for shelters | 🔜 PENDING |
+| **UC-13** | Analysis | Fire Grid View | Fire events visualization and filtering | ✅ DONE |
 
 ## 🏗️ Unified architecture
 
