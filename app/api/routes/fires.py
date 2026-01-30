@@ -280,29 +280,78 @@ def export_fires(
 @router.get(
     "/stats",
     response_model=StatsResponse,
-    summary="Estadísticas agregadas"
+    summary="Estadísticas agregadas",
+    tags=["stats"],
 )
 def get_statistics(
     date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
     province: Optional[List[str]] = Query(None),
     db: Session = Depends(deps.get_db),
 ):
-    query = db.query(FireEvent)
-    if province: query = query.filter(FireEvent.province.in_(province))
-    if date_from: query = query.filter(FireEvent.start_date >= date_from)
-    
-    total = query.count()
-    # Mock aggregates for MVP
+    filters = []
+    if province:
+        filters.append(FireEvent.province.in_(province))
+    if date_from:
+        filters.append(FireEvent.start_date >= datetime.combine(date_from, datetime.min.time()))
+    if date_to:
+        filters.append(FireEvent.start_date <= datetime.combine(date_to, datetime.max.time()))
+
+    summary = db.query(
+        func.count(FireEvent.id).label("total_fires"),
+        func.coalesce(func.sum(FireEvent.total_detections), 0).label("total_detections"),
+        func.coalesce(func.sum(FireEvent.estimated_area_hectares), 0).label("total_hectares"),
+        func.coalesce(func.avg(FireEvent.avg_confidence), 0).label("avg_confidence"),
+    ).filter(*filters).one()
+
+    by_province_rows = db.query(
+        FireEvent.province.label("province"),
+        func.count(FireEvent.id).label("fire_count"),
+        func.max(FireEvent.start_date).label("latest_fire"),
+    ).filter(*filters).group_by(FireEvent.province).all()
+
+    by_month_rows = db.query(
+        func.date_trunc("month", FireEvent.start_date).label("month"),
+        func.count(FireEvent.id).label("fire_count"),
+    ).filter(*filters).group_by(func.date_trunc("month", FireEvent.start_date)).order_by(
+        func.date_trunc("month", FireEvent.start_date)
+    ).all()
+
+    fires_in_protected = db.query(
+        func.count(func.distinct(FireProtectedAreaIntersection.fire_event_id))
+    ).join(
+        FireEvent,
+        FireEvent.id == FireProtectedAreaIntersection.fire_event_id,
+    ).filter(*filters).scalar() or 0
+
+    by_province = [
+        ProvinceStats(
+            name=row.province or "Unknown",
+            fire_count=row.fire_count,
+            latest_fire=row.latest_fire.date() if row.latest_fire else None,
+        )
+        for row in by_province_rows
+    ]
+
+    by_month = {
+        row.month.strftime("%Y-%m"): row.fire_count
+        for row in by_month_rows
+        if row.month
+    }
+
     return StatsResponse(
-        period={"from": date_from or date.today()},
+        period={
+            "from": date_from or date.today(),
+            "to": date_to or date.today(),
+        },
         stats=FireStatistics(
-            total_fires=total,
-            total_detections=0,
-            total_hectares=0,
-            avg_confidence=0,
-            fires_in_protected=0,
-            by_province=[],
-            by_month={}
+            total_fires=summary.total_fires,
+            total_detections=summary.total_detections,
+            total_hectares=float(summary.total_hectares or 0),
+            avg_confidence=float(summary.avg_confidence or 0),
+            fires_in_protected=fires_in_protected,
+            by_province=by_province,
+            by_month=by_month,
         )
     )
 
