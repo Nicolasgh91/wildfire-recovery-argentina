@@ -6,7 +6,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useI18n } from '@/context/LanguageContext'
-import { provinces } from '@/data/mockData'
+import { provinces } from '@/data/mockdata'
 
 interface FireFiltersProps {
   selectedProvince: string

@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useI18n } from '@/context/LanguageContext'
-import { fires } from '@/data/mockData'
+import { fires } from '@/data/mockdata'
 
 const AuditMap = lazy(() =>
   import('@/components/audit-map').then((mod) => ({ default: mod.AuditMap })),

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Flame } from 'lucide-react'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { useI18n } from '@/context/LanguageContext'
-import type { Fire } from '@/data/mockData'
+import type { Fire } from '@/data/mockdata'
 
 interface StoriesBarProps {
   fires: Fire[]

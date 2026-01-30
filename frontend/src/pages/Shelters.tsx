@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useI18n } from '@/context/LanguageContext'
-import { shelters } from '@/data/mockData'
+import { shelters, type Shelter } from '@/data/mockdata'
 
 export default function SheltersPage() {
   const { t } = useI18n()
@@ -137,7 +137,7 @@ export default function SheltersPage() {
                   <SelectValue placeholder="Select a shelter" />
                 </SelectTrigger>
                 <SelectContent>
-                  {shelters.map((shelter) => (
+                  {shelters.map((shelter: Shelter) => (
                     <SelectItem key={shelter.id} value={shelter.id}>
                       {shelter.name}
                     </SelectItem>

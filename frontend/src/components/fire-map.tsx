@@ -5,7 +5,7 @@ import L from 'leaflet'
 import { useI18n } from '@/context/LanguageContext'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import type { Fire } from '@/data/mockData'
+import type { Fire } from '@/data/mockdata'
 import 'leaflet/dist/leaflet.css'
 
 interface FireMapProps {

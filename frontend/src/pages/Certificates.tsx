@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
-import { verifyCertificate, type Certificate } from '@/data/mockData'
+import { verifyCertificate, type Certificate } from '@/data/mockdata'
 
 export default function CertificatesPage() {
   const { t } = useI18n()

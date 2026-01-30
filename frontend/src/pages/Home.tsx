@@ -4,7 +4,7 @@ import { StoriesBar } from '@/components/stories-bar'
 import { FireCard } from '@/components/fire-card'
 import { FireFilters } from '@/components/fire-filters'
 import { useI18n } from '@/context/LanguageContext'
-import { fires } from '@/data/mockData'
+import { fires } from '@/data/mockdata'
 
 export default function HomePage() {
   const { t } = useI18n()

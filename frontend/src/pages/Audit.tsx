@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useI18n } from '@/context/LanguageContext'
-import { runAudit } from '@/data/mockData'
+import { runAudit } from '@/data/mockdata'
 
 const AuditMap = lazy(() =>
   import('@/components/audit-map').then((mod) => ({ default: mod.AuditMap })),

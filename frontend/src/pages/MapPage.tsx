@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useI18n } from '@/context/LanguageContext'
-import { fires, type Fire } from '@/data/mockData'
+import { fires, type Fire } from '@/data/mockdata'
 
 const FireMap = lazy(() =>
   import('@/components/fire-map').then((mod) => ({ default: mod.FireMap })),
@@ -56,7 +56,7 @@ export default function MapPage() {
           <CardContent>
             <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-2">
-                {fires.map((fire) => (
+                {fires.map((fire: Fire) => (
                   <button
                     key={fire.id}
                     type="button"
@@ -88,7 +88,7 @@ export default function MapPage() {
           <CardContent className="p-3">
             <ScrollArea className="h-32">
               <div className="flex gap-2 pb-2">
-                {fires.map((fire) => (
+                {fires.map((fire: Fire) => (
                   <button
                     key={fire.id}
                     type="button"

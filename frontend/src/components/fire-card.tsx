@@ -4,7 +4,7 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/context/LanguageContext'
-import type { Fire } from '@/data/mockData'
+import type { Fire } from '@/data/mockdata'
 import { cn } from '@/lib/utils'
 
 interface FireCardProps {

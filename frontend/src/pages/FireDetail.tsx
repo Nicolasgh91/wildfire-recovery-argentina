@@ -16,7 +16,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { NdviChart } from '@/components/ndvi-chart'
 import { ReliabilityScore } from '@/components/reliability-score'
 import { useI18n } from '@/context/LanguageContext'
-import { fires } from '@/data/mockData'
+import { fires } from '@/data/mockdata'
 import { cn } from '@/lib/utils'
 
 const FireMap = lazy(() =>
