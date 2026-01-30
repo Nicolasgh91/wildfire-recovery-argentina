@@ -44,7 +44,7 @@ from app.services.vae_service import VAEService, RecoveryStatus, AnomalyType
 # ROUTER
 # =============================================================================
 
-router = APIRouter(tags=["Monitoring"])
+router = APIRouter()
 
 
 # =============================================================================

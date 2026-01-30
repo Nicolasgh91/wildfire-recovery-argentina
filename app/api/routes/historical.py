@@ -79,7 +79,6 @@ logger = logging.getLogger(__name__)
 
 # Router
 router = APIRouter(
-    tags=["Historical Reports"],
     responses={
         401: {"description": "API key inválida o faltante"},
         429: {"description": "Rate limit excedido"},

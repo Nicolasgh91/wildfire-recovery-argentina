@@ -47,7 +47,7 @@ from app.services.ers_service import ERSService, ReportType, ReportRequest, Repo
 # ROUTER
 # =============================================================================
 
-router = APIRouter(tags=["Reports"])
+router = APIRouter()
 
 
 # =============================================================================
