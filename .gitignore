@@ -87,6 +87,12 @@ output_images/
 output_reports/
 data/
 
+# Allow frontend source data/lib (otherwise ignored by patterns above)
+!frontend/src/data/
+!frontend/src/data/**
+!frontend/src/lib/
+!frontend/src/lib/**
+
 #Borrador interno
 CAMBIOS_A_DOCUMENTAR.MD
 temp_files/
