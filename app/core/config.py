@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     API_KEY: Optional[SecretStr] = None  # Loaded from .env or environment variables
     ADMIN_API_KEY: Optional[SecretStr] = None  # Admin capabilities
     SECRET_KEY: Optional[SecretStr] = None  # For JWT/session signing; loaded from .env
+    GOOGLE_CLIENT_ID: Optional[str] = None  # Google OAuth client ID for frontend auth
     
     # --- Alerting ---
     ALERT_EMAIL: Optional[str] = None  # Email to receive security alerts

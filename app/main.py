@@ -11,7 +11,7 @@ from app.core.security import verify_api_key
 from app.core.rate_limiter import check_ip_rate_limit
 from app.core.middleware import LatencyMonitorMiddleware, DeprecationMiddleware
 from app.api.routes import (
-    fires, certificates, audit,
+    fires, certificates, audit, auth,
     reports, monitoring, citizen, quality, analysis, historical
 )
 
@@ -156,6 +156,13 @@ app.add_middleware(LatencyMonitorMiddleware)
 register_exception_handlers(app)
 
 # Include routers
+# Auth - no API key required
+app.include_router(
+    auth.router,
+    prefix=f"{settings.API_V1_PREFIX}/auth",
+    tags=["auth"]
+)
+
 app.include_router(
     fires.router,
     prefix=f"{settings.API_V1_PREFIX}/fires",
