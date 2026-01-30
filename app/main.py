@@ -25,43 +25,43 @@ logger = setup_logging()
 tags_metadata = [
     {
         "name": "fires",
-        "description": "🔥 **Fire Events** - List and retrieve wildfire events detected by satellite. Supports filtering by date, province, and significance. / *Eventos de incendio detectados por satélite.*",
+        "description": "**Fire Events** - List and retrieve wildfire events detected by satellite. Supports filtering by date, province, and significance. / *Eventos de incendio detectados por satélite.*",
     },
     {
         "name": "stats",
-        "description": "📊 **Statistics** - Aggregate fire statistics and metrics. / *Estadísticas agregadas de incendios.*",
+        "description": "**Statistics** - Aggregate fire statistics and metrics. / *Estadísticas agregadas de incendios.*",
     },
     {
         "name": "audit",
-        "description": "📋 **Land Use Audit (UC-01)** - Verify legal restrictions on land due to previous fires under Law 26.815 Art. 22 bis. **Requires API key.** / *Auditoría de restricciones legales por incendios previos.*",
+        "description": "**Land Use Audit (UC-01)** - Verify legal restrictions on land due to previous fires under Law 26.815 Art. 22 bis. **Requires API key.** / *Auditoría de restricciones legales por incendios previos.*",
     },
     {
         "name": "certificates",
-        "description": "📜 **Legal Certificates (UC-07)** - Issue and verify digital certificates for land legal status. **Requires API key.** / *Certificados digitales verificables del estado legal del terreno.*",
+        "description": "**Legal Certificates (UC-07)** - Issue and verify digital certificates for land legal status. **Requires API key.** / *Certificados digitales verificables del estado legal del terreno.*",
     },
     {
         "name": "monitoring",
-        "description": "🌱 **Vegetation Recovery (UC-06)** - Track NDVI-based vegetation recovery in burnt areas over 36 months. / *Monitoreo de recuperación de vegetación post-incendio.*",
+        "description": "**Vegetation Recovery (UC-06)** - Track NDVI-based vegetation recovery in burnt areas over 36 months. / *Monitoreo de recuperación de vegetación post-incendio.*",
     },
     {
         "name": "reports",
-        "description": "📑 **Reports (UC-02, UC-11)** - Generate judicial forensic reports and historical fire reports with satellite evidence. **Requires API key.** / *Reportes judiciales e históricos con evidencia satelital.*",
+        "description": "**Reports (UC-02, UC-11)** - Generate judicial forensic reports and historical fire reports with satellite evidence. **Requires API key.** / *Reportes judiciales e históricos con evidencia satelital.*",
     },
     {
         "name": "citizen",
-        "description": "🧑‍🤝‍🧑 **Citizen Reports (UC-09)** - Submit citizen reports of suspicious activity in burnt areas. / *Denuncias ciudadanas de actividad sospechosa.*",
+        "description": "**Citizen Reports (UC-09)** - Submit citizen reports of suspicious activity in burnt areas. / *Denuncias ciudadanas de actividad sospechosa.*",
     },
     {
         "name": "quality",
-        "description": "🔬 **Data Quality (UC-10)** - Reliability metrics and data source transparency for forensic use. / *Métricas de confiabilidad para uso forense.*",
+        "description": "**Data Quality (UC-10)** - Reliability metrics and data source transparency for forensic use. / *Métricas de confiabilidad para uso forense.*",
     },
     {
         "name": "analysis",
-        "description": "📈 **Analysis (UC-03, UC-05)** - Fire recurrence patterns and historical trend analysis. / *Análisis de patrones de recurrencia y tendencias históricas.*",
+        "description": "**Analysis (UC-03, UC-05)** - Fire recurrence patterns and historical trend analysis. / *Análisis de patrones de recurrencia y tendencias históricas.*",
     },
     {
         "name": "historical",
-        "description": "🗂️ **Historical Data (UC-11)** - Access historical fire records with satellite imagery. **Requires API key.** / *Datos históricos de incendios con imágenes satelitales.*",
+        "description": "**Historical Data (UC-11)** - Access historical fire records with satellite imagery. **Requires API key.** / *Datos históricos de incendios con imágenes satelitales.*",
     },
 ]
 
@@ -85,39 +85,9 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="""
-## ForestGuard API 🌲🔥
+## ForestGuard API
 
 REST API for **legal oversight of wildfires** in protected areas of Argentina, implementing Law 26.815 (Fire Management Law).
-
-### 🎯 Key Use Cases
-
-| UC | Name | Description |
-|----|------|-------------|
-| UC-01 | Land Use Audit | Verify legal restrictions due to fires |
-| UC-07 | Legal Certification | Issue verifiable digital certificates |
-| UC-06 | Vegetation Recovery | NDVI monitoring of burnt areas |
-| UC-10 | Data Quality | Reliability metrics for forensics |
-| UC-11 | Historical Reports | PDFs of fires in protected areas |
-
-### 🔐 Authentication
-
-Protected endpoints require the `X-API-Key` header:
-```
-X-API-Key: your-api-key-here
-```
-
-Endpoints marked with 🔒 in their tag descriptions require authentication.
-
-### 📊 Rate Limits
-
-- **Public endpoints**: 100 requests/minute per IP
-- **Authenticated endpoints**: 10 requests/day per IP (sensitive operations)
-
-### 🌐 Bilingual Support
-
-All responses include both English and Spanish content where applicable.
-
----
 
 *Data sources: NASA FIRMS (VIIRS/MODIS), Sentinel-2, Google Earth Engine*
     """,
