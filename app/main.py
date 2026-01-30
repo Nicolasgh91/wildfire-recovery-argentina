@@ -11,7 +11,7 @@ from app.core.security import verify_api_key
 from app.core.rate_limiter import check_ip_rate_limit
 from app.api.routes import (
     fires, certificates, audit,
-    reports, monitoring, citizen, quality, analysis
+    reports, monitoring, citizen, quality, analysis, historical
 )
 
 # Setup logging
@@ -110,6 +110,14 @@ app.include_router(
     analysis.router,
     prefix=f"{settings.API_V1_PREFIX}/analysis",
     tags=["analysis"]
+)
+
+# UC-12: Historical Reports (Legacy reports with satellite imagery)
+app.include_router(
+    historical.router,
+    prefix=f"{settings.API_V1_PREFIX}/historical",
+    tags=["historical"],
+    dependencies=[Depends(verify_api_key)]
 )
 
 # Health check endpoint

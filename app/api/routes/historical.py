@@ -79,8 +79,7 @@ logger = logging.getLogger(__name__)
 
 # Router
 router = APIRouter(
-    prefix="/reports",
-    tags=["Reports"],
+    tags=["Historical Reports"],
     responses={
         401: {"description": "API key inválida o faltante"},
         429: {"description": "Rate limit excedido"},
@@ -470,12 +469,3 @@ def _convert_ers_result_to_response(result) -> HistoricalReportResponse:
         completed_at=datetime.now() if result.status.value == "completed" else None,
         error_message=result.error_message
     )
-
-
-# =============================================================================
-# ROUTER INCLUSION HELPER
-# =============================================================================
-
-def include_router(app):
-    """Helper para incluir el router en la app principal."""
-    app.include_router(router, prefix="/api/v1")

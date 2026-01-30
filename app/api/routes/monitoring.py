@@ -44,7 +44,7 @@ from app.services.vae_service import VAEService, RecoveryStatus, AnomalyType
 # ROUTER
 # =============================================================================
 
-router = APIRouter(prefix="/monitoring", tags=["Monitoreo de Recuperación"])
+router = APIRouter(tags=["Monitoring"])
 
 
 # =============================================================================
@@ -126,6 +126,127 @@ class RecoverySummaryResponse(BaseModel):
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
+
+# NOTE: Static routes must be defined BEFORE parameterized routes
+# Otherwise /recovery/summary would match /recovery/{fire_event_id}
+
+@router.get(
+    "/recovery/summary",
+    response_model=RecoverySummaryResponse,
+    summary="Get recovery summary for multiple fires",
+    description="""
+    Get a summary of vegetation recovery status for multiple fire events.
+    
+    Useful for:
+    - Dashboard overviews
+    - Identifying areas needing attention
+    - Generating reports for authorities
+    """
+)
+async def get_recovery_summary(
+    province: Optional[str] = Query(None, description="Filter by province"),
+    min_months: int = Query(default=6, ge=1, description="Minimum months since fire"),
+    status_filter: Optional[str] = Query(None, description="Filter by status"),
+    limit: int = Query(default=50, ge=1, le=200, description="Maximum results"),
+    db: Session = Depends(get_db)
+) -> RecoverySummaryResponse:
+    """
+    Get recovery summary for multiple fire events.
+    
+    Returns a high-level summary without detailed NDVI timelines
+    (those are stored in vegetation_monitoring table).
+    """
+    # Query fires with monitoring data
+    query = text("""
+        SELECT 
+            fe.id as fire_event_id,
+            fe.start_date,
+            fe.province,
+            vm.months_after_fire,
+            vm.recovery_percentage,
+            vm.anomaly_type
+        FROM fire_events fe
+        LEFT JOIN LATERAL (
+            SELECT 
+                months_after_fire,
+                recovery_percentage,
+                anomaly_type
+            FROM vegetation_monitoring
+            WHERE fire_event_id = fe.id
+            ORDER BY months_after_fire DESC
+            LIMIT 1
+        ) vm ON true
+        WHERE (:province IS NULL OR fe.province = :province)
+        AND fe.start_date < NOW() - INTERVAL ':min_months months'
+        ORDER BY fe.start_date DESC
+        LIMIT :limit
+    """)
+    
+    try:
+        results = db.execute(query, {
+            "province": province,
+            "min_months": min_months,
+            "limit": limit
+        }).fetchall()
+    except Exception:
+        # If vegetation_monitoring table doesn't exist yet, return empty
+        results = []
+    
+    # Process results
+    fires = []
+    status_counts = {
+        "excellent": 0,
+        "good": 0,
+        "moderate": 0,
+        "poor": 0,
+        "critical": 0,
+        "suspicious": 0,
+        "unknown": 0
+    }
+    suspicious_count = 0
+    
+    for row in results:
+        recovery_pct = row.recovery_percentage if hasattr(row, 'recovery_percentage') else None
+        anomaly = row.anomaly_type if hasattr(row, 'anomaly_type') else None
+        
+        # Determine status
+        if recovery_pct is None:
+            status = "unknown"
+        elif recovery_pct >= 90:
+            status = "excellent"
+        elif recovery_pct >= 70:
+            status = "good"
+        elif recovery_pct >= 50:
+            status = "moderate"
+        elif recovery_pct >= 25:
+            status = "poor"
+        else:
+            status = "critical"
+        
+        is_suspicious = anomaly in ["bare_soil", "no_recovery", "construction", "agriculture"]
+        if is_suspicious:
+            status = "suspicious"
+            suspicious_count += 1
+        
+        status_counts[status] += 1
+        
+        fires.append(RecoverySummaryItem(
+            fire_event_id=str(row.fire_event_id),
+            fire_date=row.start_date.isoformat() if hasattr(row.start_date, 'isoformat') else str(row.start_date),
+            province=row.province if hasattr(row, 'province') else None,
+            recovery_status=status,
+            recovery_percentage=recovery_pct,
+            is_suspicious=is_suspicious
+        ))
+    
+    return RecoverySummaryResponse(
+        total_fires=len(fires),
+        fires_analyzed=len([f for f in fires if f.recovery_status != "unknown"]),
+        status_breakdown=status_counts,
+        suspicious_count=suspicious_count,
+        fires=fires
+    )
+
 
 @router.get(
     "/recovery/{fire_event_id}",
@@ -248,121 +369,3 @@ async def get_recovery_status(
             status_code=503,
             detail=f"Error processing NDVI analysis: {str(e)}"
         )
-
-
-@router.get(
-    "/recovery/summary",
-    response_model=RecoverySummaryResponse,
-    summary="Get recovery summary for multiple fires",
-    description="""
-    Get a summary of vegetation recovery status for multiple fire events.
-    
-    Useful for:
-    - Dashboard overviews
-    - Identifying areas needing attention
-    - Generating reports for authorities
-    """
-)
-async def get_recovery_summary(
-    province: Optional[str] = Query(None, description="Filter by province"),
-    min_months: int = Query(default=6, ge=1, description="Minimum months since fire"),
-    status_filter: Optional[str] = Query(None, description="Filter by status"),
-    limit: int = Query(default=50, ge=1, le=200, description="Maximum results"),
-    db: Session = Depends(get_db)
-) -> RecoverySummaryResponse:
-    """
-    Get recovery summary for multiple fire events.
-    
-    Returns a high-level summary without detailed NDVI timelines
-    (those are stored in vegetation_monitoring table).
-    """
-    # Query fires with monitoring data
-    query = text("""
-        SELECT 
-            fe.id as fire_event_id,
-            fe.start_date,
-            fe.province,
-            vm.months_after_fire,
-            vm.recovery_percentage,
-            vm.anomaly_type
-        FROM fire_events fe
-        LEFT JOIN LATERAL (
-            SELECT 
-                months_after_fire,
-                recovery_percentage,
-                anomaly_type
-            FROM vegetation_monitoring
-            WHERE fire_event_id = fe.id
-            ORDER BY months_after_fire DESC
-            LIMIT 1
-        ) vm ON true
-        WHERE (:province IS NULL OR fe.province = :province)
-        AND fe.start_date < NOW() - INTERVAL ':min_months months'
-        ORDER BY fe.start_date DESC
-        LIMIT :limit
-    """)
-    
-    try:
-        results = db.execute(query, {
-            "province": province,
-            "min_months": min_months,
-            "limit": limit
-        }).fetchall()
-    except Exception:
-        # If vegetation_monitoring table doesn't exist yet, return empty
-        results = []
-    
-    # Process results
-    fires = []
-    status_counts = {
-        "excellent": 0,
-        "good": 0,
-        "moderate": 0,
-        "poor": 0,
-        "critical": 0,
-        "suspicious": 0,
-        "unknown": 0
-    }
-    suspicious_count = 0
-    
-    for row in results:
-        recovery_pct = row.recovery_percentage if hasattr(row, 'recovery_percentage') else None
-        anomaly = row.anomaly_type if hasattr(row, 'anomaly_type') else None
-        
-        # Determine status
-        if recovery_pct is None:
-            status = "unknown"
-        elif recovery_pct >= 90:
-            status = "excellent"
-        elif recovery_pct >= 70:
-            status = "good"
-        elif recovery_pct >= 50:
-            status = "moderate"
-        elif recovery_pct >= 25:
-            status = "poor"
-        else:
-            status = "critical"
-        
-        is_suspicious = anomaly in ["bare_soil", "no_recovery", "construction", "agriculture"]
-        if is_suspicious:
-            status = "suspicious"
-            suspicious_count += 1
-        
-        status_counts[status] += 1
-        
-        fires.append(RecoverySummaryItem(
-            fire_event_id=str(row.fire_event_id),
-            fire_date=row.start_date.isoformat() if hasattr(row.start_date, 'isoformat') else str(row.start_date),
-            province=row.province if hasattr(row, 'province') else None,
-            recovery_status=status,
-            recovery_percentage=recovery_pct,
-            is_suspicious=is_suspicious
-        ))
-    
-    return RecoverySummaryResponse(
-        total_fires=len(fires),
-        fires_analyzed=len([f for f in fires if f.recovery_status != "unknown"]),
-        status_breakdown=status_counts,
-        suspicious_count=suspicious_count,
-        fires=fires
-    )

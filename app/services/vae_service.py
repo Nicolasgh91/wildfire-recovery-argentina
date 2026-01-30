@@ -377,6 +377,91 @@ class VAEService:
         
         return results
     
+    def get_recovery_timeline(
+        self,
+        fire_event_id: str,
+        fire_lat: float,
+        fire_lon: float,
+        fire_date: date,
+        max_months: int = 36,
+        buffer_degrees: float = 0.01
+    ) -> Dict[str, Any]:
+        """
+        Get recovery timeline for a fire event.
+        
+        Wrapper method that converts lat/lon to bbox and returns
+        a dictionary format compatible with the monitoring API endpoint.
+        
+        Args:
+            fire_event_id: ID of the fire event
+            fire_lat: Latitude of fire centroid
+            fire_lon: Longitude of fire centroid
+            fire_date: Date of the fire
+            max_months: Maximum months to analyze (default 36)
+            buffer_degrees: Buffer around centroid for bbox (default ~1km)
+            
+        Returns:
+            Dictionary with recovery timeline data for API response
+        """
+        # Convert lat/lon to bbox
+        bbox = {
+            "west": fire_lon - buffer_degrees,
+            "south": fire_lat - buffer_degrees,
+            "east": fire_lon + buffer_degrees,
+            "north": fire_lat + buffer_degrees
+        }
+        
+        # Get baseline NDVI
+        baseline_ndvi = self._get_baseline_ndvi(bbox, fire_date)
+        
+        # Get time series analysis
+        series = self.get_recovery_time_series(
+            fire_event_id=str(fire_event_id),
+            bbox=bbox,
+            fire_date=fire_date,
+            interval_months=1,  # Monthly for detailed timeline
+            max_months=max_months
+        )
+        
+        # Convert to API response format
+        monitoring_data = []
+        for analysis in series:
+            monitoring_data.append({
+                "month": analysis.months_after_fire,
+                "date": analysis.analysis_date.isoformat(),
+                "ndvi_mean": analysis.current_ndvi,
+                "recovery_percentage": analysis.recovery_percentage,
+                "cloud_cover_pct": analysis.cloud_cover
+            })
+        
+        # Determine overall status
+        if series:
+            latest = series[-1]
+            recovery_status = self._map_recovery_status_to_string(latest.recovery_status)
+            anomaly_detected = latest.anomaly_type.value if latest.anomaly_detected else None
+        else:
+            recovery_status = "unknown"
+            anomaly_detected = None
+        
+        return {
+            "baseline_ndvi": baseline_ndvi,
+            "monitoring_data": monitoring_data,
+            "recovery_status": recovery_status,
+            "anomaly_detected": anomaly_detected
+        }
+    
+    def _map_recovery_status_to_string(self, status: RecoveryStatus) -> str:
+        """Map RecoveryStatus enum to API-friendly string."""
+        mapping = {
+            RecoveryStatus.NOT_STARTED: "critical",
+            RecoveryStatus.EARLY_RECOVERY: "poor",
+            RecoveryStatus.MODERATE_RECOVERY: "moderate",
+            RecoveryStatus.ADVANCED_RECOVERY: "good",
+            RecoveryStatus.FULL_RECOVERY: "excellent",
+            RecoveryStatus.ANOMALY_DETECTED: "suspicious"
+        }
+        return mapping.get(status, "unknown")
+    
     # =========================================================================
     # UC-08: DETECCIÓN DE CAMBIO DE USO
     # =========================================================================

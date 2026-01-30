@@ -1,6 +1,6 @@
 from typing import List, Optional, Any
 from urllib.parse import quote_plus  # ← AGREGADO
-from pydantic import AnyHttpUrl, field_validator, ValidationInfo
+from pydantic import AnyHttpUrl, SecretStr, field_validator, ValidationInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # --- Security ---
-    API_KEY: str = ""  # Required for protected endpoints
-    SECRET_KEY: str = ""  # For JWT/session signing
+    API_KEY: Optional[SecretStr] = None  # Loaded from .env or environment variables
+    SECRET_KEY: Optional[SecretStr] = None  # For JWT/session signing; loaded from .env
     
     # --- Alerting ---
     ALERT_EMAIL: Optional[str] = None  # Email to receive security alerts
@@ -68,6 +68,15 @@ class Settings(BaseSettings):
         db = values.get("DB_NAME", "postgres")
         
         return f"postgresql://{user}:{password}@{host}:{port}/{db}"
+
+    @field_validator("SECRET_KEY", mode="before")
+    @classmethod
+    def validate_secret_key(cls, v: Optional[SecretStr], info: ValidationInfo) -> Optional[SecretStr]:
+        # Require a SECRET_KEY for non-local deployments
+        env = info.data.get("ENVIRONMENT") or "local"
+        if env != "local" and not v:
+            raise ValueError("SECRET_KEY must be set in environment for non-local deployments")
+        return v
 
 settings = Settings()
 

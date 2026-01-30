@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-This document details the **11 main use cases** that the ForestGuard API is designed to solve. Each use case is linked to real needs for environmental oversight, institutional transparency, and defense of Argentina's natural heritage under the framework of Law 26.815 (Fire Management).
+This document details the **13 main use cases** that the ForestGuard API is designed to solve. Each use case is linked to real needs for environmental oversight, institutional transparency, and defense of Argentina's natural heritage under the framework of Law 26.815 (Fire Management).
 
 ---
 
@@ -317,6 +317,55 @@ Content-Type: application/json
 
 ---
 
+### UC-13: Fire grid visualization and filtering
+
+**Description:**  
+Build a grid/list page to query registered fires and filter by key attributes, supporting typical queries (by province, protected area, dates, and status).
+
+**Primary actor:** General users, analysts, operators
+
+**Main flow:**
+1. User accesses the "Fires" section
+2. Views paginated grid with key columns:
+   - Event ID / Detection ID
+   - Last detection / Start date
+   - Province
+   - Protected area (yes/no + name)
+   - Status/Category
+   - Confidence (normalized)
+   - Severity (FRP total, detections, estimated area)
+3. Applies filters:
+   - Province
+   - Category/Status (e.g., Suspected/Confirmed/Controlled)
+   - Protected Area
+   - Date range
+   - "Current fires only"
+4. Sorts by date/severity
+5. Opens fire detail (optional) to view timeline/map
+
+**Business rules:**
+- RB-01: Grid must paginate from DB (not load everything in memory)
+- RB-02: Filters must translate to efficient queries (indexes)
+- RB-03: "Current fires" defined by time window (e.g., detection in last N days) or `is_active` field
+
+**Data required:**
+- `fire_events` (consolidated events)
+- `fire_detections` (aggregated detections)
+
+**Endpoint:**
+```
+GET /api/v1/fires?province[]={province}&protected_area_id={id}&from={date}&to={date}&status={status}&active={bool}&min_confidence={float}&page={n}&page_size={n}&sort={field}
+GET /api/v1/fires/{id}
+GET /api/v1/fires/export?... (optional CSV/XLSX)
+```
+
+**Success criteria:**
+- ✅ Performance: response < 1-2s with pagination
+- ✅ Observability: logs for slow queries
+- ✅ Security: protect administrative filters by role
+
+---
+
 ## 🟢 Category: Analysis and reports
 
 ### UC-05: Historical trends and projections
@@ -519,6 +568,71 @@ Content-Type: application/json
 
 ---
 
+### UC-12: Digital visitor registration for mountain shelters (Offline-first)
+
+**Description:**  
+Digitize the daily visitor registration (entries and overnight stays) in mountain shelters, replacing paper records with a **mobile-first**, **offline-first**, secure, and auditable system with automatic synchronization and statistics/export generation.
+
+**Primary actor:** Shelter operators, APN administrators, auditors
+
+**Main flow:**
+1. Operator opens the app (web/PWA)
+2. Selects "New Registration"
+3. Completes:
+   - shelter
+   - Date (default: today)
+   - Registration type: Day Entry / Overnight
+4. Completes **group leader** data
+5. Adds companions via a **dynamic list**:
+   - Full name
+   - Age or age range
+   - Document (optional)
+6. System automatically calculates total people
+7. Saves the record:
+   - If online → syncs with backend
+   - If offline → saved locally (IndexedDB)
+8. When connectivity is restored, system syncs automatically
+9. Operator can edit the record **up to 30 minutes** after first sync
+10. Administrator can query statistics and export data
+
+**Business rules:**
+- RB-01 (Offline-first): System must allow creating and storing records without connection
+- RB-02 (Synchronization): Local records sync automatically when there's connectivity
+- RB-03 (Limited editing): A record can only be edited up to **30 minutes** after `first_submitted_at`
+- RB-04 (Audit): Every edit generates a historical revision
+- RB-05 (Security): Access restricted by roles (RLS / JWT)
+- RB-06 (Export): Data can be exported in CSV or XLSX
+
+**Data required:**
+- `shelters` (shelter catalog)
+- `visitor_logs` (registration records)
+- `visitor_log_companions` (companion details)
+- `visitor_log_revisions` (edit history)
+
+**Endpoints:**
+```
+POST /api/v1/visitor-logs
+PATCH /api/v1/visitor-logs/{id} (validates 30-min window)
+GET /api/v1/visitor-logs?shelter_id=&from=&to=
+GET /api/v1/visitor-logs/export?from=&to=&province=&shelter_id= (CSV/XLSX)
+GET /api/v1/shelters?province=&q=
+```
+
+**Frontend stack (Offline-first):**
+- Vite + React + TypeScript
+- Tailwind CSS (branding)
+- TanStack Query (cache persistence + offline mutation queue)
+- IndexedDB / LocalForage
+- PWA (Service Worker, asset caching, installable)
+
+**Success criteria:**
+- ✅ Eliminates paper records
+- ✅ Improves traceability and data quality
+- ✅ Enables historical statistical analysis
+- ✅ Foundation for correlation with environmental risk and emergencies
+
+---
+
 ## 🔵 Category: Citizen participation
 
 ### UC-09: Citizen reporting support
@@ -601,6 +715,8 @@ Content-Type: application/json
 | UC-09 | Reporting | 🟡 MEDIUM | Low | ⚖️ Medium | 🧑‍🤝‍🧑 Very High |
 | UC-10 | Data Quality | 🔴 HIGH | Low | ⚖️ High | 🔬 Medium |
 | UC-11 | Hist. Reports | 🟡 MEDIUM | Medium | ⚖️ Medium | 📊 High |
+| UC-12 | Visitor Registration | 🟡 MEDIUM | Medium | ⚖️ Low | 🏔️ High |
+| UC-13 | Fire Grid View | 🟢 LOW | Low | ⚖️ Low | 📋 Medium |
 
 ---
 
@@ -612,6 +728,7 @@ Content-Type: application/json
 - ✅ UC-06: Reforestation (basic)
 - ✅ UC-10: Data Quality
 - ✅ UC-11: Historical Reports (MVP)
+- ✅ UC-13: Fire Grid View (basic)
 
 ### Phase 2: Certification and alerts (weeks 7-8)
 - ✅ UC-07: Legal Certification
@@ -624,6 +741,7 @@ Content-Type: application/json
 - 🔜 UC-05: Historical Trends
 - 🔜 UC-08: Land Use Change (advanced ML)
 - 🔜 UC-11: Historical Reports (v2)
+- 🔜 UC-12: Visitor Registration (PWA + offline)
 
 ---
 
@@ -636,6 +754,7 @@ For new use case suggestions or improvements:
 
 ---
 
-**Version:** 3.0  
-**Last updated:** 2025-01-24  
+**Version:** 4.0  
+**Last updated:** 2025-01-29  
 **Authors:** ForestGuard Team
+

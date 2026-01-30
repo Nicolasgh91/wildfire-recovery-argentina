@@ -53,7 +53,7 @@ except ImportError:
 # ROUTER
 # =============================================================================
 
-router = APIRouter(prefix="/audit", tags=["Auditoría Legal"])
+router = APIRouter(tags=["Audit"])
 
 
 # =============================================================================

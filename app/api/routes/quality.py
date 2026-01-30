@@ -42,7 +42,7 @@ except ImportError:
 # ROUTER
 # =============================================================================
 
-router = APIRouter(prefix="/quality", tags=["Calidad de Datos"])
+router = APIRouter(tags=["Data Quality"])
 
 
 # =============================================================================

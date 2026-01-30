@@ -399,13 +399,13 @@ class TestHistoricalEndpointIntegration:
     
     def test_health_endpoint(self, client):
         """Health check debe responder."""
-        response = client.get("/api/v1/reports/health")
+        response = client.get("/api/v1/health")
         # Puede fallar si servicios no están configurados
         assert response.status_code in [200, 500]
     
     def test_list_reports_empty(self, client):
         """Lista de reportes vacía."""
-        response = client.get("/api/v1/reports/")
+        response = client.get("/api/v1/")
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 0
@@ -415,7 +415,7 @@ class TestHistoricalEndpointIntegration:
         """Validación de request debe funcionar."""
         # Request inválido (falta bbox)
         response = client.post(
-            "/api/v1/reports/historical-fire",
+            "/api/v1/historical-fire",
             json={
                 "fire_date": "2020-08-15"
                 # Falta bbox requerido
@@ -429,7 +429,7 @@ class TestHistoricalEndpointIntegration:
         future = (date.today() + timedelta(days=30)).isoformat()
         
         response = client.post(
-            "/api/v1/reports/historical-fire",
+            "/api/v1/historical-fire",
             json={
                 "fire_date": future,
                 "bbox": {
@@ -444,7 +444,7 @@ class TestHistoricalEndpointIntegration:
     
     def test_get_nonexistent_report(self, client):
         """Reporte inexistente debe retornar 404."""
-        response = client.get("/api/v1/reports/NONEXISTENT-ID")
+        response = client.get("/api/v1/NONEXISTENT-ID")
         assert response.status_code in [404, 500]  # 500 si storage no configurado
 
 

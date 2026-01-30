@@ -41,7 +41,7 @@ except ImportError:
 # ROUTER
 # =============================================================================
 
-router = APIRouter(prefix="/analysis", tags=["Análisis Avanzado"])
+router = APIRouter(tags=["Analysis"])
 
 
 # =============================================================================

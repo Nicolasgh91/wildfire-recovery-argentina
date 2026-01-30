@@ -47,8 +47,16 @@ async def verify_api_key(api_key: str = Security(api_key_header)) -> str:
             detail="Missing API Key. Include 'X-API-Key' header."
         )
     
+    # Normalize settings.API_KEY to plain str if it's a SecretStr
+    stored_key = settings.API_KEY
+    try:
+        # SecretStr provides get_secret_value()
+        stored_key_val = stored_key.get_secret_value() if stored_key is not None else None
+    except Exception:
+        stored_key_val = stored_key
+
     # Use secrets.compare_digest for timing-attack safe comparison
-    if not secrets.compare_digest(api_key, settings.API_KEY):
+    if not secrets.compare_digest(api_key, stored_key_val):
         logger.warning(f"Invalid API key attempt: {api_key[:8]}...")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
