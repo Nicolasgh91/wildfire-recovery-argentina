@@ -15,6 +15,7 @@ class Settings(BaseSettings):
 
     # --- Security ---
     API_KEY: Optional[SecretStr] = None  # Loaded from .env or environment variables
+    ADMIN_API_KEY: Optional[SecretStr] = None  # Admin capabilities
     SECRET_KEY: Optional[SecretStr] = None  # For JWT/session signing; loaded from .env
     
     # --- Alerting ---

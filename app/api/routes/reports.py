@@ -10,13 +10,19 @@ Use Cases:
     - UC-11: Reportes Históricos - Historical fire reports for protected areas
 
 Endpoints:
-    - POST /reports/judicial - Generate forensic report
-    - POST /reports/historical - Generate historical fire report
+    - POST /reports/judicial - Generate forensic report (idempotent)
+    - POST /reports/historical - Generate historical fire report (idempotent)
     - GET /reports/{report_id} - Retrieve existing report
     - GET /reports/{report_id}/verify - Verify report hash
 
+Idempotency:
+-----------
+POST endpoints support idempotency keys via the X-Idempotency-Key header.
+If the same key is sent again, the cached response is returned without
+generating a duplicate report.
+
 Author: ForestGuard Team
-Version: 1.0.0
+Version: 1.1.0
 Last Updated: 2026-01-29
 =============================================================================
 """
@@ -27,7 +33,7 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Header, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -41,6 +47,8 @@ except ImportError:
 
 # Use correct imports from the new service structure
 from app.services.ers_service import ERSService, ReportType, ReportRequest, ReportResult
+from app.core.idempotency import IdempotencyManager, get_idempotency_key
+from app.core.rate_limiter import check_rate_limit
 
 
 # =============================================================================
@@ -149,16 +157,39 @@ class VerifyReportResponse(BaseModel):
     
     Generates a comprehensive forensic report for a specific fire event.
     Designed for legal proceedings, insurance claims, and official investigations.
-    """
+    
+    **Idempotency Support**: Send `X-Idempotency-Key` header with a unique ID (UUID recommended)
+    to prevent duplicate report generation on retry. Cached responses expire after 24 hours.
+    """,
+    dependencies=[Depends(check_rate_limit)]
 )
 async def generate_judicial_report(
     request: JudicialReportRequest,
     x_api_key: Optional[str] = Header(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    idempotency_key: Optional[str] = Depends(get_idempotency_key)
 ) -> JudicialReportResponse:
     """
     Generate forensic judicial report for a fire event.
+    
+    Supports idempotency via X-Idempotency-Key header.
     """
+    endpoint = "/api/v1/reports/judicial"
+    idempotency = IdempotencyManager(db)
+    
+    # Check for cached response (idempotency)
+    cached = await idempotency.get_cached_response(
+        idempotency_key, 
+        endpoint,
+        request.model_dump(mode="json")
+    )
+    if cached:
+        return JSONResponse(
+            content=cached["body"],
+            status_code=cached["status"],
+            headers={"X-Idempotency-Replayed": "true"}
+        )
+    
     start_time = time.time()
     
     # Initialize ERS Service
@@ -209,7 +240,7 @@ async def generate_judicial_report(
         query_duration_ms = int((time.time() - start_time) * 1000)
         now = datetime.now()
         
-        return JudicialReportResponse(
+        response = JudicialReportResponse(
             success=True,
             report=ReportMetadataResponse(
                 report_id=result.report_id,
@@ -224,6 +255,17 @@ async def generate_judicial_report(
             query_duration_ms=query_duration_ms
         )
         
+        # Cache response for idempotency
+        await idempotency.cache_response(
+            idempotency_key,
+            endpoint,
+            request.model_dump(mode="json"),
+            200,
+            response.model_dump(mode="json")
+        )
+        
+        return response
+        
     except Exception as e:
         raise HTTPException(
             status_code=503,
@@ -237,15 +279,40 @@ async def generate_judicial_report(
     summary="Generate historical fire report",
     description="""
     **UC-11: Reportes Históricos**
-    """
+    
+    Generates a historical fire report for a protected area and date range.
+    
+    **Idempotency Support**: Send `X-Idempotency-Key` header with a unique ID (UUID recommended)
+    to prevent duplicate report generation on retry. Cached responses expire after 24 hours.
+    """,
+    dependencies=[Depends(check_rate_limit)]
 )
 async def generate_historical_report(
     request: HistoricalReportRequestBase,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    idempotency_key: Optional[str] = Depends(get_idempotency_key)
 ) -> HistoricalResponse:
     """
     Generate historical fire report for a protected area.
+    
+    Supports idempotency via X-Idempotency-Key header.
     """
+    endpoint = "/api/v1/reports/historical"
+    idempotency = IdempotencyManager(db)
+    
+    # Check for cached response (idempotency)
+    cached = await idempotency.get_cached_response(
+        idempotency_key, 
+        endpoint,
+        request.model_dump(mode="json")
+    )
+    if cached:
+        return JSONResponse(
+            content=cached["body"],
+            status_code=cached["status"],
+            headers={"X-Idempotency-Replayed": "true"}
+        )
+    
     start_time = time.time()
     
     if request.end_date < request.start_date:
@@ -271,7 +338,7 @@ async def generate_historical_report(
         query_duration_ms = int((time.time() - start_time) * 1000)
         now = datetime.now()
         
-        return HistoricalResponse(
+        response = HistoricalResponse(
             success=True,
             fires_included=result.fire_events_found,
             date_range={
@@ -290,6 +357,18 @@ async def generate_historical_report(
             ),
             query_duration_ms=query_duration_ms
         )
+        
+        # Cache response for idempotency
+        await idempotency.cache_response(
+            idempotency_key,
+            endpoint,
+            request.model_dump(mode="json"),
+            200,
+            response.model_dump(mode="json")
+        )
+        
+        return response
+        
     except Exception as e:
          raise HTTPException(
             status_code=503,

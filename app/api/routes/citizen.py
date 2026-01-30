@@ -42,6 +42,9 @@ except ImportError:
     from app.api.deps import get_db
 
 from app.core.email_config import email_config
+from app.core.security import require_admin
+from app.services.audit_logger import AuditLogger
+from fastapi import BackgroundTasks
 # Updated imports for new ERS service
 from app.services.ers_service import ERSService, ReportType, ReportRequest, ReportResult
 
@@ -379,6 +382,23 @@ async def submit_citizen_report(
             "area_count": len(related_areas)
         })
         db.commit()
+
+        # Audit Log
+        AuditLogger.log(
+            db=db,
+            action="submit_citizen_report",
+            principal_id=request.reporter_email or "anonymous",
+            principal_role="public",
+            resource_type="citizen_report",
+            resource_id=report_id, # Using the generated report_id as resource_id
+            details={
+                "report_type": request.report_type.value,
+                "latitude": request.latitude,
+                "longitude": request.longitude,
+                "related_fire_count": len(related_fires),
+                "related_protected_area_count": len(related_areas)
+            }
+        )
     except Exception as e:
         # Log but continue - table might not exist
         import logging
@@ -532,3 +552,47 @@ async def get_evidence_package(
             
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating evidence: {str(e)}")
+
+
+@router.get(
+    "/reviews/all",
+    summary="List all citizen reports (Admin Only)",
+    dependencies=[Depends(require_admin)]
+)
+def list_all_reports(
+    skip: int = 0,
+    limit: int = 50,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    List all citizen reports for administrative review.
+    Protected by Admin API Key.
+    """
+    query_str = "SELECT * FROM citizen_reports"
+    params = {"limit": limit, "skip": skip}
+    
+    if status:
+        query_str += " WHERE status = :status"
+        params["status"] = status
+        
+    query_str += " ORDER BY created_at DESC LIMIT :limit OFFSET :skip"
+    
+    try:
+        results = db.execute(text(query_str), params).fetchall()
+        
+        # Log Admin Access
+        # Note: We rely on 'require_admin' so we know it's admin.
+        # Ideally we get the API Key ID but for now we log generic "admin"
+        AuditLogger.log(
+            db=db,
+            action="admin_list_reports",
+            principal_id="admin_key", 
+            principal_role="admin",
+            resource_type="citizen_report",
+            details={"limit": limit, "skip": skip, "status_filter": status}
+        )
+        
+        return [dict(row._mapping) for row in results]
+    except Exception:
+        return []

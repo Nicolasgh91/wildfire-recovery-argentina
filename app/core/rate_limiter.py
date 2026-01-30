@@ -25,66 +25,71 @@ from collections import defaultdict
 from datetime import date, datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Dict, Set
+from typing import Dict, Set, Optional
 from threading import Lock
 
 from fastapi import Depends, HTTPException, Request, status
 
 from app.core.config import settings
 
+from app.core.security import get_current_user_optional, UserPrincipal, UserRole
+
 logger = logging.getLogger(__name__)
 
-# Thread-safe storage for IP tracking
+# Thread-safe storage for IP and Key tracking
 _lock = Lock()
 _ip_counts: Dict[str, int] = defaultdict(int)
+_key_counts: Dict[str, int] = defaultdict(int)  # Track by API Key
 _blocked_ips: Set[str] = set()
 _current_date: date = date.today()
+
+# Limits
+LIMIT_IP_DAILY = 10
+LIMIT_USER_DAILY = 1000
 
 
 def _reset_if_new_day() -> None:
     """Reset counters if a new day has started."""
-    global _current_date, _ip_counts, _blocked_ips
+    global _current_date, _ip_counts, _key_counts, _blocked_ips
     today = date.today()
     if today > _current_date:
         with _lock:
             if today > _current_date:  # Double-check after acquiring lock
                 _ip_counts.clear()
+                _key_counts.clear()
                 _blocked_ips.clear()
                 _current_date = today
                 logger.info(f"Rate limiter reset for new day: {today}")
 
 
-def _send_block_alert(ip: str, request_count: int) -> None:
-    """Send email alert when an IP is blocked."""
+def _send_block_alert(target: str, request_count: int, is_ip: bool = True) -> None:
+    """Send email alert when an IP or Key is blocked."""
     if not settings.ALERT_EMAIL or not settings.SMTP_HOST:
-        logger.warning(f"Cannot send alert: SMTP not configured. Blocked IP: {ip}")
         return
     
     try:
         msg = MIMEMultipart()
         msg['From'] = settings.SMTP_USER or "noreply@forestguard.org"
         msg['To'] = settings.ALERT_EMAIL
-        msg['Subject'] = f"⚠️ ForestGuard: IP Blocked - {ip}"
+        subject = f"⚠️ ForestGuard: {'IP' if is_ip else 'API Key'} Blocked - {target}"
+        msg['Subject'] = subject
+        
+        limit = LIMIT_IP_DAILY if is_ip else LIMIT_USER_DAILY
         
         body = f"""
 ForestGuard Security Alert
 ==========================
 
-An IP address has been blocked due to excessive API requests.
+Access blocked due to excessive API requests.
 
 Details:
-- IP Address: {ip}
+- Target: {target} ({'IP Address' if is_ip else 'API Key'})
 - Request Count: {request_count}
-- Threshold: 10 requests/day
+- Threshold: {limit} requests/day
 - Blocked At: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 - Environment: {settings.ENVIRONMENT}
 
-This could indicate:
-- A misconfigured client
-- Automated scraping attempt
-- Denial of service attempt
-
-The IP will be unblocked automatically at midnight (server time).
+This will be unblocked automatically at midnight.
 
 --
 ForestGuard API Security
@@ -98,73 +103,80 @@ ForestGuard API Security
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.send_message(msg)
         
-        logger.info(f"Block alert sent to {settings.ALERT_EMAIL} for IP {ip}")
-        
     except Exception as e:
         logger.error(f"Failed to send block alert email: {e}")
 
 
 def get_client_ip(request: Request) -> str:
     """Extract client IP from request, considering proxies."""
-    # Check for forwarded header (behind proxy/load balancer)
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
-        # First IP in the chain is the original client
         return forwarded.split(",")[0].strip()
-    
-    # Direct connection
     if request.client:
         return request.client.host
-    
     return "unknown"
 
 
-async def check_ip_rate_limit(request: Request) -> str:
+async def check_rate_limit(
+    request: Request,
+    user: Optional[UserPrincipal] = Depends(get_current_user_optional)
+) -> None:
     """
-    Dependency to check and enforce IP-based rate limiting.
-    
-    Returns:
-        str: The client IP address
-        
-    Raises:
-        HTTPException: 429 if IP is blocked or exceeds limit
+    Unified rate limiter:
+    - Admin: Unlimited
+    - Authenticated User: High limit (1000/day) based on API Key
+    - Anonymous (IP): Low limit (10/day) based on IP
     """
     _reset_if_new_day()
     
+    # 1. Admin - Unlimited
+    if user and user.role == UserRole.ADMIN:
+        return
+
+    # 2. Authenticated User - Key Based Limit
+    if user and user.role == UserRole.USER:
+        key_masked = f"{user.key[:8]}..."
+        with _lock:
+            _key_counts[user.key] += 1
+            count = _key_counts[user.key]
+            
+        if count > LIMIT_USER_DAILY:
+            logger.warning(f"API Key {key_masked} exceeded limit ({count})")
+            _send_block_alert(key_masked, count, is_ip=False)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Daily API limit exceeded for this key."
+            )
+        return
+
+    # 3. Anonymous - IP Based Limit
     client_ip = get_client_ip(request)
-    
-    # Check if already blocked
     if client_ip in _blocked_ips:
-        logger.warning(f"Blocked IP attempted access: {client_ip}")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="IP blocked due to excessive requests. Try again tomorrow."
+            detail="IP blocked due to excessive requests."
         )
-    
-    # Increment counter
+
     with _lock:
         _ip_counts[client_ip] += 1
-        current_count = _ip_counts[client_ip]
-    
-    # Log the access
-    logger.info(f"API access from {client_ip}: request #{current_count} today")
-    
-    # Check if threshold exceeded
-    if current_count > 10:
+        count = _ip_counts[client_ip]
+
+    if count > LIMIT_IP_DAILY:
         with _lock:
             _blocked_ips.add(client_ip)
-        
-        logger.warning(f"IP {client_ip} blocked after {current_count} requests")
-        
-        # Send alert (async would be better, but sync is simpler for MVP)
-        _send_block_alert(client_ip, current_count)
-        
+        logger.warning(f"IP {client_ip} blocked after {count} requests")
+        _send_block_alert(client_ip, count, is_ip=True)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded. IP has been temporarily blocked."
+            detail="Rate limit exceeded. IP blocked."
         )
-    
-    return client_ip
+
+
+# Backward compatibility helper
+async def check_ip_rate_limit(request: Request) -> str:
+    """Legacy: enforces IP limit only (ignores auth). Used where strict IP limit is desired."""
+    await check_rate_limit(request, user=None)
+    return get_client_ip(request)
 
 
 def get_rate_limit_stats() -> dict:

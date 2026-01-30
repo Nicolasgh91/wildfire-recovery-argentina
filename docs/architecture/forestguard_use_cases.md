@@ -755,6 +755,6 @@ For new use case suggestions or improvements:
 ---
 
 **Version:** 4.0  
-**Last updated:** 2025-01-29  
+**Last updated:** 2026-01-29  
 **Authors:** ForestGuard Team
 

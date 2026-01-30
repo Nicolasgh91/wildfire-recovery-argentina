@@ -12,7 +12,6 @@ Wildfire Recoveries implements a **hybrid API+Workers architecture** designed fo
 ---
 
 ## 📐 High-level architecture diagram (updated with GEE)
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                           END USER                              │
@@ -49,6 +48,7 @@ Wildfire Recoveries implements a **hybrid API+Workers architecture** designed fo
 │  - Validation    │    └──────────────────────┘
 │  - Logging       │
 │  - 🆕 Rate Limit │
+│  - 🆕 Idempotency│
 └────────┬─────────┘
          │
          │ Read/Write
@@ -504,14 +504,44 @@ GEE Advantage: Does not download 700MB, only 500KB thumbnail!
    - ✅ Review citizen reports
    - ✅ Access metrics
 
-### 🔒 New Security Controls (v3.1)
-- **API Key**: `X-API-Key` header mandatory for sensitive endpoints.
-- **IP Rate Limiting**:
-  - Limit: 10 requests/day per IP (for protected endpoints).
-  - Action: Automatic block + Email Alert to Admin.
+### 🔒 Security Controls (v3.2)
+- **RBAC (Role Based Access Control)**:
+  - **Admin**: Full access (`X-API-Key` matching `ADMIN_API_KEY`).
+  - **User**: Protected access (`X-API-Key` matching `API_KEY`).
+  - **Public**: Limited access to open endpoints.
+- **Smart Rate Limiting**:
+  - **Authenticated (User)**: 1000 requests/day per Key.
+  - **Anonymous (IP)**: 10 requests/day per IP.
+  - **Admin**: Unlimited.
+- **Secret Scanning**:
+  - CI pipeline (`.github/workflows/security.yml`) scans for leaked credentials using Gitleaks.
 - **Error Handling**:
-  - Dev (DEBUG=True): Stack traces visible.
   - Prod (DEBUG=False): Generic "Internal Server Error" message.
+- **Audit Logging**:
+  - Centralized `audit_events` table (Append-Only) for critical actions.
+  - Integration: `AuditLogger` tracks report submissions access.
+- **Row Level Security (RLS)**:
+  - Standardized policies (`audit_and_rls.sql`):
+    - `audit_events`: Admin Read Only.
+    - `fire_events`: Public Read / Admin Write.
+
+---
+
+## 🔄 Idempotency
+
+To prevent duplicate resource creation (e.g., certificates, reports) during retries or network timeouts, critical `POST` endpoints support **idempotency keys**.
+
+- **Mechanism**: Client sends `X-Idempotency-Key` header (UUID).
+- **Behavior**:
+  - **First Request**: Server processes request, saves response to DB, returns 200/201.
+  - **Retry (same key)**: Server returns cached response *immediately* without re-processing.
+  - **Conflict**: If same key is used with *different* body, returns `409 Conflict`.
+- **TTL**: Keys expire after **24 hours**.
+
+**Protected Endpoints:**
+- `POST /api/v1/certificates/issue`
+- `POST /api/v1/reports/judicial`
+- `POST /api/v1/reports/historical`
 
 ---
 
@@ -556,8 +586,8 @@ Failed tasks after max retries are logged to `failed_tasks` table:
 - **Rotate keys** every 90 days
 
 ### API rate limiting
-- **Per IP**: 100 requests/minute (Cloudflare)
-- **Authenticated Users**: 500 requests/minute
+- **Anonymous/IP**: 10 requests/day (Strict limit for public/scraping protection)
+- **Authenticated Users**: 1000 requests/day (High limit for legitimate use)
 - **Admin Users**: Unlimited
 
 ---
@@ -674,7 +704,12 @@ Require new major version (e.g., `/api/v2/`):
 
 ---
 
-## 📊 Performance metrics
+## 📊 Performance metrics & SLOs
+
+**Enforced SLOs (Middleware checks):**
+- **Listing Fires**: < 400ms
+- **Health Check**: < 200ms
+- **Audit Analysis**: < 1.5s
 
 | Endpoint | P50 Latency | P95 Latency | P99 Latency |
 |----------|-------------|-------------|-------------|
@@ -765,19 +800,20 @@ curl https://forestguard.freedynamicdns.org/health
 - [x] Docker Compose
 - [x] Makefile
 - [x] **Google Earth Engine Integration**
-- [x] **FastAPI Endpoints (fires, audit, certificates)**
-- [ ] Missing endpoints (reports, monitoring, citizen)
-- [ ] Unit tests
-- [ ] Integration tests
+- [x] **FastAPI Endpoints (fires, audit, certificates, citizen)**
+- [x] Missing endpoints (reports, monitoring)
+- [x] Unit tests (Security, Deprecation)
+- [x] Integration tests (Regression)
 - [ ] Frontend (React + Leaflet)
-- [ ] CI/CD (GitHub Actions)
-- [ ] API Documentation (OpenAPI)
+- [x] CI/CD (GitHub Actions)
+- [x] API Documentation (OpenAPI)
+- [x] **Idempotency Implementation**
 - [ ] Deploy to production
 
-**Progress:** 80% completed 🎉
+**Progress:** 82% completed 🎉
 
 ---
 
-**Last updated:** 2025-01-24  
+**Last updated:** 2026-01-29  
 **Version:** 3.0  
 **Status:** ✅ Active Development (Core Endpoints Implemented)

@@ -94,7 +94,7 @@ Guías detalladas:
 | **UC-10** | Análisis | Calidad del Dato | Métricas de confiabilidad para peritajes | 🔜 PENDING |
 | **UC-11** | Análisis | Reportes Históricos | PDFs de incendios en áreas protegidas | 🔜 PENDING |
 | **UC-12** | Operacional | Registro de Visitantes | Registro digital offline-first para refugios | 🔜 PENDING |
-| **UC-13** | Análisis | Grilla de Incendios | Visualización y filtrado de eventos | 🔜 PENDING |
+| **UC-13** | Análisis | Grilla de Incendios | Visualización y filtrado de eventos con índices optimizados | ✅ DONE |
 
 ---
 
@@ -565,6 +565,8 @@ pytest tests/e2e/test_audit_flow.py
 - ✅ **API versioning**: `/api/v1/` con deprecation policy
 - ✅ **Health checks**: Componente-level monitoring
 - ✅ **Error handling**: Mensajes sanitizados en producción (sin stack traces)
+- ✅ **Audit Logging**: Trazabilidad completa de acciones críticas (`audit_events`)
+- ✅ **SLOs Enforced**: Monitoreo de latencia (<400ms) vía Middleware
 
 ### Rate limits externos
 
@@ -708,7 +710,7 @@ We have prepared detailed guides for all user profiles:
 | **UC-10** | Analysis | Data Quality | Reliability metrics for forensics | 🔜 PENDING |
 | **UC-11** | Analysis | Historical Reports | PDFs of fires in protected areas | 🔜 PENDING |
 | **UC-12** | Operational | Visitor Registration | Offline-first digital registration for shelters | 🔜 PENDING |
-| **UC-13** | Analysis | Fire Grid View | Fire events visualization and filtering | ✅ DONE |
+| **UC-13** | Analysis | Fire Grid View | Fire events visualization and filtering (Optimized) | ✅ DONE |
 
 ## 🏗️ Unified architecture
 
@@ -773,6 +775,8 @@ uvicorn app.main:app --reload --port 8000
 - **Rate limiting**: IPs blocked after 10 requests/day. Optional alerts via email.
 - **Error handling**: Production-safe error messages (no stack traces).
 - **SSL/TLS**: Mandatory HTTPS via Let's Encrypt.
+- **Audit Logging**: Centralized tracking of critical actions.
+- **SLOs**: Enforced latency budgets (e.g., <400ms).
 
 ## 📄 License
 

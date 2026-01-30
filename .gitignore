@@ -24,12 +24,16 @@ wheels/
 *.egg
 
 # Estos son provisorios! Eliminar cuando se suban los scripts definitivos
+# Estos son provisorios! Eliminar cuando se suban los scripts definitivos
 database/supabase.sql
 scripts/debug_forensic.py
 scripts/generate_forensic_timelapse.py
 conftest.py
 llave
 llave.pub
+debug_output.txt
+test_log.txt
+database/migrations/current_schema_supabase.sql
 
 # Virtual environments
 .venv
@@ -85,3 +89,6 @@ data/
 
 #Borrador interno
 CAMBIOS_A_DOCUMENTAR.MD
+temp_files/
+temp_files
+verify_deployment.py

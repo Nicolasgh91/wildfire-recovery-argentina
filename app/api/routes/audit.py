@@ -48,6 +48,8 @@ try:
 except ImportError:
     from app.api.deps import get_db
 
+from app.core.rate_limiter import check_rate_limit
+
 
 # =============================================================================
 # ROUTER
@@ -281,18 +283,10 @@ def generate_legal_summary(
     **Ley 26.815 Art. 22 bis** prohíbe cambio de uso del suelo:
     - **60 años** para bosques nativos y áreas protegidas
     - **30 años** para zonas agrícolas/praderas
-    
-    El endpoint busca incendios históricos en un radio configurable y verifica
-    si alguno afectó áreas protegidas, calculando la fecha de expiración de la
-    prohibición más lejana.
-    
-    **Uso típico**: Escribanos, compradores de terrenos, inspectores municipales.
+    Realiza una auditoría legal completa para un punto geográfico.
+    Detecta historial de incendios y prohibiciones activas de venta/edificación.
     """,
-    responses={
-        200: {"description": "Auditoría completada exitosamente"},
-        422: {"description": "Coordenadas fuera del territorio argentino"},
-        500: {"description": "Error interno del servidor"}
-    }
+    dependencies=[Depends(check_rate_limit)]
 )
 async def audit_land_use(
     request: AuditRequest,

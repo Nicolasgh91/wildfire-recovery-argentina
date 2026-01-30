@@ -2,25 +2,35 @@
 ForestGuard - Endpoints de Certificados (UC-07)
 
 Endpoints:
-- POST /issue - Emitir certificado de quema
+- POST /issue - Emitir certificado de quema (with idempotency support)
 - GET /download/{certificate_number} - Descargar PDF
 - GET /verify/{certificate_number} - Verificar autenticidad
+
+Idempotency:
+-----------
+The POST /issue endpoint supports idempotency keys via the X-Idempotency-Key header.
+If the same key is sent again, the cached response is returned without creating
+a duplicate certificate.
 """
 
 import os
 import json
 import hashlib
 from datetime import datetime
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text  # ← FIX: Agregar import de text
+from sqlalchemy import func, text
 from pydantic import BaseModel
 
 from app.api.deps import get_db
 from app.models.fire import FireEvent
 from app.models.certificate import BurnCertificate
 from app.services.pdf_service import generate_certificate_pdf
+from app.core.idempotency import IdempotencyManager, get_idempotency_key
+from app.core.rate_limiter import check_rate_limit
 
 router = APIRouter()
 
@@ -39,20 +49,47 @@ class CertificateRequest(BaseModel):
     Creates a wildfire certificate record for a fire event and recipient.
     The PDF is generated on demand during download.
     
+    **Idempotency Support**: Send `X-Idempotency-Key` header with a unique ID (UUID recommended)
+    to prevent duplicate certificates on retry. If the same key is sent again within 24 hours,
+    the cached response is returned.
+    
     ---
     Crea un registro de certificado de quema para un evento y un destinatario.
     El PDF se genera bajo demanda al descargar.
-    """
+    
+    **Soporte Idempotencia**: Enviar header `X-Idempotency-Key` con un ID único para
+    prevenir certificados duplicados en reintentos.
+    """,
+    dependencies=[Depends(check_rate_limit)]
 )
 async def issue_certificate(
     request: CertificateRequest,
     req: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    idempotency_key: Optional[str] = Depends(get_idempotency_key)
 ):
     """
     Emite un certificado de quema.
     SOLO guarda el registro en BD. El PDF se genera al descargar.
+    
+    Supports idempotency via X-Idempotency-Key header.
     """
+    endpoint = "/api/v1/certificates/issue"
+    idempotency = IdempotencyManager(db)
+    
+    # Check for cached response (idempotency)
+    cached = await idempotency.get_cached_response(
+        idempotency_key, 
+        endpoint,
+        request.model_dump()
+    )
+    if cached:
+        return JSONResponse(
+            content=cached["body"],
+            status_code=cached["status"],
+            headers={"X-Idempotency-Replayed": "true"}
+        )
+    
     # 1. Validar el evento
     event = db.query(FireEvent).filter(FireEvent.id == request.fire_event_id).first()
     if not event:
@@ -97,13 +134,24 @@ async def issue_certificate(
     base_url = str(req.base_url).rstrip("/")
     download_url = f"{base_url}/api/v1/certificates/download/{cert_number}"
 
-    return {
+    response_data = {
         "status": "success",
         "certificate_number": cert_number,
         "issued_to": new_cert.issued_to,
         "download_url": download_url,
         "verification_hash": new_cert.data_hash
     }
+    
+    # Cache response for idempotency
+    await idempotency.cache_response(
+        idempotency_key,
+        endpoint,
+        request.model_dump(),
+        200,
+        response_data
+    )
+
+    return response_data
 
 
 @router.get(
