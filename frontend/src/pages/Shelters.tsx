@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Mountain, Users, Calendar, Wifi, WifiOff, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +13,19 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useI18n } from '@/context/LanguageContext'
-import { shelters, type Shelter } from '@/data/mockdata'
+import { shelters as mockShelters, type Shelter } from '@/data/mockdata'
+
+type ShelterOption = Shelter & { id: string }
+
+type VisitorLogPayload = {
+  shelter_id: string
+  visit_date: string
+  registration_type: 'day_entry' | 'overnight'
+  group_leader_name: string
+  contact_email?: string
+  contact_phone?: string
+  companions: Array<{ full_name: string }>
+}
 
 export default function SheltersPage() {
   const { t } = useI18n()
@@ -24,6 +36,8 @@ export default function SheltersPage() {
   const [checkInDate, setCheckInDate] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [shelterOptions, setShelterOptions] = useState<ShelterOption[]>([])
+  const [syncMessage, setSyncMessage] = useState('')
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true)
@@ -40,23 +54,82 @@ export default function SheltersPage() {
     }
   }, [])
 
+  useEffect(() => {
+    const loadShelters = async () => {
+      try {
+        const response = await fetch('/api/v1/shelters')
+        if (!response.ok) throw new Error('Failed to load shelters')
+        const data = await response.json()
+        if (Array.isArray(data.shelters)) {
+          setShelterOptions(data.shelters)
+          return
+        }
+      } catch {
+        setShelterOptions(mockShelters)
+      }
+    }
+    loadShelters()
+  }, [])
+
+  useEffect(() => {
+    const syncOfflineLogs = async () => {
+      if (!isOnline) return
+      const queue = JSON.parse(localStorage.getItem('visitorLogQueue') || '[]') as VisitorLogPayload[]
+      if (!queue.length) return
+
+      const remaining: VisitorLogPayload[] = []
+      for (const item of queue) {
+        try {
+          const response = await fetch('/api/v1/visitor-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+          })
+          if (!response.ok) {
+            remaining.push(item)
+          }
+        } catch {
+          remaining.push(item)
+        }
+      }
+
+      localStorage.setItem('visitorLogQueue', JSON.stringify(remaining))
+      setSyncMessage(remaining.length ? t('offline') : t('online'))
+    }
+
+    syncOfflineLogs()
+  }, [isOnline, t])
+
+  const registrationType = useMemo(() => {
+    const size = parseInt(groupSize, 10)
+    return size > 1 ? 'overnight' : 'day_entry'
+  }, [groupSize])
+
   const handleCheckIn = async () => {
     if (!selectedShelter || !hikerName || !groupSize || !checkInDate) return
 
     setIsSubmitting(true)
 
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const payload: VisitorLogPayload = {
+      shelter_id: selectedShelter,
+      visit_date: checkInDate,
+      registration_type: registrationType,
+      group_leader_name: hikerName,
+      companions: Array.from({ length: Math.max(parseInt(groupSize, 10) - 1, 0) }).map(() => ({
+        full_name: 'Companion',
+      })),
+    }
 
-    if (!isOnline) {
-      const offlineData = JSON.parse(localStorage.getItem('offlineCheckIns') || '[]')
-      offlineData.push({
-        shelterId: selectedShelter,
-        hikerName,
-        groupSize: parseInt(groupSize, 10),
-        date: checkInDate,
-        timestamp: Date.now(),
+    if (isOnline) {
+      await fetch('/api/v1/visitor-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       })
-      localStorage.setItem('offlineCheckIns', JSON.stringify(offlineData))
+    } else {
+      const offlineQueue = JSON.parse(localStorage.getItem('visitorLogQueue') || '[]')
+      offlineQueue.push(payload)
+      localStorage.setItem('visitorLogQueue', JSON.stringify(offlineQueue))
     }
 
     setIsSubmitting(false)
@@ -92,7 +165,9 @@ export default function SheltersPage() {
                   <p className="font-medium text-primary">
                     {t('syncStatus')}: {t('online')}
                   </p>
-                  <p className="text-sm text-muted-foreground">Data will sync immediately</p>
+                  <p className="text-sm text-muted-foreground">
+                    {syncMessage || 'Data will sync immediately'}
+                  </p>
                 </div>
               </>
             ) : (
@@ -137,7 +212,7 @@ export default function SheltersPage() {
                   <SelectValue placeholder="Select a shelter" />
                 </SelectTrigger>
                 <SelectContent>
-                  {shelters.map((shelter: Shelter) => (
+                  {shelterOptions.map((shelter: Shelter) => (
                     <SelectItem key={shelter.id} value={shelter.id}>
                       {shelter.name}
                     </SelectItem>
