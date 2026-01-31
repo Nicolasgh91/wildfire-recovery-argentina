@@ -46,7 +46,7 @@ except ImportError:
     from app.api.deps import get_db
 
 # Use correct imports from the new service structure
-from app.services.ers_service import ERSService, ReportType, ReportRequest, ReportResult
+from app.services.ers_service import ERSService, ReportType, ReportRequest, ReportResult, ReportStatus
 from app.core.idempotency import IdempotencyManager, get_idempotency_key
 from app.core.rate_limiter import check_rate_limit
 
@@ -208,6 +208,11 @@ async def generate_judicial_report(
         # Generate report using new service
         # This handles data fetching, analysis, and PDF generation
         result = ers.generate_report(ers_request)
+        if result.status == ReportStatus.FAILED:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Report generation failed: {result.error_message or 'Unknown error'}"
+            )
         
         # Store report metadata in DB (if table exists)
         # Note: In a real migration we would ensure table exists
@@ -334,6 +339,11 @@ async def generate_historical_report(
     
     try:
         result = ers.generate_report(ers_request)
+        if result.status == ReportStatus.FAILED:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Report generation failed: {result.error_message or 'Unknown error'}"
+            )
         
         query_duration_ms = int((time.time() - start_time) * 1000)
         now = datetime.now()
