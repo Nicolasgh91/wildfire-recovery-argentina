@@ -12,7 +12,7 @@ from app.core.rate_limiter import check_ip_rate_limit
 from app.core.middleware import LatencyMonitorMiddleware, DeprecationMiddleware
 from app.api.routes import (
     fires, certificates, audit, auth,
-    reports, monitoring, citizen, quality, analysis, historical
+    reports, monitoring, citizen, quality, analysis, historical, workers
 )
 
 # Setup logging
@@ -62,6 +62,10 @@ tags_metadata = [
     {
         "name": "historical",
         "description": "**Historical Data (UC-11)** - Access historical fire records with satellite imagery. **Requires API key.** / *Datos históricos de incendios con imágenes satelitales.*",
+    },
+    {
+        "name": "workers",
+        "description": "**Workers (UC-08)** - Trigger background land-use change detection for post-fire monitoring. / *Tareas de detección de cambio de uso del suelo post-incendio.*",
     },
 ]
 
@@ -194,6 +198,14 @@ app.include_router(
     historical.router,
     prefix=f"{settings.API_V1_PREFIX}/historical",
     tags=["historical"],
+    dependencies=[Depends(verify_api_key)]
+)
+
+# UC-08: Land Use Change Detection (worker-triggered)
+app.include_router(
+    workers.router,
+    prefix=f"{settings.API_V1_PREFIX}/workers",
+    tags=["workers"],
     dependencies=[Depends(verify_api_key)]
 )
 

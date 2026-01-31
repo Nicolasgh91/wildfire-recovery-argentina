@@ -64,12 +64,22 @@ except ImportError:
 # Services
 # Services
 try:
-    from app.services.ers_service import ERSService, ReportRequest as ERSReportRequest, ReportType as ERSReportType
+    from app.services.ers_service import (
+        ERSService,
+        ReportRequest as ERSReportRequest,
+        ReportType as ERSReportType,
+        ReportStatus as ERSReportStatus,
+    )
     from app.services.gee_service import GEEService
     from app.services.vae_service import VAEService
     from app.services.storage_service import StorageService
 except ImportError:
-    from app.services.ers_service import ERSService, ReportRequest as ERSReportRequest, ReportType as ERSReportType
+    from app.services.ers_service import (
+        ERSService,
+        ReportRequest as ERSReportRequest,
+        ReportType as ERSReportType,
+        ReportStatus as ERSReportStatus,
+    )
     from app.services.gee_service import GEEService
     from app.services.vae_service import VAEService
     from app.services.storage_service import StorageService
@@ -196,6 +206,11 @@ async def generate_historical_report(
         # Modo síncrono: esperar a que termine
         try:
             result = ers_service.generate_report(ers_request)
+            if result.status == ERSReportStatus.FAILED:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f"Error generando reporte: {result.error_message or 'Unknown error'}"
+                )
             return _convert_ers_result_to_response(result)
         except Exception as e:
             logger.error(f"Report generation failed: {e}")
@@ -388,6 +403,8 @@ async def _generate_report_background(
         logger.info(f"Report completed: {result.report_id}, status={result.status}")
         
         # En producción, actualizaría la DB con el resultado
+        if result.status == ERSReportStatus.FAILED:
+            logger.error(f"Report failed: {result.error_message}")
         
     except Exception as e:
         logger.error(f"Background report generation failed: {e}")

@@ -46,7 +46,7 @@ from app.core.security import require_admin
 from app.services.audit_logger import AuditLogger
 from fastapi import BackgroundTasks
 # Updated imports for new ERS service
-from app.services.ers_service import ERSService, ReportType, ReportRequest, ReportResult
+from app.services.ers_service import ERSService, ReportType, ReportRequest, ReportResult, ReportStatus
 
 
 # =============================================================================
@@ -536,6 +536,11 @@ async def get_evidence_package(
     
     try:
         report_result = ers.generate_report(request)
+        if report_result.status == ReportStatus.FAILED:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Evidence generation failed: {report_result.error_message or 'Unknown error'}"
+            )
         
         # If we have a URL, redirect or stream from URL?
         # Ideally stream the content, or return the URL.

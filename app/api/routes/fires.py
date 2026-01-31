@@ -16,6 +16,7 @@ from geoalchemy2 import Geometry
 # Local imports
 from app.api import deps
 from app.models.fire import FireEvent, FireDetection
+from app.models.evidence import SatelliteImage
 from app.models.region import FireProtectedAreaIntersection, ProtectedArea
 from app.schemas.fire import (
     FireListResponse,
@@ -59,6 +60,75 @@ def build_sort_clause(sort_by: SortField, sort_desc: bool):
 def collect_active_filters(**kwargs) -> Dict[str, Any]:
     """Recopila filtros activos (no-None) para metadata."""
     return {k: v for k, v in kwargs.items() if v is not None}
+
+
+def apply_fire_filters(
+    query,
+    *,
+    db: Session,
+    province: Optional[List[str]] = None,
+    department: Optional[str] = None,
+    protected_area_id: Optional[UUID] = None,
+    in_protected_area: Optional[bool] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    active_only: Optional[bool] = None,
+    min_confidence: Optional[float] = None,
+    min_detections: Optional[int] = None,
+    is_significant: Optional[bool] = None,
+    has_imagery: Optional[bool] = None,
+    search: Optional[str] = None,
+):
+    """Aplica filtros comunes a queries de incendios."""
+    if province:
+        query = query.filter(FireEvent.province.in_(province))
+
+    if department:
+        query = query.filter(FireEvent.department.ilike(f"%{department}%"))
+
+    if protected_area_id:
+        query = query.filter(FireProtectedAreaIntersection.protected_area_id == protected_area_id)
+
+    if in_protected_area is not None:
+        if in_protected_area:
+            query = query.filter(FireProtectedAreaIntersection.id.isnot(None))
+        else:
+            query = query.filter(FireProtectedAreaIntersection.id.is_(None))
+
+    if date_from:
+        query = query.filter(FireEvent.start_date >= datetime.combine(date_from, datetime.min.time()))
+
+    if date_to:
+        query = query.filter(FireEvent.start_date <= datetime.combine(date_to, datetime.max.time()))
+
+    if active_only:
+        now = datetime.now()
+        query = query.filter(FireEvent.end_date >= now)
+
+    if min_confidence is not None:
+        query = query.filter(FireEvent.avg_confidence >= min_confidence)
+
+    if min_detections is not None:
+        query = query.filter(FireEvent.total_detections >= min_detections)
+
+    if is_significant is not None:
+        query = query.filter(FireEvent.is_significant == is_significant)
+
+    if has_imagery is not None:
+        imagery_exists = db.query(SatelliteImage.id).filter(
+            SatelliteImage.fire_event_id == FireEvent.id
+        ).exists()
+        query = query.filter(imagery_exists if has_imagery else ~imagery_exists)
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(or_(
+            FireEvent.province.ilike(search_term),
+            FireEvent.department.ilike(search_term),
+            ProtectedArea.official_name.ilike(search_term)
+        ))
+
+    return query
 
 def to_coordinates(geom_wkb) -> Optional[Dict[str, float]]:
     """Convierte WKBElement a dict {latitude, longitude} (Simplificado)."""
@@ -117,11 +187,16 @@ def list_fires(
 ) -> FireListResponse:
     """Lista incendios con filtros y paginación."""
     
+    imagery_exists = db.query(SatelliteImage.id).filter(
+        SatelliteImage.fire_event_id == FireEvent.id
+    ).exists()
+
     # Query Base con Coordenadas explícitas
     query = db.query(
         FireEvent,
         func.ST_Y(func.cast(FireEvent.centroid, Geometry)).label('lat'),
-        func.ST_X(func.cast(FireEvent.centroid, Geometry)).label('lon')
+        func.ST_X(func.cast(FireEvent.centroid, Geometry)).label('lon'),
+        imagery_exists.label("has_imagery"),
     )
 
     # Joins condicionales (si filtramos por protected area)
@@ -131,49 +206,22 @@ def list_fires(
         query = query.outerjoin(FireProtectedAreaIntersection).outerjoin(ProtectedArea)
 
     # --- APLICAR FILTROS ---
-    
-    if province:
-        query = query.filter(FireEvent.province.in_(province))
-    
-    if department:
-        query = query.filter(FireEvent.department.ilike(f"%{department}%"))
-        
-    if protected_area_id:
-        query = query.filter(FireProtectedAreaIntersection.protected_area_id == protected_area_id)
-        
-    if in_protected_area is not None:
-        if in_protected_area:
-            query = query.filter(FireProtectedAreaIntersection.id.isnot(None))
-        else:
-            query = query.filter(FireProtectedAreaIntersection.id.is_(None))
-            
-    if date_from:
-        query = query.filter(FireEvent.start_date >= date_from)
-        
-    if date_to:
-        query = query.filter(FireEvent.start_date <= date_to) # Asume timestamps
-        
-    if active_only:
-        # Lógica aproximada: End Date en futuro o muy reciente (< 24h)
-        now = datetime.now()
-        query = query.filter(FireEvent.end_date >= now)
-
-    if min_confidence:
-        query = query.filter(FireEvent.avg_confidence >= min_confidence)
-        
-    if min_detections:
-        query = query.filter(FireEvent.total_detections >= min_detections)
-        
-    if is_significant is not None:
-        query = query.filter(FireEvent.is_significant == is_significant)
-        
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(or_(
-            FireEvent.province.ilike(search_term),
-            FireEvent.department.ilike(search_term),
-            ProtectedArea.official_name.ilike(search_term)
-        ))
+    query = apply_fire_filters(
+        query,
+        db=db,
+        province=province,
+        department=department,
+        protected_area_id=protected_area_id,
+        in_protected_area=in_protected_area,
+        date_from=date_from,
+        date_to=date_to,
+        active_only=active_only,
+        min_confidence=min_confidence,
+        min_detections=min_detections,
+        is_significant=is_significant,
+        has_imagery=has_imagery,
+        search=search,
+    )
     
     # --- TOTAL COUNT (para paginación) ---
     # Optimizacion: Count sobre subquery o id
@@ -188,7 +236,7 @@ def list_fires(
     # --- MAPEO A SCHEMA ---
     results = []
     for row in items:
-        fire, lat, lon = row
+        fire, lat, lon, has_imagery_result = row
         
         # Determinar nombre area protegida (si existe intersección)
         # Esto es n+1 potential issue, pero aceptable para page_size=20
@@ -212,6 +260,7 @@ def list_fires(
             max_frp=float(fire.max_frp) if fire.max_frp else 0,
             estimated_area_hectares=float(fire.estimated_area_hectares) if fire.estimated_area_hectares else 0,
             is_significant=fire.is_significant or False,
+            has_satellite_imagery=bool(has_imagery_result),
             protected_area_name=pa_name,
             in_protected_area=in_pa
         ))
@@ -222,7 +271,16 @@ def list_fires(
         filters_applied=collect_active_filters(
             province=province, department=department, 
             protected_area_id=protected_area_id, in_protected_area=in_protected_area,
-            min_confidence=min_confidence, is_significant=is_significant
+            date_from=date_from.isoformat() if date_from else None,
+            date_to=date_to.isoformat() if date_to else None,
+            active_only=active_only,
+            min_confidence=min_confidence,
+            min_detections=min_detections,
+            is_significant=is_significant,
+            has_imagery=has_imagery,
+            search=search,
+            sort_by=sort_by.value,
+            sort_desc=sort_desc,
         )
     )
 
@@ -233,23 +291,55 @@ def list_fires(
 )
 def export_fires(
     province: Optional[List[str]] = Query(None),
+    department: Optional[str] = Query(None),
+    protected_area_id: Optional[UUID] = Query(None),
+    in_protected_area: Optional[bool] = Query(None),
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    active_only: Optional[bool] = Query(None),
+    min_confidence: Optional[float] = Query(None, ge=0, le=100),
+    min_detections: Optional[int] = Query(None, ge=1),
     is_significant: Optional[bool] = Query(None),
+    has_imagery: Optional[bool] = Query(None),
+    search: Optional[str] = Query(None, min_length=2, max_length=100),
     format: ExportFormat = Query(ExportFormat.CSV),
     max_records: int = Query(10000, ge=1, le=50000),
     db: Session = Depends(deps.get_db),
 ) -> StreamingResponse:
     """Exporta incendios a CSV o JSON."""
     
-    # Reutilizamos lógica de filtros (simplificada)
+    imagery_exists = db.query(SatelliteImage.id).filter(
+        SatelliteImage.fire_event_id == FireEvent.id
+    ).exists()
+
+    # Reutilizamos lógica de filtros
     query = db.query(
         FireEvent,
         func.ST_Y(func.cast(FireEvent.centroid, Geometry)).label('lat'),
-        func.ST_X(func.cast(FireEvent.centroid, Geometry)).label('lon')
+        func.ST_X(func.cast(FireEvent.centroid, Geometry)).label('lon'),
+        imagery_exists.label("has_imagery"),
     )
-    
-    if province: query = query.filter(FireEvent.province.in_(province))
-    if is_significant is not None: query = query.filter(FireEvent.is_significant == is_significant)
-    
+
+    if protected_area_id or in_protected_area is not None or search:
+        query = query.outerjoin(FireProtectedAreaIntersection).outerjoin(ProtectedArea)
+
+    query = apply_fire_filters(
+        query,
+        db=db,
+        province=province,
+        department=department,
+        protected_area_id=protected_area_id,
+        in_protected_area=in_protected_area,
+        date_from=date_from,
+        date_to=date_to,
+        active_only=active_only,
+        min_confidence=min_confidence,
+        min_detections=min_detections,
+        is_significant=is_significant,
+        has_imagery=has_imagery,
+        search=search,
+    )
+
     rows = query.limit(max_records).all()
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -257,13 +347,62 @@ def export_fires(
     if format == ExportFormat.CSV:
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["id", "start_date", "province", "lat", "lon", "detections", "hectares"])
+        writer.writerow([
+            "id",
+            "start_date",
+            "end_date",
+            "duration_hours",
+            "latitude",
+            "longitude",
+            "province",
+            "department",
+            "total_detections",
+            "avg_confidence",
+            "max_frp",
+            "estimated_area_hectares",
+            "is_significant",
+            "has_satellite_imagery",
+            "protected_area_name",
+            "in_protected_area",
+            "status",
+        ])
         
-        for r in rows:
-            fire, lat, lon = r
+        for row in rows:
+            fire, lat, lon, has_imagery_result = row
+            in_pa = bool(fire.protected_area_intersections)
+            pa_name = (
+                fire.protected_area_intersections[0].protected_area.official_name
+                if in_pa and fire.protected_area_intersections[0].protected_area
+                else None
+            )
+            duration_hours = (
+                (fire.end_date - fire.start_date).total_seconds() / 3600
+                if fire.end_date and fire.start_date
+                else 0
+            )
             writer.writerow([
-                str(fire.id), fire.start_date, fire.province, 
-                lat, lon, fire.total_detections, fire.estimated_area_hectares
+                str(fire.id),
+                fire.start_date.isoformat() if fire.start_date else None,
+                fire.end_date.isoformat() if fire.end_date else None,
+                duration_hours,
+                lat,
+                lon,
+                fire.province,
+                fire.department,
+                fire.total_detections,
+                float(fire.avg_confidence) if fire.avg_confidence else 0,
+                float(fire.max_frp) if fire.max_frp else 0,
+                float(fire.estimated_area_hectares) if fire.estimated_area_hectares else 0,
+                bool(fire.is_significant),
+                bool(has_imagery_result),
+                pa_name,
+                in_pa,
+                FireEventListItem(
+                    id=fire.id,
+                    start_date=fire.start_date,
+                    end_date=fire.end_date,
+                    total_detections=fire.total_detections or 0,
+                ).status.value,
             ])
             
         output.seek(0)
@@ -272,9 +411,71 @@ def export_fires(
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename=fires_{timestamp}.csv"}
         )
-    
-    # JSON impl...
-    return StreamingResponse(iter(["Not implemented"]), media_type="application/json")
+
+    data = {
+        "exported_at": datetime.now().isoformat(),
+        "total_records": len(rows),
+        "filters_applied": collect_active_filters(
+            province=province,
+            department=department,
+            protected_area_id=str(protected_area_id) if protected_area_id else None,
+            in_protected_area=in_protected_area,
+            date_from=date_from.isoformat() if date_from else None,
+            date_to=date_to.isoformat() if date_to else None,
+            active_only=active_only,
+            min_confidence=min_confidence,
+            min_detections=min_detections,
+            is_significant=is_significant,
+            has_imagery=has_imagery,
+            search=search,
+        ),
+        "fires": [],
+    }
+
+    for row in rows:
+        fire, lat, lon, has_imagery_result = row
+        in_pa = bool(fire.protected_area_intersections)
+        pa_name = (
+            fire.protected_area_intersections[0].protected_area.official_name
+            if in_pa and fire.protected_area_intersections[0].protected_area
+            else None
+        )
+        duration_hours = (
+            (fire.end_date - fire.start_date).total_seconds() / 3600
+            if fire.end_date and fire.start_date
+            else 0
+        )
+        data["fires"].append({
+            "id": str(fire.id),
+            "start_date": fire.start_date.isoformat() if fire.start_date else None,
+            "end_date": fire.end_date.isoformat() if fire.end_date else None,
+            "duration_hours": duration_hours,
+            "latitude": lat,
+            "longitude": lon,
+            "province": fire.province,
+            "department": fire.department,
+            "total_detections": fire.total_detections,
+            "avg_confidence": float(fire.avg_confidence) if fire.avg_confidence else 0,
+            "max_frp": float(fire.max_frp) if fire.max_frp else 0,
+            "estimated_area_hectares": float(fire.estimated_area_hectares) if fire.estimated_area_hectares else 0,
+            "is_significant": bool(fire.is_significant),
+            "has_satellite_imagery": bool(has_imagery_result),
+            "protected_area_name": pa_name,
+            "in_protected_area": in_pa,
+            "status": FireEventListItem(
+                id=fire.id,
+                start_date=fire.start_date,
+                end_date=fire.end_date,
+                total_detections=fire.total_detections or 0,
+            ).status.value,
+        })
+
+    filename = f"fires_{timestamp}.json"
+    return StreamingResponse(
+        iter([json.dumps(data, indent=2, ensure_ascii=False)]),
+        media_type="application/json",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
 
 
 @router.get(
@@ -361,9 +562,20 @@ def get_statistics(
 )
 def list_provinces(db: Session = Depends(deps.get_db)):
     """Lista provincias disponibles."""
-    results = db.query(FireEvent.province, func.count(FireEvent.id)).group_by(FireEvent.province).all()
+    results = db.query(
+        FireEvent.province,
+        func.count(FireEvent.id),
+        func.max(FireEvent.start_date),
+    ).group_by(FireEvent.province).all()
     return {
-        "provinces": [{"name": r[0] or "Unknown", "fire_count": r[1]} for r in results],
+        "provinces": [
+            {
+                "name": r[0] or "Unknown",
+                "fire_count": r[1],
+                "latest_fire": r[2].date().isoformat() if r[2] else None,
+            }
+            for r in results
+        ],
         "total": len(results)
     }
 
