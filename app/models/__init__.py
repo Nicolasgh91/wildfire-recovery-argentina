@@ -5,6 +5,7 @@ Uso:
     from app.models import FireEvent, ProtectedArea, LandCertificate
 """
 
+from .alerts import ParkAlert
 from .audit import LandCertificate, LandUseAudit
 from .base import Base
 from .citizen import CitizenReport, LandUseChange
@@ -14,6 +15,7 @@ from .fire import FireDetection, FireEvent
 from .quality import DataSourceMetadata
 from .region import FireProtectedAreaIntersection, ProtectedArea
 from .certificate import BurnCertificate
+from .visitor import Shelter, VisitorLog, VisitorLogCompanion, VisitorLogRevision
 
 __all__ = [
     # Base
@@ -38,6 +40,9 @@ __all__ = [
     # Audit models
     "LandUseAudit",
     "LandCertificate",
+
+    # Alerts models
+    "ParkAlert",
     
     # Citizen models
     "CitizenReport",
@@ -48,5 +53,11 @@ __all__ = [
 
     # Certificate models
     "BurnCertificate",
+
+    # Visitor models
+    "Shelter",
+    "VisitorLog",
+    "VisitorLogCompanion",
+    "VisitorLogRevision",
 
 ]

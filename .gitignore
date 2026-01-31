@@ -93,6 +93,9 @@ data/
 !frontend/src/lib/
 !frontend/src/lib/**
 
+# Allow test configuration under testing/
+!testing/conftest.py
+
 #Borrador interno
 CAMBIOS_A_DOCUMENTAR.MD
 temp_files/
