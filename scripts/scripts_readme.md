@@ -97,7 +97,44 @@ python scripts/load_protected_areas.py \
 
 ---
 
-### 3️⃣ `cluster_fire_events.py` - Agrupación de Eventos
+### 3️⃣ `cross_fire_protected_areas.py` - Intersecciones legales
+
+**Qué hace:**
+- Cruza `fire_events` con `protected_areas`
+- Inserta en `fire_protected_area_intersections`
+- Calcula `prohibition_until` según Ley 26.815
+
+**Uso básico:**
+
+```bash
+# Procesamiento batch (recomendado para carga inicial)
+python scripts/cross_fire_protected_areas.py --mode batch
+
+# Procesamiento incremental (diario)
+python scripts/cross_fire_protected_areas.py --mode incremental
+```
+
+---
+
+### 4️⃣ `load_protected_area_pipeline.py` - Pipeline completo
+
+**Qué hace:**
+- Carga áreas protegidas desde IGN/APN
+- Ejecuta el cruce con incendios para generar intersecciones
+
+**Uso básico:**
+
+```bash
+# Pipeline completo desde IGN
+python scripts/load_protected_area_pipeline.py --source ign --simplify 100 --truncate
+
+# Pipeline incremental (sin truncar)
+python scripts/load_protected_area_pipeline.py --source apn_wfs --simplify 50
+```
+
+---
+
+### 5️⃣ `cluster_fire_events.py` - Agrupación de Eventos
 
 **Qué hace:**
 - Agrupa detecciones cercanas en eventos únicos

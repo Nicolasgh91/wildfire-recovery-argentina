@@ -299,6 +299,12 @@ class ProtectedArea(Base, UUIDMixin, TimestampMixin):
         default=60,
         doc="Años de prohibición según Ley 26.815 (60 para bosques, 30 otros)"
     )
+
+    carrying_capacity = Column(
+        Integer,
+        nullable=True,
+        doc="Capacidad de carga estimada para alertas preventivas (UC-04)"
+    )
     
     # -------------------------------------------------------------------------
     # Metadata e Interoperabilidad
