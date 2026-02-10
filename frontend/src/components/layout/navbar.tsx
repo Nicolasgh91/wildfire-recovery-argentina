@@ -1,5 +1,18 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Trees, Map, ClipboardCheck, User, LogIn, LogOut, Globe, Sun, Moon } from 'lucide-react'
+import {
+  Trees,
+  Map,
+  ClipboardCheck,
+  Flame,
+  FileText,
+  User,
+  LogIn,
+  LogOut,
+  Globe,
+  Sun,
+  Moon,
+  Settings,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -11,23 +24,26 @@ import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
+import { isFeatureEnabled } from '@/lib/featureFlags'
 
 export function Navbar() {
   const { pathname } = useLocation()
   const { language, setLanguage, t } = useI18n()
-  const { user, logout, isAuthenticated } = useAuth()
+  const { user, signOut, isAuthenticated } = useAuth()
   const { theme, setTheme } = useTheme()
 
   const navItems = [
     { href: '/', label: t('home'), icon: Trees },
+    { href: '/fires/history', label: t('fireHistory'), icon: Flame },
     { href: '/map', label: t('map'), icon: Map },
     { href: '/audit', label: t('audit'), icon: ClipboardCheck },
+    { href: '/exploracion', label: t('reports'), icon: FileText },
   ]
 
   return (
     <>
       {/* Desktop Navigation */}
-      <header className="hidden md:flex fixed top-0 left-0 right-0 z-50 h-16 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="hidden md:flex fixed top-0 left-0 right-0 z-50 h-24 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <Link to="/" className="flex items-center gap-2">
           <Trees className="h-8 w-8 text-primary" />
           <span className="text-xl font-bold text-foreground">ForestGuard</span>
@@ -49,28 +65,32 @@ export function Navbar() {
               {item.label}
             </Link>
           ))}
-          <Link
-            to="/certificates"
-            className={cn(
-              'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              pathname === '/certificates'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            )}
-          >
-            {t('certificates')}
-          </Link>
-          <Link
-            to="/shelters"
-            className={cn(
-              'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              pathname === '/shelters'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            )}
-          >
-            {t('shelters')}
-          </Link>
+          {isFeatureEnabled('certificates') && (
+            <Link
+              to="/certificates"
+              className={cn(
+                'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                pathname === '/certificates'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              {t('certificates')}
+            </Link>
+          )}
+          {isFeatureEnabled('refuges') && (
+            <Link
+              to="/shelters"
+              className={cn(
+                'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                pathname === '/shelters'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              )}
+            >
+              {t('shelters')}
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -115,7 +135,13 @@ export function Navbar() {
                 <DropdownMenuItem disabled>
                   <span className="text-xs text-muted-foreground">{user?.email}</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={logout}>
+                <DropdownMenuItem asChild>
+                  <Link to="/profile" className="flex items-center">
+                    <Settings className="mr-2 h-4 w-4" />
+                    {t('editProfile')}
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={signOut}>
                   <LogOut className="mr-2 h-4 w-4" />
                   {t('logout')}
                 </DropdownMenuItem>
@@ -133,7 +159,7 @@ export function Navbar() {
       </header>
 
       {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex h-16 items-center justify-around border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex h-24 items-center justify-around border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         {navItems.map((item) => (
           <Link
             key={item.href}
@@ -148,10 +174,10 @@ export function Navbar() {
           </Link>
         ))}
         <Link
-          to={isAuthenticated ? '/certificates' : '/login'}
+          to={isAuthenticated ? '/profile' : '/login'}
           className={cn(
             'flex flex-col items-center gap-1 px-3 py-2',
-            pathname === '/login' || pathname === '/certificates' ? 'text-primary' : 'text-muted-foreground'
+            pathname === '/login' || pathname === '/profile' ? 'text-primary' : 'text-muted-foreground'
           )}
         >
           <User className="h-5 w-5" />
