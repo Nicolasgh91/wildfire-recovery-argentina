@@ -94,8 +94,8 @@ nano deployment/forestguard.service
 # - SUPABASE_SERVICE_KEY: From Supabase dashboard
 # - SUPABASE_JWT_SECRET: From Supabase dashboard
 # - FIRMS_API_KEY: Your NASA FIRMS key
-# - R2_ACCESS_KEY_ID: Cloudflare R2 key
-# - R2_SECRET_ACCESS_KEY: Cloudflare R2 secret
+# - GCS_PROJECT_ID: Google Cloud project ID
+# - GCS_SERVICE_ACCOUNT_JSON: Path to GCS service account JSON
 
 # Copy to systemd directory
 sudo cp deployment/forestguard.service /etc/systemd/system/

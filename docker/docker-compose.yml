@@ -1,7 +1,5 @@
-
-version: '3.8'
-
 services:
+  
   # PostgreSQL + PostGIS (Local development only)
   # En producción, usar Supabase
   db:
@@ -45,26 +43,37 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # FastAPI Application
+  # FastAPI Application con GCS y ADC
   api:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.api
+      context: ..
+      dockerfile: Dockerfile.api
     container_name: wildfire_api
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     ports:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      # Inyectamos las variables necesarias para GCS
+      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      GCS_PROJECT_ID: project-fd452487-efa4-4858-8a7 #forest-guard-484400
+      STORAGE_BACKEND: gcs
+      STORAGE_BUCKET_IMAGES: forestguard-images
+      STORAGE_BUCKET_REPORTS: forestguard-reports
+      STORAGE_BUCKET_CERTIFICATES: forestguard-certificates
+    volumes:
+      # Montajes de código existentes
+      - ../app:/app/app
+      - ../scripts:/app/scripts
+      - ../data:/app/data
+      # MONTAJE CRUCIAL: Mapea tus credenciales de Windows/Linux al contenedor
+      - ~/.config/gcloud:/home/user/.config/gcloud:ro
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    volumes:
-      - ./app:/app/app
-      - ./scripts:/app/scripts
-      - ./data:/app/data
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -75,21 +84,26 @@ services:
   # Celery Worker (Async tasks)
   worker:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.worker
+      context: ..
+      dockerfile: Dockerfile.worker
     container_name: wildfire_worker
     command: celery -A workers.celery_app worker --loglevel=info --concurrency=4
     env_file:
       - .env
+    environment:
+      PYTHONPATH: /app
+      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      GCS_PROJECT_ID: project-fd452487-efa4-4858-8a7
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
-      - ./app:/app/app
-      - ./workers:/app/workers
-      - ./data:/app/data
+      - ..:/app
+      - ../workers:/app/workers
+      - ../data:/app/data
+      - ~/.config/gcloud:/home/user/.config/gcloud:ro
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -100,16 +114,20 @@ services:
   # Celery Beat (Scheduled tasks - optional)
   beat:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.worker
+      context: ..
+      dockerfile: Dockerfile.worker
     container_name: wildfire_beat
     command: celery -A workers.celery_app beat --loglevel=info
     env_file:
       - .env
+    environment:
+      PYTHONPATH: /app
+      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      GCS_PROJECT_ID: project-fd452487-efa4-4858-8a7
     depends_on:
       - redis
     volumes:
-      - ./workers:/app/workers
+      - ..:/app
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -120,8 +138,8 @@ services:
   # Flower (Celery monitoring - optional)
   flower:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.worker
+      context: ..
+      dockerfile: Dockerfile.worker
     container_name: wildfire_flower
     command: celery -A workers.celery_app flower --port=5555
     ports:
@@ -142,7 +160,7 @@ services:
   # Frontend (Vite + React servido por Nginx interno)
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile  # Asegúrate que este sea el Dockerfile nuevo que creamos
     container_name: wildfire_frontend
     restart: unless-stopped

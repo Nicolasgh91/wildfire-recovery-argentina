@@ -20,7 +20,7 @@ def _clamp(value: float, min_value: float, max_value: float) -> float:
 def assess_park_capacity(
     visitor_count: int,
     carrying_capacity: int,
-    climate: Optional[ClimateSnapshot] = None
+    climate: Optional[ClimateSnapshot] = None,
 ) -> AlertAssessment:
     """
     Evaluate park carrying capacity alerts (UC-04).
@@ -52,7 +52,9 @@ def assess_park_capacity(
 
     if occupancy_pct >= 0.8 and risk_level == "high":
         alert_level = "alert"
-        action = "Reforzar vigilancia, restringir accesos y coordinar con guardaparques."
+        action = (
+            "Reforzar vigilancia, restringir accesos y coordinar con guardaparques."
+        )
     elif occupancy_pct >= 0.7 or risk_level == "medium":
         alert_level = "watch"
         action = "Monitorear ocupación y emitir recordatorios preventivos."

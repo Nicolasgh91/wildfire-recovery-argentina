@@ -1,40 +1,62 @@
-from datetime import date, datetime
-from typing import List, Optional
-from pydantic import BaseModel, Field
+from __future__ import annotations
+
+from datetime import date, datetime, timezone
+from typing import Dict, List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel, Field
 
 
 class LandUseAuditRequest(BaseModel):
-    """Request para auditoría de cambio de uso del suelo"""
-    latitude: float = Field(..., ge=-90, le=90)
-    longitude: float = Field(..., ge=-180, le=180)
-    radius_meters: int = Field(500, ge=100, le=5000)
+    """Request payload for land-use audits (UC-F06)."""
+
+    lat: float = Field(..., ge=-90, le=90)
+    lon: float = Field(..., ge=-180, le=180)
+    radius_meters: Optional[int] = Field(default=None, ge=1)
     cadastral_id: Optional[str] = None
 
 
-class FireEvidenceItem(BaseModel):
-    """Evidencia de un incendio individual"""
-    fire_id: UUID
-    fire_date: datetime
-    frp: Optional[float]
-    confidence: float
-    protected_area: Optional[str]
+class AuditFire(BaseModel):
+    fire_event_id: UUID
+    fire_date: date
+    distance_meters: float
+    in_protected_area: bool
     prohibition_until: date
-    image_url: Optional[str]
+    years_remaining: int
+    province: Optional[str] = None
+    avg_confidence: Optional[float] = None
+    estimated_area_hectares: Optional[float] = None
+    protected_area_names: List[str] = Field(default_factory=list)
+    protected_area_categories: List[str] = Field(default_factory=list)
 
 
-class LandUseAuditResponse(BaseModel):
-    """Respuesta de auditoría"""
+class EvidenceThumbnail(BaseModel):
+    fire_event_id: UUID
+    thumbnail_url: str
+    acquisition_date: Optional[date] = None
+    image_type: Optional[str] = None
+    gee_system_index: Optional[str] = None
+
+
+class AuditEvidence(BaseModel):
+    thumbnails: List[EvidenceThumbnail] = Field(default_factory=list)
+
+
+class AuditResponse(BaseModel):
     audit_id: UUID
-    location: dict
-    fires_found: int
+    audit_hash: str
     is_prohibited: bool
     prohibition_until: Optional[date]
-    violation_severity: str
-    
-    fires: List[FireEvidenceItem]
-    
-    protected_areas_affected: List[str]
-    
-    summary: str
-    legal_disclaimer: str
+    fires_found: int
+    fires: List[AuditFire]
+    evidence: AuditEvidence
+    location: Dict[str, float]
+    radius_meters: int
+    cadastral_id: Optional[str] = None
+    warnings: List[str] = Field(default_factory=list)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# Backwards compatibility aliases
+LandUseAuditResponse = AuditResponse
+AuditRequest = LandUseAuditRequest

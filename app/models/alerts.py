@@ -1,4 +1,14 @@
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -13,7 +23,9 @@ class ParkAlert(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "park_alerts"
 
-    protected_area_id = Column(UUID(as_uuid=True), ForeignKey("protected_areas.id"), nullable=False)
+    protected_area_id = Column(
+        UUID(as_uuid=True), ForeignKey("protected_areas.id"), nullable=False
+    )
     alert_date = Column(Date, nullable=False)
 
     visitor_count = Column(Integer, nullable=False)

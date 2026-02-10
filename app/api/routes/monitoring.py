@@ -37,8 +37,7 @@ try:
 except ImportError:
     from app.api.deps import get_db
 
-from app.services.vae_service import VAEService, RecoveryStatus, AnomalyType
-
+from app.services.vae_service import AnomalyType, RecoveryStatus, VAEService
 
 # =============================================================================
 # ROUTER
@@ -51,41 +50,62 @@ router = APIRouter()
 # SCHEMAS
 # =============================================================================
 
+
 class MonthlyNDVI(BaseModel):
     """Monthly NDVI measurement."""
-    month: int = Field(..., ge=1, le=36, description="Month number after fire (1-36)")
+
+    month: int = Field(
+        ..., ge=1, le=36, description="Month number after fire (1-36)"
+    )
     date: str = Field(..., description="ISO date of measurement")
     ndvi_mean: float = Field(..., ge=-1, le=1, description="Mean NDVI value")
-    recovery_percentage: Optional[float] = Field(None, description="Recovery % relative to baseline")
-    cloud_cover_pct: Optional[float] = Field(None, description="Cloud cover percentage")
+    recovery_percentage: Optional[float] = Field(
+        None, description="Recovery % relative to baseline"
+    )
+    cloud_cover_pct: Optional[float] = Field(
+        None, description="Cloud cover percentage"
+    )
 
 
 class RecoveryResponse(BaseModel):
     """
     Response for recovery monitoring endpoint.
-    
+
     Uses VAE Service to calculate NDVI timeline and recovery status.
     """
+
     fire_event_id: str
     fire_date: str
     fire_location: dict
-    
+
     # Baseline and current status
-    baseline_ndvi: Optional[float] = Field(None, description="Pre-fire NDVI baseline")
-    current_ndvi: Optional[float] = Field(None, description="Latest NDVI measurement")
-    
+    baseline_ndvi: Optional[float] = Field(
+        None, description="Pre-fire NDVI baseline"
+    )
+    current_ndvi: Optional[float] = Field(
+        None, description="Latest NDVI measurement"
+    )
+
     # Recovery metrics
-    months_monitored: int = Field(..., description="Number of months with data")
-    recovery_status: str = Field(..., description="Overall recovery classification")
-    recovery_percentage: Optional[float] = Field(None, description="Current recovery %")
-    anomaly_detected: Optional[str] = Field(None, description="Anomaly type if any")
-    
+    months_monitored: int = Field(
+        ..., description="Number of months with data"
+    )
+    recovery_status: str = Field(
+        ..., description="Overall recovery classification"
+    )
+    recovery_percentage: Optional[float] = Field(
+        None, description="Current recovery %"
+    )
+    anomaly_detected: Optional[str] = Field(
+        None, description="Anomaly type if any"
+    )
+
     # Timeline data
     monitoring_data: List[MonthlyNDVI]
-    
+
     # Metadata
     query_duration_ms: int
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -99,13 +119,14 @@ class RecoveryResponse(BaseModel):
                 "recovery_percentage": 72.5,
                 "anomaly_detected": None,
                 "monitoring_data": [],
-                "query_duration_ms": 1250
+                "query_duration_ms": 1250,
             }
         }
 
 
 class RecoverySummaryItem(BaseModel):
     """Summary item for multiple fires."""
+
     fire_event_id: str
     fire_date: str
     province: Optional[str]
@@ -116,6 +137,7 @@ class RecoverySummaryItem(BaseModel):
 
 class RecoverySummaryResponse(BaseModel):
     """Response for recovery summary endpoint."""
+
     total_fires: int
     fires_analyzed: int
     status_breakdown: dict
@@ -130,6 +152,7 @@ class RecoverySummaryResponse(BaseModel):
 # NOTE: Static routes must be defined BEFORE parameterized routes
 # Otherwise /recovery/summary would match /recovery/{fire_event_id}
 
+
 @router.get(
     "/recovery/summary",
     response_model=RecoverySummaryResponse,
@@ -141,23 +164,28 @@ class RecoverySummaryResponse(BaseModel):
     - Dashboard overviews
     - Identifying areas needing attention
     - Generating reports for authorities
-    """
+    """,
 )
 async def get_recovery_summary(
     province: Optional[str] = Query(None, description="Filter by province"),
-    min_months: int = Query(default=6, ge=1, description="Minimum months since fire"),
+    min_months: int = Query(
+        default=6, ge=1, description="Minimum months since fire"
+    ),
     status_filter: Optional[str] = Query(None, description="Filter by status"),
-    limit: int = Query(default=50, ge=1, le=200, description="Maximum results"),
-    db: Session = Depends(get_db)
+    limit: int = Query(
+        default=50, ge=1, le=200, description="Maximum results"
+    ),
+    db: Session = Depends(get_db),
 ) -> RecoverySummaryResponse:
     """
     Get recovery summary for multiple fire events.
-    
+
     Returns a high-level summary without detailed NDVI timelines
     (those are stored in vegetation_monitoring table).
     """
     # Query fires with monitoring data
-    query = text("""
+    query = text(
+        """
         SELECT 
             fe.id as fire_event_id,
             fe.start_date,
@@ -180,18 +208,18 @@ async def get_recovery_summary(
         AND fe.start_date < NOW() - INTERVAL ':min_months months'
         ORDER BY fe.start_date DESC
         LIMIT :limit
-    """)
-    
+    """
+    )
+
     try:
-        results = db.execute(query, {
-            "province": province,
-            "min_months": min_months,
-            "limit": limit
-        }).fetchall()
+        results = db.execute(
+            query,
+            {"province": province, "min_months": min_months, "limit": limit},
+        ).fetchall()
     except Exception:
         # If vegetation_monitoring table doesn't exist yet, return empty
         results = []
-    
+
     # Process results
     fires = []
     status_counts = {
@@ -201,14 +229,18 @@ async def get_recovery_summary(
         "poor": 0,
         "critical": 0,
         "suspicious": 0,
-        "unknown": 0
+        "unknown": 0,
     }
     suspicious_count = 0
-    
+
     for row in results:
-        recovery_pct = row.recovery_percentage if hasattr(row, 'recovery_percentage') else None
-        anomaly = row.anomaly_type if hasattr(row, 'anomaly_type') else None
-        
+        recovery_pct = (
+            row.recovery_percentage
+            if hasattr(row, "recovery_percentage")
+            else None
+        )
+        anomaly = row.anomaly_type if hasattr(row, "anomaly_type") else None
+
         # Determine status
         if recovery_pct is None:
             status = "unknown"
@@ -222,29 +254,40 @@ async def get_recovery_summary(
             status = "poor"
         else:
             status = "critical"
-        
-        is_suspicious = anomaly in ["bare_soil", "no_recovery", "construction", "agriculture"]
+
+        is_suspicious = anomaly in [
+            "bare_soil",
+            "no_recovery",
+            "construction",
+            "agriculture",
+        ]
         if is_suspicious:
             status = "suspicious"
             suspicious_count += 1
-        
+
         status_counts[status] += 1
-        
-        fires.append(RecoverySummaryItem(
-            fire_event_id=str(row.fire_event_id),
-            fire_date=row.start_date.isoformat() if hasattr(row.start_date, 'isoformat') else str(row.start_date),
-            province=row.province if hasattr(row, 'province') else None,
-            recovery_status=status,
-            recovery_percentage=recovery_pct,
-            is_suspicious=is_suspicious
-        ))
-    
+
+        fires.append(
+            RecoverySummaryItem(
+                fire_event_id=str(row.fire_event_id),
+                fire_date=row.start_date.isoformat()
+                if hasattr(row.start_date, "isoformat")
+                else str(row.start_date),
+                province=row.province if hasattr(row, "province") else None,
+                recovery_status=status,
+                recovery_percentage=recovery_pct,
+                is_suspicious=is_suspicious,
+            )
+        )
+
     return RecoverySummaryResponse(
         total_fires=len(fires),
-        fires_analyzed=len([f for f in fires if f.recovery_status != "unknown"]),
+        fires_analyzed=len(
+            [f for f in fires if f.recovery_status != "unknown"]
+        ),
         status_breakdown=status_counts,
         suspicious_count=suspicious_count,
-        fires=fires
+        fires=fires,
     )
 
 
@@ -279,17 +322,19 @@ async def get_recovery_summary(
     responses={
         200: {"description": "Recovery timeline retrieved successfully"},
         404: {"description": "Fire event not found"},
-        503: {"description": "Google Earth Engine unavailable"}
-    }
+        503: {"description": "Google Earth Engine unavailable"},
+    },
 )
 async def get_recovery_status(
     fire_event_id: UUID,
-    max_months: int = Query(default=36, ge=1, le=36, description="Max months to analyze"),
-    db: Session = Depends(get_db)
+    max_months: int = Query(
+        default=36, ge=1, le=36, description="Max months to analyze"
+    ),
+    db: Session = Depends(get_db),
 ) -> RecoveryResponse:
     """
     Get vegetation recovery timeline for a fire event.
-    
+
     Uses VAE Service to:
     1. Fetch pre-fire baseline NDVI
     2. Calculate monthly NDVI for each month since fire
@@ -297,9 +342,10 @@ async def get_recovery_status(
     4. Detect anomalies in the recovery pattern
     """
     start_time = time.time()
-    
+
     # Fetch fire event details from DB
-    fire_query = text("""
+    fire_query = text(
+        """
         SELECT 
             id,
             start_date,
@@ -308,30 +354,31 @@ async def get_recovery_status(
             ST_X(centroid::geometry) as lon
         FROM fire_events
         WHERE id = :fire_id
-    """)
-    
+    """
+    )
+
     result = db.execute(fire_query, {"fire_id": str(fire_event_id)}).fetchone()
-    
+
     if not result:
         raise HTTPException(status_code=404, detail="Fire event not found")
-    
+
     fire_date = result.start_date
     fire_lat = result.lat
     fire_lon = result.lon
-    
+
     try:
         # Initialize VAE Service
         vae = VAEService()
-        
+
         # Get recovery timeline
         timeline = vae.get_recovery_timeline(
             fire_event_id=fire_event_id,
             fire_lat=fire_lat,
             fire_lon=fire_lon,
             fire_date=fire_date,
-            max_months=max_months
+            max_months=max_months,
         )
-        
+
         # Build response
         monitoring_data = [
             MonthlyNDVI(
@@ -339,20 +386,28 @@ async def get_recovery_status(
                 date=m["date"],
                 ndvi_mean=m["ndvi_mean"],
                 recovery_percentage=m.get("recovery_percentage"),
-                cloud_cover_pct=m.get("cloud_cover_pct")
+                cloud_cover_pct=m.get("cloud_cover_pct"),
             )
             for m in timeline.get("monitoring_data", [])
         ]
-        
+
         # Get current NDVI (latest measurement)
-        current_ndvi = monitoring_data[-1].ndvi_mean if monitoring_data else None
-        current_recovery = monitoring_data[-1].recovery_percentage if monitoring_data else None
-        
+        current_ndvi = (
+            monitoring_data[-1].ndvi_mean if monitoring_data else None
+        )
+        current_recovery = (
+            monitoring_data[-1].recovery_percentage
+            if monitoring_data
+            else None
+        )
+
         query_duration_ms = int((time.time() - start_time) * 1000)
-        
+
         return RecoveryResponse(
             fire_event_id=str(fire_event_id),
-            fire_date=fire_date.isoformat() if hasattr(fire_date, 'isoformat') else str(fire_date),
+            fire_date=fire_date.isoformat()
+            if hasattr(fire_date, "isoformat")
+            else str(fire_date),
             fire_location={"lat": fire_lat, "lon": fire_lon},
             baseline_ndvi=timeline.get("baseline_ndvi"),
             current_ndvi=current_ndvi,
@@ -361,11 +416,10 @@ async def get_recovery_status(
             recovery_percentage=current_recovery,
             anomaly_detected=timeline.get("anomaly_detected"),
             monitoring_data=monitoring_data,
-            query_duration_ms=query_duration_ms
+            query_duration_ms=query_duration_ms,
         )
-        
+
     except Exception as e:
         raise HTTPException(
-            status_code=503,
-            detail=f"Error processing NDVI analysis: {str(e)}"
+            status_code=503, detail=f"Error processing NDVI analysis: {str(e)}"
         )

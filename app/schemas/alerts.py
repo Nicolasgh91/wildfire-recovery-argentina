@@ -6,17 +6,25 @@ from pydantic import BaseModel, Field
 
 
 class ClimateSnapshot(BaseModel):
-    temperature_c: Optional[float] = Field(None, description="Air temperature in Celsius")
+    temperature_c: Optional[float] = Field(
+        None, description="Air temperature in Celsius"
+    )
     wind_speed_kmh: Optional[float] = Field(None, description="Wind speed in km/h")
-    humidity_pct: Optional[float] = Field(None, ge=0, le=100, description="Relative humidity")
-    drought_index: Optional[float] = Field(None, ge=0, le=5, description="Drought severity (0-5)")
+    humidity_pct: Optional[float] = Field(
+        None, ge=0, le=100, description="Relative humidity"
+    )
+    drought_index: Optional[float] = Field(
+        None, ge=0, le=5, description="Drought severity (0-5)"
+    )
 
 
 class ParkCapacityAlertRequest(BaseModel):
     protected_area_id: UUID = Field(..., description="Protected area UUID")
     alert_date: date = Field(..., description="Date of the alert")
     visitor_count: int = Field(..., ge=0, description="Reported visitor count")
-    carrying_capacity: Optional[int] = Field(None, ge=1, description="Override carrying capacity")
+    carrying_capacity: Optional[int] = Field(
+        None, ge=1, description="Override carrying capacity"
+    )
     climate: Optional[ClimateSnapshot] = None
 
 

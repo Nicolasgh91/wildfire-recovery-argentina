@@ -214,6 +214,9 @@ class FIRMSProcessor:
             axis=1
         )
 
+        # --- Estado de procesamiento ---
+        df_renamed['is_processed'] = False
+        df_renamed['fire_event_id'] = None
         # --- Selección Final de Columnas ---
         # NO incluimos bt_delta_kelvin porque es generada automáticamente
         columns_to_keep = [
@@ -231,6 +234,8 @@ class FIRMSProcessor:
             'acquisition_date',
             'acquisition_time',
             'daynight',
+            'is_processed',
+            'fire_event_id',
         ]
 
         # Rellenar columnas faltantes con None

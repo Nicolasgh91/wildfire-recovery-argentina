@@ -1,12 +1,17 @@
+# System & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
-venv/
-ENV/
 build/
 develop-eggs/
 dist/
@@ -22,82 +27,78 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
-# Estos son provisorios! Eliminar cuando se suban los scripts definitivos
-# Estos son provisorios! Eliminar cuando se suban los scripts definitivos
-database/supabase.sql
-scripts/debug_forensic.py
-scripts/generate_forensic_timelapse.py
-conftest.py
-llave
-llave.pub
-debug_output.txt
-test_log.txt
-database/migrations/current_schema_supabase.sql
-
-# Virtual environments
-.venv
+# Virtual Environment
 venv/
+.venv/
+env/
 ENV/
 
-# Jupyter Notebook
-.ipynb_checkpoints
-*.ipynb_checkpoints/
+# Logs & Debug
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+debug_output.txt
+test_log.txt
+validation_errors.log
 
-# Environment variables
+# Node & Frontend
+node_modules/
+.next/
+out/
+build/
+.nuxt/
+dist/
+.cache/
+.parcel-cache/
+
+# Environment Variables & Secrets (CRITICAL)
 .env
 .env.local
-*.env
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Google Earth Engine
-.config/earthengine/
-gee-service-account.json
-*-service-account.json
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Logs
-*.log
-logs/
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Credentials (NUNCA subir a Git)
-credentials.json
-service-account.json
-*-credentials.json
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+*.pub
+llave
+llave.pub
 secrets/
+clientLibraryConfig-oracle-free-tier.json
 
-# Data & outputs
-raw_data/
-data/raw/firms/
-output_images/
-output_reports/
+# Supabase / Database / Docker
+supabase/.temp/
+postgres_data/
+*.sql
+
+# Data & Bloatware
 data/
-
-# Allow frontend source data/lib (otherwise ignored by patterns above)
-!frontend/src/data/
-!frontend/src/data/**
-!frontend/src/lib/
-!frontend/src/lib/**
-
-# Allow test configuration under testing/
-!testing/conftest.py
-
-#Borrador interno
-CAMBIOS_A_DOCUMENTAR.MD
+*.zip
+*.tar.gz
+*.csv
+*.tiff
+*.bak
 temp_files/
-temp_files
-verify_deployment.py
+
+# Specific Project Files
+terraform.tfstate*
+
+# Coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+#Internal documentation
+architecture

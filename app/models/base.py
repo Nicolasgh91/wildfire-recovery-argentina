@@ -25,45 +25,6 @@ Dependencias:
 # FILE: app/models/base.py
 # =============================================================================
 
-from datetime import datetime
-from typing import Any
-from uuid import uuid4
+from app.db.base import Base, TimestampMixin, UUIDMixin
 
-from geoalchemy2 import Geography
-from sqlalchemy import Column, DateTime, func
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import declared_attr
-
-Base = declarative_base()
-
-
-class TimestampMixin:
-    """Mixin para columnas created_at y updated_at"""
-    
-    created_at = Column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now()
-    )
-    
-    updated_at = Column(
-        DateTime(timezone=True),
-        nullable=True,
-        onupdate=func.now()
-    )
-
-
-class UUIDMixin:
-    """Mixin para primary key UUID"""
-    
-    @declared_attr
-    def id(cls):
-        return Column(
-            UUID(as_uuid=True),
-            primary_key=True,
-            default=uuid4,
-            nullable=False
-        )
-
-
+__all__ = ["Base", "TimestampMixin", "UUIDMixin"]

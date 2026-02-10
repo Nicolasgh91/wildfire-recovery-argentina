@@ -1,0 +1,30 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements
+COPY requirements.txt .
+
+# Instalar dependencias Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar código de la aplicación
+COPY . .
+
+# User para ejecutar celery (evita ejecutar como root)
+RUN useradd -m celery
+USER celery
+
+# Health check (ping a Redis)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import redis; redis.Redis.from_url('${CELERY_BROKER_URL}').ping()" || exit 1
+
+# Celery entrypoint
+CMD ["celery", "-A", "workers.celery_app", "worker", "--loglevel=info"]

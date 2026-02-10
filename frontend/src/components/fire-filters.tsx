@@ -10,16 +10,12 @@ import { provinces } from '@/data/mockdata'
 
 interface FireFiltersProps {
   selectedProvince: string
-  selectedStatus: string
   onProvinceChange: (value: string) => void
-  onStatusChange: (value: string) => void
 }
 
 export function FireFilters({
   selectedProvince,
-  selectedStatus,
   onProvinceChange,
-  onStatusChange,
 }: FireFiltersProps) {
   const { t } = useI18n()
 
@@ -36,17 +32,6 @@ export function FireFilters({
               {province}
             </SelectItem>
           ))}
-        </SelectContent>
-      </Select>
-
-      <Select value={selectedStatus} onValueChange={onStatusChange}>
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder={t('status')} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">{t('all')}</SelectItem>
-          <SelectItem value="active">{t('active')}</SelectItem>
-          <SelectItem value="extinguished">{t('extinguished')}</SelectItem>
         </SelectContent>
       </Select>
     </div>

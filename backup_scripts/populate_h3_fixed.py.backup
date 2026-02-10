@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+"""
+Populate H3 indexes for fire_events using Python H3 library - FIXED VERSION
+Alternative to PostgreSQL H3 extension for UC-F05 performance
+"""
+
+import logging
+import os
+import sys
+from pathlib import Path
+from typing import Optional
+
+import psycopg2
+from psycopg2.extras import execute_values
+from dotenv import load_dotenv
+
+# Add project root to path
+BASE_DIR = Path(__file__).resolve().parent
+sys.path.append(str(BASE_DIR))
+load_dotenv(dotenv_path=BASE_DIR / ".env")
+
+try:
+    import h3
+    H3_AVAILABLE = True
+    print(f"✓ H3 library available: {h3.__version__}")
+except ImportError:
+    h3 = None
+    H3_AVAILABLE = False
+    print("❌ H3 library not available")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+DEFAULT_H3_RESOLUTION = 7  # ~5 km² hexagons as per documentation
+
+
+def get_db_params() -> dict:
+    """Build psycopg2 connection params from env."""
+    return {
+        "host": os.getenv("DB_HOST"),
+        "port": int(os.getenv("DB_PORT", 5432)),
+        "dbname": os.getenv("DB_NAME"),
+        "user": os.getenv("DB_USER"),
+        "password": os.getenv("DB_PASSWORD"),
+        "sslmode": os.getenv("DB_SSLMODE", "require"),
+    }
+
+
+def get_connection():
+    """Create a psycopg2 connection."""
+    params = get_db_params()
+    if not params["host"] or not params["password"]:
+        raise RuntimeError("Database credentials incomplete. Check DB_HOST / DB_PASSWORD.")
+    return psycopg2.connect(**params)
+
+
+def resolve_h3_resolution() -> int:
+    """Resolve H3 resolution from env or system_parameters."""
+    env_value = os.getenv("H3_RESOLUTION")
+    if env_value:
+        try:
+            return int(env_value)
+        except (TypeError, ValueError):
+            logger.warning("Invalid H3_RESOLUTION: %s", env_value)
+
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT param_value FROM system_parameters WHERE param_key = %s",
+                    ('h3_resolution',)
+                )
+                row = cur.fetchone()
+    except Exception as exc:
+        logger.warning("Could not read system_parameters: %s", exc)
+        return DEFAULT_H3_RESOLUTION
+
+    if not row:
+        return DEFAULT_H3_RESOLUTION
+    
+    try:
+        return int(row[0])
+    except (TypeError, ValueError):
+        return DEFAULT_H3_RESOLUTION
+
+
+def lat_lng_to_h3(lat: float, lon: float, resolution: int) -> Optional[int]:
+    """Convert lat/lon to H3 index using Python library and return as integer."""
+    try:
+        h3_str = h3.latlng_to_cell(lat, lon, resolution)
+        # Convert H3 string to integer (base 16)
+        return int(h3_str, 16)
+    except Exception as exc:
+        logger.warning("H3 conversion failed for (%.6f, %.6f): %s", lat, lon, exc)
+        return None
+
+
+def populate_fire_events_h3(batch_size: int = 1000):
+    """Populate H3 indexes for fire_events table."""
+    if not H3_AVAILABLE:
+        raise RuntimeError("H3 library not available")
+    
+    resolution = resolve_h3_resolution()
+    logger.info(f"Using H3 resolution {resolution}")
+    
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Check current population
+            cur.execute("SELECT COUNT(*) FROM fire_events")
+            total_fires = cur.fetchone()[0]
+            
+            cur.execute("SELECT COUNT(*) FROM fire_events WHERE h3_index IS NOT NULL")
+            current_h3 = cur.fetchone()[0]
+            
+            logger.info(f"Current H3 population: {current_h3}/{total_fires} ({current_h3/total_fires*100:.1f}%)")
+            
+            if current_h3 >= total_fires * 0.9:
+                logger.info("H3 indexes already sufficiently populated")
+                return
+            
+            # Get fire events without H3 indexes
+            cur.execute("""
+                SELECT id, ST_Y(centroid::geometry) as lat, ST_X(centroid::geometry) as lon
+                FROM fire_events
+                WHERE centroid IS NOT NULL 
+                  AND h3_index IS NULL
+                  AND ST_X(centroid::geometry) BETWEEN -180 AND 180
+                  AND ST_Y(centroid::geometry) BETWEEN -90 AND 90
+                ORDER BY id
+                LIMIT %s
+            """, (batch_size,))
+            
+            rows = cur.fetchall()
+            
+            if not rows:
+                logger.info("No fire events need H3 indexing")
+                return
+            
+            logger.info(f"Processing {len(rows)} fire events for H3 indexing...")
+            
+            # Convert to H3 indexes
+            updates = []
+            for fire_id, lat, lon in rows:
+                h3_index = lat_lng_to_h3(lat, lon, resolution)
+                if h3_index:
+                    updates.append((h3_index, fire_id))
+            
+            if updates:
+                # Batch update using individual statements to avoid placeholder issues
+                for h3_index, fire_id in updates:
+                    cur.execute(
+                        "UPDATE fire_events SET h3_index = %s WHERE id = %s",
+                        (h3_index, fire_id)
+                    )
+                conn.commit()
+                logger.info(f"Updated {len(updates)} fire events with H3 indexes")
+            
+            # Check new population
+            cur.execute("SELECT COUNT(*) FROM fire_events WHERE h3_index IS NOT NULL")
+            new_h3 = cur.fetchone()[0]
+            logger.info(f"New H3 population: {new_h3}/{total_fires} ({new_h3/total_fires*100:.1f}%)")
+
+
+def refresh_h3_materialized_view():
+    """Refresh the h3_recurrence_stats materialized view."""
+    logger.info("Refreshing h3_recurrence_stats materialized view...")
+    
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            try:
+                cur.execute("REFRESH MATERIALIZED VIEW h3_recurrence_stats")
+                conn.commit()
+                logger.info("✓ Materialized view refreshed")
+            except Exception as exc:
+                logger.warning("Could not refresh materialized view: %s", exc)
+                # Try to create it if it doesn't exist
+                try:
+                    cur.execute("""
+                        CREATE MATERIALIZED VIEW IF NOT EXISTS h3_recurrence_stats AS
+                        SELECT 
+                            h3_index,
+                            COUNT(*) AS total_fires,
+                            COUNT(*) FILTER (WHERE start_date > NOW() - INTERVAL '5 years') AS fires_last_5_years,
+                            CASE
+                                WHEN COUNT(*) FILTER (WHERE start_date > NOW() - INTERVAL '5 years') > 3 THEN 'high'
+                                WHEN COUNT(*) FILTER (WHERE start_date > NOW() - INTERVAL '5 years') >= 1 THEN 'medium'
+                                ELSE 'low'
+                            END AS recurrence_class,
+                            LEAST(
+                                COUNT(*) FILTER (WHERE start_date > NOW() - INTERVAL '5 years')::NUMERIC / 5.0,
+                                1.0
+                            ) AS recurrence_score
+                        FROM fire_events
+                        WHERE h3_index IS NOT NULL
+                        GROUP BY h3_index
+                        WITH DATA
+                    """)
+                    conn.commit()
+                    logger.info("✓ Materialized view created")
+                except Exception as create_exc:
+                    logger.error("Could not create materialized view: %s", create_exc)
+
+
+def main():
+    """Main execution function."""
+    print("=== Populating H3 indexes for fire_events (Python H3 - FIXED) ===")
+    
+    if not H3_AVAILABLE:
+        print("❌ H3 library not available. Install with: pip install h3")
+        return False
+    
+    try:
+        # Populate H3 indexes in batches
+        batch_size = 1000
+        max_iterations = 50  # Prevent infinite loops
+        
+        for iteration in range(max_iterations):
+            logger.info(f"Batch iteration {iteration + 1}/{max_iterations}")
+            
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT COUNT(*) FROM fire_events WHERE h3_index IS NULL")
+                    remaining = cur.fetchone()[0]
+            
+            if remaining == 0:
+                logger.info("✓ All fire events have H3 indexes")
+                break
+            
+            populate_fire_events_h3(batch_size)
+        
+        # Refresh materialized view
+        refresh_h3_materialized_view()
+        
+        # Final verification
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM fire_events")
+                total_fires = cur.fetchone()[0]
+                
+                cur.execute("SELECT COUNT(*) FROM fire_events WHERE h3_index IS NOT NULL")
+                final_h3 = cur.fetchone()[0]
+                
+                logger.info(f"Final H3 population: {final_h3}/{total_fires} ({final_h3/total_fires*100:.1f}%)")
+        
+        print("\n=== H3 Population Complete ===")
+        return True
+        
+    except Exception as exc:
+        logger.error("H3 population failed: %s", exc)
+        return False
+
+
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)

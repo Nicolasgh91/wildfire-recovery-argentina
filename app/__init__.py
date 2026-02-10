@@ -1,0 +1,3 @@
+"""
+ForestGuard application package.
+"""

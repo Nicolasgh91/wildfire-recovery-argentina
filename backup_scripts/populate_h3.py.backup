@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""
+Populate H3 indexes for fire_events to improve UC-F05 performance
+"""
+
+from app.db.session import engine
+from sqlalchemy import text
+
+def populate_h3_indexes():
+    """Populate H3 indexes for fire_events with valid centroids"""
+    print('=== Populating H3 indexes for fire_events ===')
+    
+    with engine.connect() as conn:
+        # Check if H3 extension is available
+        result = conn.execute(text("SELECT 1 FROM pg_extension WHERE extname = 'h3'"))
+        h3_ext = result.fetchone()
+        
+        if not h3_ext:
+            print('❌ H3 extension not found in database')
+            print('Installing H3 extension...')
+            conn.execute(text('CREATE EXTENSION IF NOT EXISTS h3'))
+            conn.commit()
+            print('✓ H3 extension installed')
+        else:
+            print('✓ H3 extension already available')
+        
+        # Check current H3 population
+        result = conn.execute(text('SELECT COUNT(*) FROM fire_events WHERE h3_index IS NOT NULL'))
+        current_h3 = result.scalar()
+        total_fires = conn.execute(text('SELECT COUNT(*) FROM fire_events')).scalar()
+        
+        print(f'Current H3 population: {current_h3}/{total_fires} ({current_h3/total_fires*100:.1f}%)')
+        
+        if current_h3 < total_fires * 0.5:  # Less than 50% populated
+            print('\nPopulating H3 indexes...')
+            
+            # Update H3 indexes for fire_events with valid centroids
+            result = conn.execute(text('''
+                UPDATE fire_events 
+                SET h3_index = h3_lat_lng_to_cell(ST_Y(centroid::geometry), ST_X(centroid::geometry), 7)
+                WHERE centroid IS NOT NULL 
+                  AND h3_index IS NULL
+                  AND ST_X(centroid::geometry) BETWEEN -180 AND 180
+                  AND ST_Y(centroid::geometry) BETWEEN -90 AND 90
+            '''))
+            
+            updated = result.rowcount
+            conn.commit()
+            print(f'✓ Updated {updated} fire events with H3 indexes')
+            
+            # Verify update
+            result = conn.execute(text('SELECT COUNT(*) FROM fire_events WHERE h3_index IS NOT NULL'))
+            new_h3 = result.scalar()
+            print(f'New H3 population: {new_h3}/{total_fires} ({new_h3/total_fires*100:.1f}%)')
+            
+            # Refresh materialized view
+            print('\nRefreshing h3_recurrence_stats materialized view...')
+            conn.execute(text('REFRESH MATERIALIZED VIEW h3_recurrence_stats'))
+            conn.commit()
+            print('✓ Materialized view refreshed')
+            
+        else:
+            print('✓ H3 indexes already sufficiently populated')
+    
+    print('\n=== H3 Population Complete ===')
+
+if __name__ == "__main__":
+    populate_h3_indexes()

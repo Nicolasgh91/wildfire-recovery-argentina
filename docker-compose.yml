@@ -1,0 +1,236 @@
+services:
+  # PostgreSQL + PostGIS (via Supabase/remote)
+  # Configurado por variable de entorno DB_HOST
+  
+  redis:
+    image: redis:7-alpine
+    container_name: forestguard-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - forestguard
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: forestguard-api
+    environment:
+      # Base de datos
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      
+      # GCS (con ADC)
+      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      GCS_PROJECT_ID: ${GCS_PROJECT_ID}
+      STORAGE_BACKEND: gcs
+      STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
+      STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
+      STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
+      
+      # Celery/Redis
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      
+      # Aplicación
+      ENVIRONMENT: development
+      DEBUG: "true"
+      SECRET_KEY: ${SECRET_KEY}
+    
+    # Monta credenciales de GCS (ADC local)
+    volumes:
+      - ~/.config/gcloud:/home/user/.config/gcloud:ro
+    
+    ports:
+      - "8000:8000"
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - forestguard
+    
+    command: python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Worker 1: Ingestion (Descarga FIRMS)
+  worker-ingestion:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: forestguard-worker-ingestion
+    environment:
+      # Base de datos
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      
+      # GCS
+      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      GCS_PROJECT_ID: ${GCS_PROJECT_ID}
+      STORAGE_BACKEND: gcs
+      
+      # Celery
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      
+      # NASA FIRMS
+      FIRMS_API_KEY: ${FIRMS_API_KEY}
+      
+      # Aplicación
+      ENVIRONMENT: development
+    
+    volumes:
+      - ~/.config/gcloud:/home/user/.config/gcloud:ro
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - forestguard
+    
+    command: celery -A workers.celery_app worker --loglevel=info --queues=ingestion --concurrency=2
+
+  # Worker 2: Clustering (DBSCAN)
+  worker-clustering:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: forestguard-worker-clustering
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      
+      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      GCS_PROJECT_ID: ${GCS_PROJECT_ID}
+      
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      
+      ENVIRONMENT: development
+    
+    volumes:
+      - ~/.config/gcloud:/home/user/.config/gcloud:ro
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - forestguard
+    
+    command: celery -A workers.celery_app worker --loglevel=info --queues=clustering --concurrency=2
+
+  # Worker 3: Analysis (Recovery + Destruction)
+  worker-analysis:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: forestguard-worker-analysis
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      
+      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      GCS_PROJECT_ID: ${GCS_PROJECT_ID}
+      #GEE_SERVICE_ACCOUNT_JSON: ${GEE_SERVICE_ACCOUNT_JSON}
+      
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      
+      ENVIRONMENT: development
+    
+    volumes:
+      - ~/.config/gcloud:/home/user/.config/gcloud:ro
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - forestguard
+    
+    command: celery -A workers.celery_app worker --loglevel=info --queues=analysis --concurrency=1
+
+  # Celery Beat (scheduler)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: forestguard-celery-beat
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      
+      ENVIRONMENT: development
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - forestguard
+    
+    command: celery -A workers.celery_app beat --loglevel=info
+
+  # Flower (monitoring dashboard)
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: forestguard-flower
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    
+    ports:
+      - "5555:5555"
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - forestguard
+    
+    command: celery -A workers.celery_app flower --port=5555
+
+networks:
+  forestguard:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local

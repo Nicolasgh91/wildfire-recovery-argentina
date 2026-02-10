@@ -1,15 +1,17 @@
+from typing import Any, Dict, Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
-from typing import Optional, Dict, Any
-from uuid import UUID
+
 from app.models.system_audit import AuditEvent
+
 
 class AuditLogger:
     """
     Service to handle persistent audit logging.
     Can be used synchronously or injected via BackgroundTasks in Controllers.
     """
-    
+
     @staticmethod
     def log(
         db: Session,
@@ -20,7 +22,7 @@ class AuditLogger:
         resource_id: Optional[UUID] = None,
         details: Optional[Dict[str, Any]] = None,
         ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None
+        user_agent: Optional[str] = None,
     ):
         """
         Record a critical system action.
@@ -34,7 +36,7 @@ class AuditLogger:
                 resource_id=resource_id,
                 details=details,
                 ip_address=ip_address,
-                user_agent=user_agent
+                user_agent=user_agent,
             )
             db.add(event)
             db.commit()

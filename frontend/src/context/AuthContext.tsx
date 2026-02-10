@@ -1,60 +1,127 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import type { Session, User } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 
-export type Role = 'guest' | 'user' | 'admin'
+export type UserRole = 'admin' | 'user' | 'anonymous'
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
 
-interface User {
-  email: string
-  role: Role
+interface AuthState {
+  user: User | null
+  session: Session | null
+  status: AuthStatus
+  role: UserRole
 }
 
-interface AuthContextType {
-  user: User | null
-  role: Role
-  login: (email: string, password: string) => boolean
-  logout: () => void
+interface AuthContextValue extends AuthState {
+  signIn: (email: string, password: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
+  signUpWithEmail: (payload: { email: string; firstName: string; lastName: string }) => Promise<void>
+  signOut: () => Promise<void>
   isAuthenticated: boolean
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextValue | null>(null)
 
-function getRoleFromEmail(email: string): Role {
-  if (email.includes('admin@') || email.endsWith('@forestguard.ar')) {
-    return 'admin'
+function mapRole(user: User | null): UserRole {
+  if (!user) return 'anonymous'
+  return user.app_metadata?.role === 'admin' ? 'admin' : 'user'
+}
+
+function buildState(session: Session | null): AuthState {
+  return {
+    user: session?.user ?? null,
+    session,
+    status: session ? 'authenticated' : 'unauthenticated',
+    role: mapRole(session?.user ?? null),
   }
-  return 'user'
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    session: null,
+    status: 'loading',
+    role: 'anonymous',
+  })
 
-  const login = (email: string, password: string): boolean => {
-    if (!email || !password) {
-      return false
+  useEffect(() => {
+    let mounted = true
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return
+      setState(buildState(session))
+    })
+
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return
+      setState(buildState(session))
+    })
+
+    return () => {
+      mounted = false
+      data.subscription.unsubscribe()
     }
-    
-    const role = getRoleFromEmail(email)
-    setUser({ email, role })
-    return true
-  }
+  }, [])
 
-  const logout = () => {
-    setUser(null)
-  }
+  const signIn = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error
+  }, [])
 
-  const role: Role = user?.role || 'guest'
-  const isAuthenticated = user !== null
+  const signOut = useCallback(async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+  }, [])
 
-  return (
-    <AuthContext.Provider value={{ user, role, login, logout, isAuthenticated }}>
-      {children}
-    </AuthContext.Provider>
+  const signInWithGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
+    })
+    if (error) throw error
+  }, [])
+
+  const signUpWithEmail = useCallback(
+    async (payload: { email: string; firstName: string; lastName: string }) => {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: payload.email,
+        options: {
+          data: {
+            full_name: `${payload.firstName} ${payload.lastName}`.trim(),
+            first_name: payload.firstName,
+            last_name: payload.lastName,
+          },
+          emailRedirectTo: window.location.origin,
+        },
+      })
+      if (error) throw error
+    },
+    []
   )
+
+  const isAuthenticated = state.status === 'authenticated'
+
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      ...state,
+      signIn,
+      signInWithGoogle,
+      signUpWithEmail,
+      signOut,
+      isAuthenticated,
+    }),
+    [isAuthenticated, signIn, signInWithGoogle, signOut, signUpWithEmail, state]
+  )
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider')
   }
   return context
 }

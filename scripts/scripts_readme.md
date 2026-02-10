@@ -134,7 +134,7 @@ python scripts/load_protected_area_pipeline.py --source apn_wfs --simplify 50
 
 ---
 
-### 5️⃣ `cluster_fire_events.py` - Agrupación de Eventos
+### 5️⃣ `cluster_fire_events_parallel.py` - Agrupación de Eventos
 
 **Qué hace:**
 - Agrupa detecciones cercanas en eventos únicos
@@ -146,18 +146,18 @@ python scripts/load_protected_area_pipeline.py --source apn_wfs --simplify 50
 
 ```bash
 # Procesar un día específico
-python scripts/cluster_fire_events.py \
+python scripts/cluster_fire_events_parallel.py \
     --date 2024-08-15 \
     --database-url $DATABASE_URL
 
 # Procesar un rango de fechas
-python scripts/cluster_fire_events.py \
+python scripts/cluster_fire_events_parallel.py \
     --start-date 2024-01-01 \
     --end-date 2024-12-31 \
     --database-url $DATABASE_URL
 
 # Personalizar parámetros de clustering
-python scripts/cluster_fire_events.py \
+python scripts/cluster_fire_events_parallel.py \
     --start-date 2024-08-01 \
     --end-date 2024-08-31 \
     --eps-meters 1000 \
@@ -176,6 +176,88 @@ python scripts/cluster_fire_events.py \
 **Tiempo estimado:**
 - ~1 minuto por día con 100 detecciones
 - **Total 2024: ~6 horas** (puede correrse overnight)
+
+---
+
+### 6) `process_satellite_slides.py` - Carruseles Satelitales (CU-15/CU-16)
+
+**Qué hace:**
+- Genera el carrusel satelital para incendios activos (CU-15).
+- Genera el carrusel histórico "antes/después" para incendios extinguidos recientes (CU-16).
+- Actualiza `slides_data`, `last_gee_image_id`, `last_update_sat` y `has_historic_report`.
+- Por defecto procesa `fire_episodes` y aplica las slides a todos los eventos del episodio para reducir requests a GEE (usa `--use-events` para el modo legacy por evento).
+
+**Uso básico:**
+
+```bash
+# Procesar activos + extinguidos recientes
+python scripts/process_satellite_slides.py
+
+# Solo activos
+python scripts/process_satellite_slides.py --mode active
+
+# Solo extinguidos (últimas 24h)
+python scripts/process_satellite_slides.py --mode historic --days-back 1
+
+# Limitar cantidad de incendios por corrida
+python scripts/process_satellite_slides.py --max-fires 25
+
+# Forzar modo legacy por evento (sin episodios)
+python scripts/process_satellite_slides.py --use-events
+
+# Incluir episodios no candidatos
+python scripts/process_satellite_slides.py --episodes-all
+
+# Ajustar padding del bbox de episodios (metros)
+python scripts/process_satellite_slides.py --episode-bbox-padding-meters 3000
+
+# Simular sin guardar en DB ni storage
+python scripts/process_satellite_slides.py --dry-run
+```
+
+**Requisitos:**
+- Credenciales GEE (GEE_SERVICE_ACCOUNT_JSON).
+- Credenciales GCS (GCS_PROJECT_ID, GCS_SERVICE_ACCOUNT_JSON) y buckets de storage.
+- `fire_episodes` poblado (ejecutar `aggregate_fire_episodes.py` antes de este script).
+
+**Cron sugerido (diario 14:00 UTC-3):**
+
+```bash
+0 14 * * * /path/to/venv/bin/python /path/to/scripts/process_satellite_slides.py >> /var/log/satellite_slides.log 2>&1
+```
+
+---
+
+### 7) `aggregate_fire_episodes.py` - Agrupación Macro para GEE (UC-17)
+
+**Qué hace:**
+- Agrupa `fire_events` activos en episodios macro (`fire_episodes`) para optimizar requests a GEE.
+- Mantiene la trazabilidad mediante la tabla N:M `fire_episode_events`.
+
+**Uso básico:**
+
+```bash
+# Rebuild completo con filtros por defecto
+python scripts/aggregate_fire_episodes.py
+
+# Incluir eventos extinguidos (active + closed)
+python scripts/aggregate_fire_episodes.py --input-status active+closed
+
+# Limitar a los últimos 90 días (default) y persistir solo candidatos GEE
+python scripts/aggregate_fire_episodes.py --input-status active+closed --only-persist-gee-candidates
+
+# Cambiar ventana de lookback
+python scripts/aggregate_fire_episodes.py --input-status active+closed --lookback-days 30 --only-persist-gee-candidates
+
+# Ajustar distancia y buffer temporal
+python scripts/aggregate_fire_episodes.py --episode-distance-threshold-meters 9000 --episode-days-buffer 14
+
+# Desactivar filtros GEE (marcar todos como candidatos)
+python scripts/aggregate_fire_episodes.py --gee-disable-filter
+
+# Dry run (sin cambios en DB)
+python scripts/aggregate_fire_episodes.py --dry-run
+```
 
 ---
 
@@ -252,13 +334,13 @@ psql $DATABASE_URL -c "SELECT COUNT(*), category FROM protected_areas GROUP BY c
 
 ```bash
 # Procesar todo 2024
-python scripts/cluster_fire_events.py \
+python scripts/cluster_fire_events_parallel.py \
     --start-date 2024-01-01 \
     --end-date 2024-12-31 \
     --database-url $DATABASE_URL
 
 # Procesar 2025 hasta hoy
-python scripts/cluster_fire_events.py \
+python scripts/cluster_fire_events_parallel.py \
     --start-date 2025-01-01 \
     --end-date 2025-01-24 \
     --database-url $DATABASE_URL
@@ -397,7 +479,7 @@ echo "Actualizando datos para $YESTERDAY"
 # Necesitas usar la API transaccional (requiere MAP_KEY)
 
 # Procesar clustering del día anterior
-python scripts/cluster_fire_events.py \
+python scripts/cluster_fire_events_parallel.py \
     --date $YESTERDAY \
     --database-url $DATABASE_URL
 

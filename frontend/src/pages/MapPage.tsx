@@ -5,14 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useI18n } from '@/context/LanguageContext'
-import { fires, type Fire } from '@/data/mockdata'
+import { fires } from '@/data/mockdata'
+import type { FireMapItem } from '@/types/map'
 
 const FireMap = lazy(() =>
   import('@/components/fire-map').then((mod) => ({ default: mod.FireMap })),
 )
 
 const mapFallback = (
-  <div className="flex h-[calc(100vh-8rem)] items-center justify-center bg-muted">
+  <div className="flex h-full items-center justify-center bg-muted">
     <div className="text-center">
       <Map className="mx-auto mb-2 h-8 w-8 animate-pulse text-primary" />
       <p className="text-sm text-muted-foreground">Loading map...</p>
@@ -22,11 +23,11 @@ const mapFallback = (
 
 export default function MapPage() {
   const { t } = useI18n()
-  const [selectedFire, setSelectedFire] = useState<Fire | null>(null)
+  const [selectedFire, setSelectedFire] = useState<FireMapItem | null>(null)
   const [showSidebar, setShowSidebar] = useState(true)
 
   return (
-    <div className="relative h-[calc(100vh-4rem)] md:h-[calc(100vh-4rem)]">
+    <div className="relative h-full">
       <Suspense fallback={mapFallback}>
         <FireMap
           fires={fires}
@@ -56,7 +57,7 @@ export default function MapPage() {
           <CardContent>
             <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-2">
-                {fires.map((fire: Fire) => (
+                {fires.map((fire) => (
                   <button
                     key={fire.id}
                     type="button"
@@ -88,7 +89,7 @@ export default function MapPage() {
           <CardContent className="p-3">
             <ScrollArea className="h-32">
               <div className="flex gap-2 pb-2">
-                {fires.map((fire: Fire) => (
+                {fires.map((fire) => (
                   <button
                     key={fire.id}
                     type="button"

@@ -1,3 +1,18 @@
+#!/usr/bin/env python3
+"""
+=============================================================================
+FORESTGUARD - ENRIQUECIMIENTO ESPACIAL DE EVENTOS
+=============================================================================
+
+Asigna la provincia correspondiente a cada evento de incendio mediante
+intersección espacial (Point in Polygon) con la tabla `regions`.
+
+Uso:
+    python scripts/enrich_location.py
+
+Autor: ForestGuard Team
+=============================================================================
+"""
 import sys
 import os
 from pathlib import Path

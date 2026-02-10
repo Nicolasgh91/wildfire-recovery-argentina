@@ -40,15 +40,14 @@ import io
 import logging
 import os
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Tuple, Optional
 import hashlib
 
 import requests
-from sqlalchemy import create_engine, text
+from sqlalchemy import bindparam, create_engine, text
 from sqlalchemy.engine import URL
-from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 
 # --- CONFIGURACIÓN ---
@@ -81,6 +80,125 @@ ARG_BOUNDS = {
     "lon_min": -74.0,
     "lon_max": -53.0
 }
+
+DEFAULT_H3_RESOLUTION = 8
+
+try:
+    import h3  # type: ignore
+    H3_AVAILABLE = True
+except ImportError:
+    h3 = None
+    H3_AVAILABLE = False
+
+
+def resolve_h3_resolution(engine=None) -> int:
+    """Resolve H3 resolution from env/system_parameters, fallback to default."""
+    env_value = os.getenv("H3_RESOLUTION")
+    if env_value:
+        try:
+            return int(env_value)
+        except (TypeError, ValueError):
+            logger.warning("H3_RESOLUTION inválido: %s", env_value)
+
+    if engine is None:
+        return DEFAULT_H3_RESOLUTION
+
+    try:
+        with engine.connect() as conn:
+            row = (
+                conn.execute(
+                    text("SELECT param_value FROM system_parameters WHERE param_key = 'h3_resolution'")
+                )
+                .mappings()
+                .first()
+            )
+        if not row:
+            return DEFAULT_H3_RESOLUTION
+        value = row.get("param_value")
+        if isinstance(value, dict):
+            value = value.get("value")
+        if isinstance(value, (int, float, str)):
+            return int(value)
+    except Exception as exc:
+        logger.warning("No se pudo leer system_parameters.h3_resolution: %s", exc)
+
+    return DEFAULT_H3_RESOLUTION
+
+
+def get_fire_detection_columns(engine) -> set[str]:
+    query = text(
+        """
+        SELECT column_name
+          FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'fire_detections'
+        """
+    )
+    with engine.connect() as conn:
+        rows = conn.execute(query).fetchall()
+    return {row[0] for row in rows}
+
+
+def normalize_acquisition_time(raw_value: Optional[str]) -> tuple[str, int, int]:
+    """Normalize FIRMS acq_time to HH:MM:SS and return (time_str, hour, minute)."""
+    raw = "" if raw_value is None else str(raw_value)
+    digits = "".join(ch for ch in raw if ch.isdigit())
+    if not digits:
+        digits = "0000"
+    digits = digits.zfill(4)
+    if len(digits) > 4:
+        digits = digits[-4:]
+    hour = int(digits[:2])
+    minute = int(digits[2:4])
+    return f"{hour:02d}:{minute:02d}:00", hour, minute
+
+
+def build_detected_at(acq_date_raw: str, acq_time_raw: Optional[str]) -> tuple[date, str, datetime]:
+    acq_date = datetime.strptime(acq_date_raw, "%Y-%m-%d").date()
+    time_str, hour, minute = normalize_acquisition_time(acq_time_raw)
+    detected_at = datetime(
+        acq_date.year,
+        acq_date.month,
+        acq_date.day,
+        hour,
+        minute,
+        tzinfo=timezone.utc,
+    )
+    return acq_date, time_str, detected_at
+
+
+def build_detection_hash(
+    *,
+    satellite: str,
+    instrument: str,
+    detected_at: datetime,
+    lat: float,
+    lon: float,
+    frp: float,
+    confidence: int,
+) -> str:
+    payload = "|".join(
+        [
+            satellite,
+            instrument,
+            detected_at.astimezone(timezone.utc).isoformat(),
+            f"{lat:.5f}",
+            f"{lon:.5f}",
+            f"{frp:.2f}",
+            str(confidence),
+        ]
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def compute_h3_index(lat: float, lon: float, resolution: int) -> int:
+    if not H3_AVAILABLE:
+        raise RuntimeError("h3 library no disponible; instala el paquete 'h3'")
+    if hasattr(h3, "latlng_to_cell"):
+        h3_str = h3.latlng_to_cell(lat, lon, resolution)
+    else:
+        h3_str = h3.geo_to_h3(lat, lon, resolution)
+    return int(h3_str, 16)
 
 
 # =============================================================================
@@ -179,71 +297,96 @@ def normalize_confidence(raw_value: str, satellite: str) -> int:
         return 0
 
 
-def filter_and_transform(detections: List[dict], satellite: str) -> List[dict]:
+def filter_and_transform(
+    detections: List[dict],
+    satellite: str,
+    *,
+    compute_h3: bool,
+    h3_resolution: int,
+) -> List[dict]:
     """
     Filtra y transforma las detecciones.
-    
+
     Filtros:
     - Dentro del bounding box de Argentina
     - Confianza >= 50%
-    
+
     Transformaciones:
     - Normalizar confianza
     - Parsear fechas
-    - Generar hash único para detección de duplicados
+    - Generar hash ?nico para detecci?n de duplicados
     """
     filtered = []
-    
+
     for det in detections:
         try:
-            lat = float(det.get('latitude', 0))
-            lon = float(det.get('longitude', 0))
-            
+            lat = float(det.get("latitude", 0))
+            lon = float(det.get("longitude", 0))
+
             # Filtrar por bounding box
-            if not (ARG_BOUNDS['lat_min'] <= lat <= ARG_BOUNDS['lat_max']):
+            if not (ARG_BOUNDS["lat_min"] <= lat <= ARG_BOUNDS["lat_max"]):
                 continue
-            if not (ARG_BOUNDS['lon_min'] <= lon <= ARG_BOUNDS['lon_max']):
+            if not (ARG_BOUNDS["lon_min"] <= lon <= ARG_BOUNDS["lon_max"]):
                 continue
-            
+
             # Normalizar confianza
-            confidence = normalize_confidence(det.get('confidence', '0'), satellite)
-            
+            confidence = normalize_confidence(det.get("confidence", "0"), satellite)
+
             # Filtrar baja confianza
             if confidence < 50:
                 continue
-            
+
             # Parsear fecha
-            acq_date = det.get('acq_date', '')
-            acq_time = det.get('acq_time', '0000')
-            
-            if not acq_date:
+            acq_date_raw = det.get("acq_date", "")
+            acq_time_raw = det.get("acq_time", "0000")
+
+            if not acq_date_raw:
                 continue
-            
-            # Generar hash único (lat + lon + fecha + hora + satélite)
-            # Esto permite detectar duplicados
-            unique_str = f"{lat:.5f}|{lon:.5f}|{acq_date}|{acq_time}|{satellite}"
-            detection_hash = hashlib.md5(unique_str.encode()).hexdigest()[:16]
-            
-            # Extraer campos
-            filtered.append({
-                "satellite": satellite.replace("_NRT", "").replace("_", "-"),
-                "instrument": "VIIRS" if "VIIRS" in satellite else "MODIS",
+
+            acq_date, acq_time, detected_at = build_detected_at(acq_date_raw, acq_time_raw)
+            sat_name = satellite.replace("_NRT", "").replace("_", "-")
+            instrument = "VIIRS" if "VIIRS" in satellite else "MODIS"
+            frp = float(det.get("frp", 0) or 0)
+
+            detection_hash = build_detection_hash(
+                satellite=sat_name,
+                instrument=instrument,
+                detected_at=detected_at,
+                lat=lat,
+                lon=lon,
+                frp=frp,
+                confidence=confidence,
+            )
+
+            legacy_str = f"{lat:.5f}|{lon:.5f}|{acq_date.isoformat()}|{acq_time}|{sat_name}"
+            legacy_hash = hashlib.md5(legacy_str.encode()).hexdigest()[:16]
+
+            payload = {
+                "satellite": sat_name,
+                "instrument": instrument,
+                "detected_at": detected_at,
                 "latitude": lat,
                 "longitude": lon,
                 "acquisition_date": acq_date,
                 "acquisition_time": acq_time,
-                "confidence_raw": det.get('confidence', ''),
+                "confidence_raw": det.get("confidence", ""),
                 "confidence_normalized": confidence,
-                "fire_radiative_power": float(det.get('frp', 0) or 0),
-                "bright_ti4": float(det.get('bright_ti4', 0) or 0),
-                "bright_ti5": float(det.get('bright_ti5', 0) or 0),
-                "daynight": det.get('daynight', 'D'),
-                "detection_hash": detection_hash
-            })
-            
-        except (ValueError, TypeError) as e:
+                "fire_radiative_power": frp,
+                "bright_ti4": float(det.get("bright_ti4", 0) or 0),
+                "bright_ti5": float(det.get("bright_ti5", 0) or 0),
+                "daynight": det.get("daynight", "D"),
+                "detection_hash": detection_hash,
+                "legacy_hash": legacy_hash,
+            }
+
+            if compute_h3:
+                payload["h3_index"] = compute_h3_index(lat, lon, h3_resolution)
+
+            filtered.append(payload)
+
+        except (ValueError, TypeError):
             continue
-    
+
     return filtered
 
 
@@ -251,102 +394,165 @@ def filter_and_transform(detections: List[dict], satellite: str) -> List[dict]:
 # INSERCIÓN EN BASE DE DATOS
 # =============================================================================
 
-def get_existing_hashes(engine, acq_dates: List[str]) -> set:
+def get_existing_hashes(engine, acq_dates: List[date], use_detection_hash: bool) -> set[str]:
     """
     Obtiene los hashes de detecciones existentes para las fechas dadas.
     Esto permite evitar duplicados eficientemente.
     """
     if not acq_dates:
         return set()
-    
-    # Crear placeholders para las fechas
-    date_list = "', '".join(acq_dates)
-    
-    query = text(f"""
+
+    if use_detection_hash:
+        query = text(
+            """
+            SELECT detection_hash
+              FROM fire_detections
+             WHERE acquisition_date IN :dates
+               AND detection_hash IS NOT NULL
+            """
+        ).bindparams(bindparam("dates", expanding=True))
+        with engine.connect() as conn:
+            result = conn.execute(query, {"dates": acq_dates}).fetchall()
+        return {row[0] for row in result if row[0]}
+
+    query = text(
+        """
         SELECT DISTINCT 
             MD5(
                 ROUND(latitude::numeric, 5)::text || '|' ||
                 ROUND(longitude::numeric, 5)::text || '|' ||
                 acquisition_date::text || '|' ||
-                COALESCE(acquisition_time::text, '0000') || '|' ||
+                COALESCE(acquisition_time::text, '00:00:00') || '|' ||
                 satellite
             )::varchar(16) as hash
         FROM fire_detections
-        WHERE acquisition_date IN ('{date_list}')
-    """)
-    
+        WHERE acquisition_date IN :dates
+        """
+    ).bindparams(bindparam("dates", expanding=True))
+
     with engine.connect() as conn:
-        result = conn.execute(query)
-        return {row.hash for row in result}
+        result = conn.execute(query, {"dates": acq_dates}).fetchall()
+    return {row[0] for row in result if row[0]}
 
 
-def insert_detections(engine, detections: List[dict], dry_run: bool = False) -> int:
+def insert_detections(
+    engine,
+    detections: List[dict],
+    dry_run: bool = False,
+    *,
+    supports_detection_hash: bool,
+    supports_h3: bool,
+    supports_created_at: bool,
+) -> dict:
     """
     Inserta detecciones nuevas en la base de datos.
-    
+
     Args:
         engine: SQLAlchemy engine
         detections: Lista de detecciones a insertar
         dry_run: Si True, solo simula sin insertar
-    
+
     Returns:
-        Número de detecciones insertadas
+        N?mero de detecciones insertadas
     """
     if not detections:
-        return 0
-    
-    # Obtener fechas únicas
-    unique_dates = list(set(d['acquisition_date'] for d in detections))
-    
+        return {"inserted": 0, "duplicates": 0, "attempted": 0, "skipped_errors": 0}
+
+    # Obtener fechas ?nicas
+    unique_dates = list(set(d["acquisition_date"] for d in detections))
+
     # Obtener hashes existentes
-    existing_hashes = get_existing_hashes(engine, unique_dates)
+    existing_hashes = get_existing_hashes(engine, unique_dates, supports_detection_hash)
     logger.info(f"   Hashes existentes para estas fechas: {len(existing_hashes)}")
-    
+
     # Filtrar duplicados
-    new_detections = [
-        d for d in detections 
-        if d['detection_hash'] not in existing_hashes
-    ]
-    
+    if supports_detection_hash:
+        new_detections = [d for d in detections if d["detection_hash"] not in existing_hashes]
+    else:
+        new_detections = [d for d in detections if d["legacy_hash"] not in existing_hashes]
+
+    duplicates = len(detections) - len(new_detections)
     logger.info(f"   Detecciones nuevas: {len(new_detections)} de {len(detections)}")
-    
+
     if dry_run or not new_detections:
-        return len(new_detections)
-    
-    # Insertar en batch
-    insert_sql = text("""
+        return {
+            "inserted": len(new_detections),
+            "duplicates": duplicates,
+            "attempted": len(detections),
+            "skipped_errors": 0,
+        }
+
+    columns = [
+        "id",
+        "satellite",
+        "instrument",
+        "detected_at",
+        "latitude",
+        "longitude",
+        "location",
+        "acquisition_date",
+        "acquisition_time",
+        "confidence_raw",
+        "confidence_normalized",
+        "fire_radiative_power",
+        "bt_mir_kelvin",
+        "bt_tir_kelvin",
+        "daynight",
+        "is_processed",
+        "fire_event_id",
+    ]
+    values = [
+        "gen_random_uuid()",
+        ":satellite",
+        ":instrument",
+        ":detected_at",
+        ":latitude",
+        ":longitude",
+        "ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography",
+        ":acquisition_date",
+        ":acquisition_time",
+        ":confidence_raw",
+        ":confidence_normalized",
+        ":fire_radiative_power",
+        ":bright_ti4",
+        ":bright_ti5",
+        ":daynight",
+        "FALSE",
+        "NULL",
+    ]
+
+    if supports_h3:
+        columns.append("h3_index")
+        values.append(":h3_index")
+    if supports_detection_hash:
+        columns.append("detection_hash")
+        values.append(":detection_hash")
+    if supports_created_at:
+        columns.append("created_at")
+        values.append("NOW()")
+
+    insert_sql = text(
+        f"""
         INSERT INTO fire_detections (
-            id, satellite, instrument,
-            latitude, longitude, location,
-            acquisition_date, acquisition_time,
-            confidence_raw, confidence_normalized,
-            fire_radiative_power,
-            bt_mir_kelvin, bt_tir_kelvin,
-            daynight, is_processed, created_at
+            {', '.join(columns)}
         ) VALUES (
-            gen_random_uuid(),
-            :satellite, :instrument,
-            :latitude, :longitude,
-            ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography,
-            :acquisition_date, :acquisition_time,
-            :confidence_raw, :confidence_normalized,
-            :fire_radiative_power,
-            :bright_ti4, :bright_ti5,
-            :daynight, FALSE, NOW()
+            {', '.join(values)}
         )
-    """)
-    
+        """
+    )
+
     inserted = 0
     batch_size = 1000
-    
+
     with engine.begin() as conn:
         for i in range(0, len(new_detections), batch_size):
             batch = new_detections[i:i + batch_size]
             for det in batch:
                 try:
-                    conn.execute(insert_sql, {
+                    payload = {
                         "satellite": det["satellite"],
                         "instrument": det["instrument"],
+                        "detected_at": det["detected_at"],
                         "latitude": det["latitude"],
                         "longitude": det["longitude"],
                         "acquisition_date": det["acquisition_date"],
@@ -356,46 +562,62 @@ def insert_detections(engine, detections: List[dict], dry_run: bool = False) -> 
                         "fire_radiative_power": det["fire_radiative_power"],
                         "bright_ti4": det["bright_ti4"],
                         "bright_ti5": det["bright_ti5"],
-                        "daynight": det["daynight"]
-                    })
+                        "daynight": det["daynight"],
+                    }
+                    if supports_h3:
+                        payload["h3_index"] = det.get("h3_index")
+                    if supports_detection_hash:
+                        payload["detection_hash"] = det.get("detection_hash")
+
+                    conn.execute(insert_sql, payload)
                     inserted += 1
                 except Exception as e:
-                    logger.warning(f"Error insertando detección: {e}")
+                    logger.warning(f"Error insertando detecci?n: {e}")
                     continue
-    
-    return inserted
+
+    skipped_errors = len(new_detections) - inserted
+    return {
+        "inserted": inserted,
+        "duplicates": duplicates,
+        "attempted": len(detections),
+        "skipped_errors": skipped_errors,
+    }
 
 
 # =============================================================================
 # POST-PROCESAMIENTO
 # =============================================================================
 
-def run_clustering_for_dates(engine, dates: List[str]) -> int:
+def run_clustering_for_dates(engine, dates: List[date]) -> int:
     """
-    Ejecuta clustering para las fechas especificadas.
-    Importa y usa el clusterer existente.
+    Ejecuta clustering para las fechas especificadas usando el worker canónico.
     """
     if not dates:
         return 0
-    
+
+    from app.db.session import SessionLocal
+    from app.services.detection_clustering_service import DetectionClusteringService
+
+    min_date = min(dates)
+    if isinstance(min_date, str):
+        min_date = datetime.strptime(min_date, "%Y-%m-%d").date()
+    days_back = max(1, (date.today() - min_date).days + 1)
+
+    db = SessionLocal()
     try:
-        # Importar el clusterer
-        from scripts.cluster_fire_events_parallel import cluster_single_date
-        
-        logger.info(f"🔄 Ejecutando clustering para {len(dates)} fechas...")
-        
-        total_events = 0
-        for date_str in dates:
-            target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-            _, events, _ = cluster_single_date(target_date, eps_meters=1000, min_samples=2)
-            total_events += events
-        
-        logger.info(f"   Eventos creados: {total_events}")
-        return total_events
-        
-    except ImportError:
-        logger.warning("   No se pudo importar el clusterer. Ejecutar manualmente.")
-        return 0
+        logger.info(f"🔄 Ejecutando clustering (days_back={days_back})...")
+        service = DetectionClusteringService(db)
+        result = service.run_clustering(days_back=days_back)
+        db.commit()
+        events_created = int(result.get("events_created", 0))
+        logger.info(f"   Eventos creados: {events_created}")
+        return events_created
+    except Exception as exc:
+        db.rollback()
+        logger.warning("   Clustering falló: %s", exc)
+        raise
+    finally:
+        db.close()
 
 
 def run_area_calculation(engine) -> int:
@@ -541,34 +763,75 @@ def run_incremental_pipeline(days: int = 2, dry_run: bool = False):
     # Verificar API key
     api_key = os.getenv("FIRMS_API_KEY")
     if not api_key:
-        logger.error("❌ FIRMS_API_KEY no configurada. Obtener en https://firms.modaps.eosdis.nasa.gov/api/")
-        sys.exit(1)
+        raise RuntimeError("FIRMS_API_KEY no configurada")
     
     engine = get_engine()
+    columns = get_fire_detection_columns(engine)
+    supports_h3 = "h3_index" in columns
+    supports_detection_hash = "detection_hash" in columns
+    supports_created_at = "created_at" in columns
+    h3_resolution = resolve_h3_resolution(engine)
+
+    if supports_h3 and not H3_AVAILABLE:
+        raise RuntimeError("h3_index existe pero la librería h3 no está instalada")
     
     # 1. Descargar datos de todos los satélites
     all_detections = []
     for satellite in SATELLITES:
         raw_data = download_firms_data(api_key, satellite, days)
-        filtered = filter_and_transform(raw_data, satellite)
+        filtered = filter_and_transform(
+            raw_data,
+            satellite,
+            compute_h3=supports_h3,
+            h3_resolution=h3_resolution,
+        )
         all_detections.extend(filtered)
     
     logger.info(f"\n Total detecciones filtradas: {len(all_detections)}")
     
     if not all_detections:
         logger.info(" No hay nuevos datos para procesar")
-        return
+        return {
+            "success": True,
+            "records_inserted": 0,
+            "duplicates_found": 0,
+            "total_filtered": 0,
+            "events_created": 0,
+            "areas_calculated": 0,
+            "intersections": 0,
+        }
     
     # 2. Insertar en BD
-    inserted = insert_detections(engine, all_detections, dry_run)
+    insert_result = insert_detections(
+        engine,
+        all_detections,
+        dry_run,
+        supports_detection_hash=supports_detection_hash,
+        supports_h3=supports_h3,
+        supports_created_at=supports_created_at,
+    )
+    inserted = int(insert_result.get("inserted", 0))
+    duplicates = int(insert_result.get("duplicates", 0))
+    skipped_errors = int(insert_result.get("skipped_errors", 0))
     logger.info(f" Detecciones insertadas: {inserted}")
+    logger.info(f" Detecciones duplicadas: {duplicates}")
+    if skipped_errors:
+        logger.info(f" Detecciones con error de insert: {skipped_errors}")
     
     if dry_run or inserted == 0:
         logger.info(" Pipeline completado (dry-run o sin datos nuevos)")
-        return
+        return {
+            "success": True,
+            "records_inserted": inserted,
+            "duplicates_found": duplicates,
+            "total_filtered": len(all_detections),
+            "events_created": 0,
+            "areas_calculated": 0,
+            "intersections": 0,
+        }
     
     # 3. Obtener fechas únicas para procesamiento
-    unique_dates = list(set(d['acquisition_date'] for d in all_detections))
+    unique_dates = list(set(d["acquisition_date"] for d in all_detections))
     
     # 4. Clustering
     events_created = run_clustering_for_dates(engine, unique_dates)
@@ -588,6 +851,15 @@ def run_incremental_pipeline(days: int = 2, dry_run: bool = False):
     logger.info(f"   Áreas calculadas: {areas_calculated}")
     logger.info(f"   Intersecciones legales: {intersections}")
     logger.info("=" * 60)
+    return {
+        "success": True,
+        "records_inserted": inserted,
+        "duplicates_found": duplicates,
+        "total_filtered": len(all_detections),
+        "events_created": events_created,
+        "areas_calculated": areas_calculated,
+        "intersections": intersections,
+    }
 
 
 # =============================================================================

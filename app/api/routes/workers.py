@@ -25,12 +25,14 @@ router = APIRouter()
 
 class LandUseChangeRequest(BaseModel):
     fire_event_id: UUID = Field(..., description="Fire event UUID")
-    analysis_date: Optional[date] = Field(None, description="Optional analysis date")
+    analysis_date: Optional[date] = Field(
+        None, description="Optional analysis date"
+    )
     buffer_degrees: float = Field(
         default=0.01,
         ge=0.001,
         le=0.1,
-        description="BBox buffer around centroid in degrees (~0.01 ≈ 1km)"
+        description="BBox buffer around centroid in degrees (~0.01 ≈ 1km)",
     )
 
 
@@ -62,16 +64,16 @@ class LandUseChangeResponse(BaseModel):
     description="""
     Detects post-fire land use changes that may indicate illegal activity.
     Intended to be triggered by workers or scheduled jobs.
-    """
+    """,
 )
 def detect_land_use_change(
-    request: LandUseChangeRequest,
-    db: Session = Depends(get_db)
+    request: LandUseChangeRequest, db: Session = Depends(get_db)
 ) -> LandUseChangeResponse:
     """
     Run VAE land-use change detection for a fire event and optionally persist results.
     """
-    fire_query = text("""
+    fire_query = text(
+        """
         SELECT
             id,
             start_date,
@@ -80,13 +82,20 @@ def detect_land_use_change(
             ST_X(centroid::geometry) as lon
         FROM fire_events
         WHERE id = :fire_id
-    """)
+    """
+    )
 
-    result = db.execute(fire_query, {"fire_id": str(request.fire_event_id)}).fetchone()
+    result = db.execute(
+        fire_query, {"fire_id": str(request.fire_event_id)}
+    ).fetchone()
     if not result:
         raise HTTPException(status_code=404, detail="Fire event not found")
 
-    fire_date = result.start_date.date() if hasattr(result.start_date, "date") else result.start_date
+    fire_date = (
+        result.start_date.date()
+        if hasattr(result.start_date, "date")
+        else result.start_date
+    )
     analysis_date = request.analysis_date or date.today()
     area_hectares = float(result.estimated_area_hectares or 0)
 
@@ -104,11 +113,13 @@ def detect_land_use_change(
             bbox=bbox,
             fire_date=fire_date,
             analysis_date=analysis_date,
-            area_hectares=area_hectares
+            area_hectares=area_hectares,
         )
     except Exception as exc:
         logger.exception("Land use change detection failed")
-        raise HTTPException(status_code=503, detail=f"Detection failed: {exc}") from exc
+        raise HTTPException(
+            status_code=503, detail=f"Detection failed: {exc}"
+        ) from exc
 
     record_saved = False
     try:
@@ -128,7 +139,9 @@ def detect_land_use_change(
         record_saved = True
     except Exception:
         db.rollback()
-        logger.warning("Unable to persist land use change record", exc_info=True)
+        logger.warning(
+            "Unable to persist land use change record", exc_info=True
+        )
 
     return LandUseChangeResponse(
         fire_event_id=request.fire_event_id,

@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
+import { Marker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import { BaseMap } from '@/components/map/BaseMap'
 
 interface AuditMapProps {
   onLocationSelect: (lat: number, lon: number) => void
@@ -49,22 +49,11 @@ export function AuditMap({ onLocationSelect }: AuditMapProps) {
     onLocationSelect(lat, lon)
   }
 
-  // Center on Argentina
-  const defaultCenter: [number, number] = [-38.4161, -63.6167]
-
   return (
     <div className="h-64 w-full overflow-hidden rounded-lg border border-border">
-      <MapContainer
-        center={defaultCenter}
-        zoom={5}
-        className="h-full w-full"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+      <BaseMap className="h-full w-full">
         <LocationMarker position={position} onLocationSelect={handleSelect} />
-      </MapContainer>
+      </BaseMap>
     </div>
   )
 }

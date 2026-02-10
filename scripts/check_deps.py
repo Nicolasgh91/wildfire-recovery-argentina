@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+"""
+Chequeo rápido de dependencias críticas de Python.
+Uso: python scripts/check_deps.py
+"""
 try:
     from passlib.context import CryptContext
     print("passlib OK")

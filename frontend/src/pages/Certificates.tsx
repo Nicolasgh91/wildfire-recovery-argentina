@@ -48,7 +48,7 @@ export default function CertificatesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="container mx-auto max-w-4xl px-4 py-8">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
@@ -81,7 +81,7 @@ export default function CertificatesPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {!isAuthenticated || role === 'guest' ? (
+                {!isAuthenticated || role === 'anonymous' ? (
                   <Alert>
                     <User className="h-4 w-4" />
                     <AlertTitle>Authentication Required</AlertTitle>

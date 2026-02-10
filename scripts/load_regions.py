@@ -1,3 +1,27 @@
+#!/usr/bin/env python3
+"""
+=============================================================================
+FORESTGUARD - CARGA DE LIMITES PROVINCIALES (IGN)
+=============================================================================
+
+Descarga y procesa los límites provinciales oficiales de Argentina desde
+el servicio WFS del Instituto Geográfico Nacional (IGN).
+
+Funcionalidad:
+1. Consulta WFS del IGN para obtener capa 'ign:provincia'
+2. Procesa GeoJSON y simplifica/valida geometrías
+3. Inserta o actualiza la tabla `regions` (category='PROVINCIA')
+
+Uso:
+    python scripts/load_regions.py
+
+Requisitos:
+    - Conexión a internet (wms.ign.gob.ar)
+    - Base de datos configurada en .env
+
+Autor: ForestGuard Team
+=============================================================================
+"""
 import sys
 import os
 import requests

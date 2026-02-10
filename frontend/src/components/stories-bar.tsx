@@ -2,15 +2,27 @@ import { Link } from 'react-router-dom'
 import { Flame } from 'lucide-react'
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'
 import { useI18n } from '@/context/LanguageContext'
-import type { Fire } from '@/data/mockdata'
+import type { EpisodeListItem } from '@/types/episode'
+
+const FRP_MEDIUM_THRESHOLD = 20
+const FRP_HIGH_THRESHOLD = 50
+
+const resolveSeverity = (maxFrp?: number | null) => {
+  if (maxFrp === null || maxFrp === undefined || Number.isNaN(maxFrp)) return 'low'
+  if (maxFrp >= FRP_HIGH_THRESHOLD) return 'high'
+  if (maxFrp >= FRP_MEDIUM_THRESHOLD) return 'medium'
+  return 'low'
+}
 
 interface StoriesBarProps {
-  fires: Fire[]
+  fires: EpisodeListItem[]
 }
 
 export function StoriesBar({ fires }: StoriesBarProps) {
   const { t } = useI18n()
-  const highSeverityFires = fires.filter((f) => f.severity === 'high' && f.status === 'active')
+  const highSeverityFires = fires.filter(
+    (f) => resolveSeverity(f.frp_max) === 'high' && (f.status ?? 'active') === 'active'
+  )
 
   if (highSeverityFires.length === 0) return null
 
@@ -26,7 +38,7 @@ export function StoriesBar({ fires }: StoriesBarProps) {
             {highSeverityFires.map((fire) => (
               <Link
                 key={fire.id}
-                to={`/fires/${fire.id}`}
+                to={`/fires/${fire.representative_event_id ?? fire.id}`}
                 className="group flex flex-col items-center gap-2"
               >
                 <div className="relative h-16 w-16 overflow-hidden rounded-full bg-gradient-to-br from-destructive/80 to-destructive p-0.5">
@@ -35,7 +47,7 @@ export function StoriesBar({ fires }: StoriesBarProps) {
                   </div>
                 </div>
                 <span className="max-w-[80px] truncate text-xs text-muted-foreground">
-                  {fire.province}
+                  {fire.provinces?.[0] ?? 'Sin provincia'}
                 </span>
               </Link>
             ))}

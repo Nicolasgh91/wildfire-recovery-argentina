@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""
+Final H3 population for fire_events - small batches with frequent commits
+"""
+
+import logging
+import os
+import sys
+import time
+from pathlib import Path
+from typing import Optional
+
+import psycopg2
+from dotenv import load_dotenv
+
+# Add project root to path
+BASE_DIR = Path(__file__).resolve().parent
+sys.path.append(str(BASE_DIR))
+load_dotenv(dotenv_path=BASE_DIR / ".env")
+
+try:
+    import h3
+    H3_AVAILABLE = True
+    print(f"✓ H3 library available: {h3.__version__}")
+except ImportError:
+    h3 = None
+    H3_AVAILABLE = False
+    print("❌ H3 library not available")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+DEFAULT_H3_RESOLUTION = 7
+
+
+def get_db_params() -> dict:
+    """Build psycopg2 connection params from env."""
+    return {
+        "host": os.getenv("DB_HOST"),
+        "port": int(os.getenv("DB_PORT", 5432)),
+        "dbname": os.getenv("DB_NAME"),
+        "user": os.getenv("DB_USER"),
+        "password": os.getenv("DB_PASSWORD"),
+        "sslmode": os.getenv("DB_SSLMODE", "require"),
+    }
+
+
+def lat_lng_to_h3(lat: float, lon: float, resolution: int) -> Optional[int]:
+    """Convert lat/lon to H3 index using Python library and return as integer."""
+    try:
+        h3_str = h3.latlng_to_cell(lat, lon, resolution)
+        return int(h3_str, 16)
+    except Exception as exc:
+        logger.warning("H3 conversion failed for (%.6f, %.6f): %s", lat, lon, exc)
+        return None
+
+
+def main():
+    """Main execution function - very small batches."""
+    print("=== Final H3 Population for fire_events ===")
+    
+    if not H3_AVAILABLE:
+        print("❌ H3 library not available. Install with: pip install h3")
+        return False
+    
+    try:
+        # Database connection
+        params = get_db_params()
+        conn = psycopg2.connect(**params)
+        cur = conn.cursor()
+        
+        # Check current status
+        cur.execute("SELECT COUNT(*) FROM fire_events")
+        total_fires = cur.fetchone()[0]
+        
+        cur.execute("SELECT COUNT(*) FROM fire_events WHERE h3_index IS NOT NULL")
+        current_h3 = cur.fetchone()[0]
+        
+        logger.info(f"Current H3 population: {current_h3}/{total_fires} ({current_h3/total_fires*100:.1f}%)")
+        
+        if current_h3 >= total_fires * 0.9:
+            logger.info("H3 indexes already sufficiently populated")
+            conn.close()
+            return True
+        
+        # Process in very small batches
+        batch_size = 100
+        max_iterations = 400  # 100 * 400 = 40,000 > 33,481 needed
+        total_processed = 0
+        
+        for iteration in range(max_iterations):
+            # Start transaction
+            conn.autocommit = False
+            
+            try:
+                # Get small batch
+                cur.execute("""
+                    SELECT id, ST_Y(centroid::geometry) as lat, ST_X(centroid::geometry) as lon
+                    FROM fire_events
+                    WHERE centroid IS NOT NULL 
+                      AND h3_index IS NULL
+                      AND ST_X(centroid::geometry) BETWEEN -180 AND 180
+                      AND ST_Y(centroid::geometry) BETWEEN -90 AND 90
+                    ORDER BY id
+                    LIMIT %s
+                """, (batch_size,))
+                
+                rows = cur.fetchall()
+                
+                if not rows:
+                    logger.info("No more fire events need H3 indexing")
+                    break
+                
+                # Process batch
+                updates = []
+                for fire_id, lat, lon in rows:
+                    h3_index = lat_lng_to_h3(lat, lon, DEFAULT_H3_RESOLUTION)
+                    if h3_index:
+                        updates.append((h3_index, fire_id))
+                
+                if updates:
+                    cur.executemany(
+                        "UPDATE fire_events SET h3_index = %s WHERE id = %s",
+                        updates
+                    )
+                    conn.commit()
+                    total_processed += len(updates)
+                    
+                    if total_processed % 1000 == 0:
+                        logger.info(f"Processed {total_processed} fire events...")
+                
+                # Small delay to avoid overwhelming the database
+                time.sleep(0.1)
+                
+            except Exception as exc:
+                conn.rollback()
+                logger.error(f"Batch {iteration + 1} failed: {exc}")
+                time.sleep(1)  # Wait before retry
+                continue
+            finally:
+                conn.autocommit = True
+        
+        # Final verification
+        cur.execute("SELECT COUNT(*) FROM fire_events WHERE h3_index IS NOT NULL")
+        final_h3 = cur.fetchone()[0]
+        logger.info(f"Final H3 population: {final_h3}/{total_fires} ({final_h3/total_fires*100:.1f}%)")
+        
+        # Try to refresh materialized view
+        try:
+            cur.execute("REFRESH MATERIALIZED VIEW h3_recurrence_stats")
+            logger.info("✓ Materialized view refreshed")
+        except Exception as exc:
+            logger.warning("Could not refresh materialized view: %s", exc)
+        
+        cur.close()
+        conn.close()
+        
+        print("\n=== H3 Population Complete ===")
+        return True
+        
+    except Exception as exc:
+        logger.error("H3 population failed: %s", exc)
+        return False
+
+
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)

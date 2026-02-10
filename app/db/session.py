@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from app.core.config import settings
 
 # Create engine with connection pooling
@@ -12,17 +13,13 @@ engine = create_engine(
 )
 
 # Session factory
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db():
     """
     Dependency for FastAPI endpoints.
-    
+
     Usage:
         @app.get("/fires")
         def get_fires(db: Session = Depends(get_db)):

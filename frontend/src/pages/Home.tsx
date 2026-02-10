@@ -1,55 +1,119 @@
-import { useMemo, useState } from 'react'
-import { Trees } from 'lucide-react'
-import { StoriesBar } from '@/components/stories-bar'
-import { FireCard } from '@/components/fire-card'
-import { FireFilters } from '@/components/fire-filters'
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
+import { Link } from 'react-router-dom'
+import { ArrowRight, Trees } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useI18n } from '@/context/LanguageContext'
-import { fires } from '@/data/mockdata'
+import { useActiveEpisodes } from '@/hooks/queries/useActiveEpisodes'
+import { queryClient, queryKeys } from '@/lib/queryClient'
+import { getActiveEpisodes } from '@/services/endpoints/episodes'
+import { FireCardSkeleton } from '@/components/fires/fire-card'
+
+const StoriesBar = lazy(() => import('@/components/stories-bar').then((m) => ({ default: m.StoriesBar })))
+const FireCard = lazy(() => import('@/components/fires/fire-card').then((m) => ({ default: m.FireCard })))
+const FireFilters = lazy(() => import('@/components/fire-filters').then((m) => ({ default: m.FireFilters })))
+
+const DEFAULT_LIMIT = 20
 
 export default function HomePage() {
   const { t } = useI18n()
   const [selectedProvince, setSelectedProvince] = useState('all')
-  const [selectedStatus, setSelectedStatus] = useState('all')
+  const gridRef = useRef<HTMLDivElement | null>(null)
+  const [gridVisible, setGridVisible] = useState(false)
+  const [slideStage, setSlideStage] = useState(1) // 1: primer thumbnail, 2: segundo, 3: tercero
 
-  const filteredFires = useMemo(() => {
-    return fires.filter((fire) => {
-      const matchesProvince = selectedProvince === 'all' || fire.province === selectedProvince
-      const matchesStatus = selectedStatus === 'all' || fire.status === selectedStatus
-      return matchesProvince && matchesStatus
+  const { data, isLoading } = useActiveEpisodes(DEFAULT_LIMIT)
+  const episodes = data?.episodes ?? []
+
+  useEffect(() => {
+    // Prefetch same query so return navigation hits cache
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.episodes.active(DEFAULT_LIMIT),
+      queryFn: ({ signal }) => getActiveEpisodes(DEFAULT_LIMIT, signal),
+      staleTime: 5 * 60 * 1000,
+      cacheTime: 30 * 60 * 1000,
     })
-  }, [selectedProvince, selectedStatus])
+  }, [])
+
+  const filteredEpisodes = useMemo(() => {
+    return episodes.filter((episode) => {
+      const province = episode.provinces?.[0]
+      const matchesProvince = selectedProvince === 'all' || province === selectedProvince
+      return matchesProvince && (episode.slides_data?.length ?? 0) > 0
+    })
+  }, [episodes, selectedProvince])
+
+  useEffect(() => {
+    if (!gridRef.current) return
+    const node = gridRef.current
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (entry.isIntersecting) {
+          setGridVisible(true)
+          observer.disconnect()
+        }
+      },
+      { rootMargin: '200px 0px', threshold: 0.15 }
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!gridVisible) return
+    setSlideStage(1)
+    const t1 = setTimeout(() => setSlideStage(2), 200)
+    const t2 = setTimeout(() => setSlideStage(3), 400)
+    return () => {
+      clearTimeout(t1)
+      clearTimeout(t2)
+    }
+  }, [gridVisible, episodes.length])
 
   return (
     <div className="min-h-screen bg-background">
-      <StoriesBar fires={fires} />
+      <Suspense fallback={null}>
+        <StoriesBar fires={filteredEpisodes} />
+      </Suspense>
 
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <Trees className="h-8 w-8 text-primary" />
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">{t('fireFeed')}</h1>
-              <p className="text-sm text-muted-foreground">
-                {filteredFires.length} {t('active').toLowerCase()} / {fires.length} total
-              </p>
-            </div>
+            <Trees className="h-8 w-8 text-primary sm:hidden" />
+            <h1 className="text-2xl font-bold text-foreground sm:hidden">{t('fireFeed')}</h1>
+            <h1 className="hidden text-2xl font-bold text-foreground sm:block">
+              {t('activeFiresArgentina')}
+            </h1>
           </div>
 
-          <FireFilters
-            selectedProvince={selectedProvince}
-            selectedStatus={selectedStatus}
-            onProvinceChange={setSelectedProvince}
-            onStatusChange={setSelectedStatus}
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            <Suspense fallback={null}>
+              <FireFilters
+                selectedProvince={selectedProvince}
+                onProvinceChange={setSelectedProvince}
+              />
+            </Suspense>
+            <Button asChild variant="outline" className="ml-auto gap-2 sm:ml-0">
+              <Link to="/fires/history">
+                {t('fireHistory')}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
 
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredFires.map((fire) => (
-            <FireCard key={fire.id} fire={fire} />
-          ))}
+        <div ref={gridRef} className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {(!gridVisible || isLoading) && <FireCardSkeleton />}
+          {gridVisible &&
+            !isLoading &&
+            filteredEpisodes.map((episode) => (
+              <Suspense key={episode.id} fallback={<FireCardSkeleton />}>
+                <FireCard key={episode.id} fire={episode} slideStage={slideStage} />
+              </Suspense>
+            ))}
         </div>
 
-        {filteredFires.length === 0 && (
+        {!isLoading && filteredEpisodes.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Trees className="mb-4 h-16 w-16 text-muted-foreground" />
             <p className="text-lg text-muted-foreground">

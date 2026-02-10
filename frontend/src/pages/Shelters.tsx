@@ -14,18 +14,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useI18n } from '@/context/LanguageContext'
 import { shelters as mockShelters, type Shelter } from '@/data/mockdata'
+import { createVisitorLog, getShelters, type VisitorLogPayload } from '@/services/endpoints/shelters'
 
 type ShelterOption = Shelter & { id: string }
-
-type VisitorLogPayload = {
-  shelter_id: string
-  visit_date: string
-  registration_type: 'day_entry' | 'overnight'
-  group_leader_name: string
-  contact_email?: string
-  contact_phone?: string
-  companions: Array<{ full_name: string }>
-}
 
 export default function SheltersPage() {
   const { t } = useI18n()
@@ -57,9 +48,7 @@ export default function SheltersPage() {
   useEffect(() => {
     const loadShelters = async () => {
       try {
-        const response = await fetch('/api/v1/shelters')
-        if (!response.ok) throw new Error('Failed to load shelters')
-        const data = await response.json()
+        const data = await getShelters()
         if (Array.isArray(data.shelters)) {
           setShelterOptions(data.shelters)
           return
@@ -80,14 +69,7 @@ export default function SheltersPage() {
       const remaining: VisitorLogPayload[] = []
       for (const item of queue) {
         try {
-          const response = await fetch('/api/v1/visitor-logs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(item),
-          })
-          if (!response.ok) {
-            remaining.push(item)
-          }
+          await createVisitorLog(item)
         } catch {
           remaining.push(item)
         }
@@ -121,11 +103,7 @@ export default function SheltersPage() {
     }
 
     if (isOnline) {
-      await fetch('/api/v1/visitor-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+      await createVisitorLog(payload)
     } else {
       const offlineQueue = JSON.parse(localStorage.getItem('visitorLogQueue') || '[]')
       offlineQueue.push(payload)
@@ -144,7 +122,7 @@ export default function SheltersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="bg-background">
       <div className="container mx-auto max-w-2xl px-4 py-8">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">

@@ -1,31 +1,26 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Trees, LogIn, AlertCircle, Globe, Sun, Moon } from 'lucide-react'
+import { Trees, AlertCircle, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { Separator } from '@/components/ui/separator'
+import { AnimatedGradientText } from '@/components/ui/AnimatedGradientText'
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
-import { useTheme } from 'next-themes'
+import bosqueLanding from '@/assets/bosque_landing.jpeg'
 
 export default function LoginPage() {
   const navigate = useNavigate()
-  const { t, language, setLanguage } = useI18n()
-  const { login } = useAuth()
-  const { theme, setTheme } = useTheme()
+  const { t } = useI18n()
+  const { signIn, signInWithGoogle } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -38,123 +33,179 @@ export default function LoginPage() {
 
     setIsLoading(true)
 
-    await new Promise((resolve) => setTimeout(resolve, 800))
-
-    const success = login(email, password)
-
-    if (success) {
+    try {
+      await signIn(email, password)
       navigate('/')
-    } else {
-      setError(t('loginError'))
+    } catch {
+      setError(t('loginInvalid'))
     }
 
     setIsLoading(false)
   }
 
+  const handleGoogleSignIn = async () => {
+    setError('')
+    setIsGoogleLoading(true)
+
+    try {
+      await signInWithGoogle()
+    } catch {
+      setError(t('loginInvalid'))
+    }
+
+    setIsGoogleLoading(false)
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-primary/5 to-background p-4">
-      <div className="fixed right-4 top-4 flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Globe className="h-5 w-5" />
-              <span className="sr-only">Toggle language</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setLanguage('es')}>
-              <span className={language === 'es' ? 'font-bold' : ''}>Español</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setLanguage('en')}>
-              <span className={language === 'en' ? 'font-bold' : ''}>English</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+    <div className="relative min-h-screen bg-background p-6 md:p-8">
+      <Link to="/" className="absolute left-6 top-6 flex items-center gap-2 md:left-8 md:top-8">
+        <Trees className="h-8 w-8 text-primary" />
+        <span className="text-xl font-bold text-foreground">ForestGuard</span>
+      </Link>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-        >
-          <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-          <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-          <span className="sr-only">Toggle theme</span>
-        </Button>
-      </div>
-
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-            <Trees className="h-8 w-8 text-primary" />
-          </div>
-          <CardTitle className="text-2xl font-bold">ForestGuard</CardTitle>
-          <CardDescription>{t('login')} to access all features</CardDescription>
-        </CardHeader>
-
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="email">{t('email')}</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="user@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
+      <div className="grid min-h-[calc(100vh-3rem)] grid-cols-1 items-center gap-10 lg:grid-cols-2">
+        <div className="flex items-center justify-center">
+          <div className="w-full max-w-lg text-left">
+            {/* Hero Section */}
+            <section className="flex flex-col gap-4 mb-8">
+              {/* H1 - componente animado */}
+              <AnimatedGradientText
+                as="h1"
+                text="La huella del fuego, vista desde el espacio."
+                className="text-4xl lg:text-5xl font-bold tracking-tight leading-tight"
+                duration={1.2}
+                delay={0.2}
+                data-testid="hero-title"
               />
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">{t('password')}</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="********"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-            </div>
+              {/* H2 */}
+              <h2 className="text-xl lg:text-2xl text-muted-foreground font-medium">
+                Genera líneas de tiempo satelitales de incendios en Argentina.
+              </h2>
 
-            <Button type="submit" className="w-full gap-2" disabled={isLoading}>
-              {isLoading ? (
-                'Loading...'
-              ) : (
-                <>
-                  <LogIn className="h-4 w-4" />
-                  {t('loginButton')}
-                </>
+              {/* Leyenda */}
+              <p className="text-base text-muted-foreground/80 leading-relaxed">
+                Compara el antes y el después: detecta revegetación natural o
+                construcciones no autorizadas en zonas afectadas.
+              </p>
+            </section>
+
+            <form onSubmit={handleSubmit} className="space-y-4 text-left" data-testid="login-form">
+              {error && (
+                <Alert variant="destructive" data-testid="login-error" role="alert" aria-live="polite">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               )}
-            </Button>
-          </form>
 
-          <div className="mt-4 rounded-lg border border-border bg-muted/50 p-3 text-xs text-muted-foreground">
-            <p className="mb-1 font-medium">Demo Accounts:</p>
-            <p>- Any email: Regular User</p>
-            <p>- admin@forestguard.ar: Administrator</p>
+              <div className="space-y-2">
+                <Label htmlFor="email">{t('email')}</Label>
+                <Input
+                  id="email"
+                  data-testid="login-email"
+                  type="email"
+                  placeholder="user@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">{t('password')}</Label>
+                <Input
+                  id="password"
+                  data-testid="login-password"
+                  type="password"
+                  placeholder="********"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <Button
+                  type="button"
+                  className="w-full gap-2"
+                  onClick={handleGoogleSignIn}
+                  disabled={isGoogleLoading}
+                  aria-label={t('loginGoogle')}
+                  data-testid="login-google"
+                >
+                  <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#FFFFFF"
+                      d="M23.22 12.27c0-.85-.08-1.48-.21-2.14H12v4.05h6.42c-.13 1.05-.84 2.63-2.42 3.69l-.02.14 3.49 2.71.24.02c2.19-2.02 3.51-4.99 3.51-8.47Z"
+                    />
+                    <path
+                      fill="#FFFFFF"
+                      d="M12 23c3.24 0 5.95-1.07 7.94-2.91l-3.78-2.93c-1.01.7-2.36 1.19-4.16 1.19-3.18 0-5.88-2.02-6.84-4.82l-.14.01-3.63 2.81-.05.13C3.32 20.68 7.32 23 12 23Z"
+                    />
+                    <path
+                      fill="#FFFFFF"
+                      d="M5.16 13.53A6.99 6.99 0 0 1 4.77 12c0-.53.09-1.04.23-1.53l-.01-.1-3.68-2.85-.12.06A11.97 11.97 0 0 0 0 12c0 1.94.47 3.78 1.3 5.41l3.86-2.88Z"
+                    />
+                    <path
+                      fill="#FFFFFF"
+                      d="M12 4.62c2.31 0 3.87 1 4.75 1.84l3.46-3.38C17.95.94 15.24 0 12 0 7.32 0 3.32 2.31 1.19 6.59l3.8 2.88C6.13 6.64 8.82 4.62 12 4.62Z"
+                    />
+                  </svg>
+                  {isGoogleLoading ? 'Loading...' : t('loginGoogle')}
+                </Button>
+
+                <Button
+                  type="submit"
+                  data-testid="login-submit"
+                  variant="outline"
+                  className="w-full gap-2"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    'Loading...'
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4" />
+                      {t('loginEmail')}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+
+            <div className="mt-6">
+              <div className="relative flex items-center">
+                <Separator className="absolute inset-0 top-1/2" />
+                <span className="relative mx-auto bg-background px-3 text-xs text-muted-foreground">
+                  {t('loginGuestDivider')}
+                </span>
+              </div>
+              <Button asChild variant="secondary" className="mt-4 w-full" data-testid="login-guest">
+                <Link to="/">{t('loginGuestAction')}</Link>
+              </Button>
+              <p className="mt-4 text-sm text-muted-foreground">
+                {t('noAccount')}{' '}
+                <Link to="/register" className="text-primary underline">
+                  {t('register')}
+                </Link>
+              </p>
+            </div>
           </div>
-        </CardContent>
+        </div>
 
-        <CardFooter className="flex flex-col gap-2 text-center text-sm text-muted-foreground">
-          <p>
-            {t('noAccount')}{' '}
-            <Link to="/" className="text-primary underline">
-              {t('register')}
-            </Link>
-          </p>
-          <Link to="/" className="text-primary underline">
-            Continue as {t('guest')}
-          </Link>
-        </CardFooter>
-      </Card>
+        <div className="hidden lg:block">
+          <div className="h-[calc(100vh-4rem)] w-full overflow-hidden rounded-3xl">
+            <img
+              src={bosqueLanding}
+              alt=""
+              aria-hidden="true"
+              className="h-full w-full object-cover"
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

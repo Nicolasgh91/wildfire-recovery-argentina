@@ -8,49 +8,46 @@ Services:
     - GEEService: Google Earth Engine access layer
     - VAEService: Vegetation Analysis Engine
     - ERSService: Evidence Reporting Service
-    - StorageService: Cloudflare R2 storage
+    - StorageService: Object storage (GCS/local/S3-compatible)
 """
-
-from .gee_service import (
-    GEEService,
-    GEEError,
-    GEEAuthenticationError,
-    GEEImageNotFoundError,
-    GEERateLimitError,
-    ImageMetadata,
-    NDVIResult,
-    ImageResult,
-)
-
-from .vae_service import (
-    VAEService,
-    RecoveryStatus,
-    LandUseChangeType,
-    AnomalyType,
-    Severity,
-    RecoveryAnalysis,
-    LandUseAnalysis,
-    TemporalAnalysis,
-    get_vae_service,
-)
 
 from .ers_service import (
     ERSService,
-    ReportType,
-    ReportStatus,
-    ReportRequest,
     ImageEvidence,
+    ReportRequest,
     ReportResult,
+    ReportStatus,
+    ReportType,
 )
-
+from .gee_service import (
+    GEEAuthenticationError,
+    GEEError,
+    GEEImageNotFoundError,
+    GEERateLimitError,
+    GEEService,
+    ImageMetadata,
+    ImageResult,
+    NDVIResult,
+)
 from .storage_service import (
-    StorageService,
     StorageError,
-    StorageUploadError,
     StorageNotFoundError,
-    UploadResult,
+    StorageService,
     StorageStats,
+    StorageUploadError,
+    UploadResult,
     get_storage_service,
+)
+from .vae_service import (
+    AnomalyType,
+    LandUseAnalysis,
+    LandUseChangeType,
+    RecoveryAnalysis,
+    RecoveryStatus,
+    Severity,
+    TemporalAnalysis,
+    VAEService,
+    get_vae_service,
 )
 
 __all__ = [

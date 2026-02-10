@@ -97,36 +97,43 @@ Write-Host ""
 # 3. GCS Connectivity (OPTIONAL - requires credentials)
 # =============================================================================
 Write-Host "=== 3. GCS Connectivity (OPTIONAL) ===" -ForegroundColor Cyan
-Write-Host -NoNewline "Running GCS test script... "
 
-if (Test-Path "scripts/test_gcs_conn.py") {
-    try {
-        $gcsResult = python scripts/test_gcs_conn.py 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "PASSED" -ForegroundColor Green
-            $script:PASSED++
-            
-            # Check if report was generated
-            if (Test-Path "artifacts/gcs_conn_report.json") {
-                Write-Host "  Report: artifacts/gcs_conn_report.json" -ForegroundColor Gray
+if ($env:SKIP_GCS -eq "1") {
+    Write-Host "SKIPPED (SKIP_GCS=1)" -ForegroundColor Yellow
+    $script:WARNINGS++
+    Write-Host ""
+} else {
+    Write-Host -NoNewline "Running GCS test script... "
+
+    if (Test-Path "scripts/test_gcs_conn.py") {
+        try {
+            $gcsResult = python scripts/test_gcs_conn.py 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "PASSED" -ForegroundColor Green
+                $script:PASSED++
+                
+                # Check if report was generated
+                if (Test-Path "artifacts/gcs_conn_report.json") {
+                    Write-Host "  Report: artifacts/gcs_conn_report.json" -ForegroundColor Gray
+                }
+            } else {
+                Write-Host "FAILED" -ForegroundColor Yellow -NoNewline
+                Write-Host " (see output above for details)"
+                $script:WARNINGS++
+                Write-Host "  Note: GCS test requires valid credentials" -ForegroundColor Gray
             }
-        } else {
-            Write-Host "FAILED" -ForegroundColor Yellow -NoNewline
-            Write-Host " (see output above for details)"
+        } catch {
+            Write-Host "SKIPPED" -ForegroundColor Yellow -NoNewline
+            Write-Host " (error running script: $($_.Exception.Message))"
             $script:WARNINGS++
-            Write-Host "  Note: GCS test requires valid credentials" -ForegroundColor Gray
         }
-    } catch {
+    } else {
         Write-Host "SKIPPED" -ForegroundColor Yellow -NoNewline
-        Write-Host " (error running script: $($_.Exception.Message))"
+        Write-Host " (test_gcs_conn.py not found)"
         $script:WARNINGS++
     }
-} else {
-    Write-Host "SKIPPED" -ForegroundColor Yellow -NoNewline
-    Write-Host " (test_gcs_conn.py not found)"
-    $script:WARNINGS++
+    Write-Host ""
 }
-Write-Host ""
 
 # =============================================================================
 # 4. Celery Workers (OPTIONAL - requires Redis)
