@@ -65,7 +65,9 @@ def _reset_if_new_day() -> None:
                 logger.info(f"Rate limiter reset for new day: {today}")
 
 
-def _send_block_alert(target: str, request_count: int, is_ip: bool = True) -> None:
+def _send_block_alert(
+    target: str, request_count: int, limit: int, is_ip: bool = True
+) -> None:
     """Send email alert when an IP or Key is blocked."""
     if not settings.ALERT_EMAIL or not settings.SMTP_HOST:
         return
@@ -76,8 +78,6 @@ def _send_block_alert(target: str, request_count: int, is_ip: bool = True) -> No
         msg["To"] = settings.ALERT_EMAIL
         subject = f"⚠️ ForestGuard: {'IP' if is_ip else 'API Key'} Blocked - {target}"
         msg["Subject"] = subject
-
-        limit = LIMIT_IP_DAILY if is_ip else LIMIT_USER_DAILY
 
         body = f"""
 ForestGuard Security Alert
@@ -121,7 +121,9 @@ def get_client_ip(request: Request) -> str:
 
 
 async def check_rate_limit(
-    request: Request, user: Optional[UserPrincipal] = Depends(get_current_user_optional)
+    request: Request,
+    user: Optional[UserPrincipal] = Depends(get_current_user_optional),
+    limit_ip_daily: int = LIMIT_IP_DAILY,
 ) -> None:
     """
     Unified rate limiter:
@@ -144,7 +146,7 @@ async def check_rate_limit(
 
         if count > LIMIT_USER_DAILY:
             logger.warning(f"API Key {key_masked} exceeded limit ({count})")
-            _send_block_alert(key_masked, count, is_ip=False)
+            _send_block_alert(key_masked, count, LIMIT_USER_DAILY, is_ip=False)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Daily API limit exceeded for this key.",
@@ -163,11 +165,11 @@ async def check_rate_limit(
         _ip_counts[client_ip] += 1
         count = _ip_counts[client_ip]
 
-    if count > LIMIT_IP_DAILY:
+    if count > limit_ip_daily:
         with _lock:
             _blocked_ips.add(client_ip)
         logger.warning(f"IP {client_ip} blocked after {count} requests")
-        _send_block_alert(client_ip, count, is_ip=True)
+        _send_block_alert(client_ip, count, limit_ip_daily, is_ip=True)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Rate limit exceeded. IP blocked.",
@@ -226,3 +228,15 @@ def get_rate_limit_stats() -> dict:
         "ip_counts": dict(_ip_counts),
         "contact_windows": {ip: len(window) for ip, window in _contact_windows.items()},
     }
+
+
+def make_rate_limiter(limit_ip_daily: int):
+    """Return a dependency that enforces a custom anonymous IP daily limit."""
+
+    async def _limit(
+        request: Request,
+        user: Optional[UserPrincipal] = Depends(get_current_user_optional),
+    ) -> None:
+        await check_rate_limit(request, user=user, limit_ip_daily=limit_ip_daily)
+
+    return _limit

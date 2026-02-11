@@ -8,11 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.core.rate_limiter import check_rate_limit
+from app.core.rate_limiter import make_rate_limiter
 from app.schemas.fire import ExplorationPreviewResponse, FireSearchResponse
 from app.services.fire_service import FireFilterParams, FireService
 
 router = APIRouter()
+public_search_rate_limit = make_rate_limiter(limit_ip_daily=200)
 
 
 def get_fire_service(db: Session = Depends(deps.get_db)) -> FireService:
@@ -59,7 +60,7 @@ def _parse_bbox(
     response_model=FireSearchResponse,
     summary="Buscar incendios (exploraciÃ³n)",
     description="BÃºsqueda humana por provincia, fechas, texto libre y bbox.",
-    dependencies=[Depends(check_rate_limit)],
+    dependencies=[Depends(public_search_rate_limit)],
 )
 def search_fire_events(
     province: Optional[List[str]] = Query(None, description="Provincia(s)"),
@@ -96,7 +97,7 @@ def search_fire_events(
     response_model=ExplorationPreviewResponse,
     summary="Preview de exploraciÃ³n sin GEE",
     description="Devuelve perÃ­metro, bbox, fechas clave y timeline sugerida.",
-    dependencies=[Depends(check_rate_limit)],
+    dependencies=[Depends(public_search_rate_limit)],
 )
 def get_exploration_preview(
     fire_event_id: UUID,

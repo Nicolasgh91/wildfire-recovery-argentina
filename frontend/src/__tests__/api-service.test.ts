@@ -87,4 +87,27 @@ describe('ApiService', () => {
     expect(toast.error).toHaveBeenCalledWith('Session expired')
     expect(assignSpy).toHaveBeenCalledWith('/login')
   })
+
+  it('skips auth redirect when X-Skip-Auth-Redirect is set', async () => {
+    vi.stubEnv('VITE_USE_SUPABASE_JWT', 'true')
+    const { responseErrorInterceptor } = await import('../services/api')
+    const assignSpy = vi.fn()
+    vi.stubGlobal('location', { ...window.location, assign: assignSpy })
+
+    const config = {
+      headers: { 'X-Skip-Auth-Redirect': 'true' },
+    } as InternalAxiosRequestConfig & { _retryCount?: number }
+
+    const error = new AxiosError(
+      'Unauthorized',
+      'ERR_BAD_REQUEST',
+      config,
+      {},
+      { status: 401 } as never
+    )
+
+    await expect(responseErrorInterceptor(error)).rejects.toBe(error)
+    expect(toast.error).not.toHaveBeenCalledWith('Session expired')
+    expect(assignSpy).not.toHaveBeenCalled()
+  })
 })
