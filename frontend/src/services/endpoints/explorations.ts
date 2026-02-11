@@ -21,7 +21,8 @@ export async function createExploration(
   const headers = await buildAuthHeaders()
   const response = await apiClient.post<ExplorationResponse>('/explorations/', payload, {
     headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' },
-  })
+    skipAuthRedirect: true,
+  } as any)
   return response.data
 }
 
@@ -33,7 +34,7 @@ export async function updateExploration(
   const response = await apiClient.patch<ExplorationResponse>(
     `/explorations/${explorationId}`,
     payload,
-    { headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' } },
+    { headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' }, skipAuthRedirect: true } as any,
   )
   return response.data
 }
@@ -46,7 +47,7 @@ export async function addExplorationItem(
   const response = await apiClient.post<ExplorationItemResponse>(
     `/explorations/${explorationId}/items`,
     payload,
-    { headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' } },
+    { headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' }, skipAuthRedirect: true } as any,
   )
   return response.data
 }
@@ -58,7 +59,8 @@ export async function deleteExplorationItem(
   const headers = await buildAuthHeaders()
   await apiClient.delete(`/explorations/${explorationId}/items/${itemId}`, {
     headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' },
-  })
+    skipAuthRedirect: true,
+  } as any)
 }
 
 export async function getExplorationQuote(
@@ -68,7 +70,7 @@ export async function getExplorationQuote(
   const response = await apiClient.post<ExplorationQuoteResponse>(
     `/explorations/${explorationId}/quote`,
     undefined,
-    { headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' } },
+    { headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' }, skipAuthRedirect: true } as any,
   )
   return response.data
 }
@@ -86,7 +88,7 @@ export async function generateExploration(
   const response = await apiClient.post<ExplorationGenerateResponse>(
     `/explorations/${explorationId}/generate`,
     {},
-    { headers },
+    { headers, skipAuthRedirect: true } as any,
   )
   return response.data
 }
