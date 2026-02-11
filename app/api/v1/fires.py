@@ -20,8 +20,8 @@ Endpoints:
     DELETE /filters/{filter_id} - Delete a saved filter
 
 Authentication:
-    - Public endpoints: list_fires, list_active_fires_for_home
-    - API Key or JWT required: export_fires
+    - Public endpoints: list_fires, list_active_fires_for_home, get_fire_detail
+    - API Key or JWT required: export_fires, stats
     - JWT required: saved filters management
 
 Rate Limiting:
@@ -386,8 +386,8 @@ def list_provinces(
 @router.get(
     "/{fire_id}",
     response_model=FireDetailResponse,
-    summary="Detalle de incendio",
-    dependencies=[Depends(require_fire_access)],
+    summary="Detalle de incendio (público)",
+    description="Obtiene detalles de un incendio por ID de evento o episodio. Endpoint público para permitir compartir enlaces.",
 )
 def get_fire_detail(
     fire_id: UUID,
