@@ -52,6 +52,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.evidence import SatelliteImage
+from app.models.episode import FireEpisodeEvent
 from app.models.fire import FireDetection, FireEvent
 from app.models.region import FireProtectedAreaIntersection, ProtectedArea
 from app.schemas.fire import (
@@ -900,6 +901,32 @@ class FireService:
             detections=detection_briefs,
             related_fires_count=0,
         )
+
+    def get_fire_detail_by_episode(self, episode_id: UUID) -> Optional[FireDetailResponse]:
+        representative_event = (
+            self.db.query(FireEvent.id)
+            .join(FireEpisodeEvent, FireEpisodeEvent.event_id == FireEvent.id)
+            .filter(FireEpisodeEvent.episode_id == episode_id)
+            .order_by(
+                case(
+                    (
+                        FireEvent.status.in_(
+                            [FireStatus.ACTIVE.value, FireStatus.MONITORING.value]
+                        ),
+                        0,
+                    ),
+                    else_=1,
+                ),
+                desc(FireEvent.end_date),
+                desc(FireEvent.start_date),
+            )
+            .first()
+        )
+
+        if not representative_event:
+            return None
+
+        return self.get_fire_detail(representative_event.id)
 
     def _summary_query(self, filters: List[Any]):
         now = datetime.now(timezone.utc)

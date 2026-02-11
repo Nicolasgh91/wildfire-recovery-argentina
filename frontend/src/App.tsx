@@ -113,14 +113,7 @@ export default function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route
-                    path="/fires/:id"
-                    element={
-                      <ProtectedRoute>
-                        <FireDetailPage />
-                      </ProtectedRoute>
-                    }
-                  />
+                  <Route path="/fires/:id" element={<FireDetailPage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
                   <Route

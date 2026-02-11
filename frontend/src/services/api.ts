@@ -80,7 +80,7 @@ export function requestInterceptor(config: InternalAxiosRequestConfig) {
   }
 
   const token = getAuthToken()
-  if (token && USE_SUPABASE_JWT) {
+  if (token) {
     setHeaderValue(headers, 'Authorization', `Bearer ${token}`)
   }
 
