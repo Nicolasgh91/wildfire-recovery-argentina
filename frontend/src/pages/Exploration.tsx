@@ -448,6 +448,10 @@ export default function ExplorationPage() {
       const data = await getExplorationPreview(fire.id)
       setPreview(data)
     } catch (error) {
+      if ((error as { response?: { status?: number } })?.response?.status === 401) {
+        setShowAuthDialog(true)
+        return
+      }
       toast.error(t('technicalError'))
     } finally {
       setPreviewLoading(false)
@@ -591,6 +595,10 @@ export default function ExplorationPage() {
       setQuote(quoteResponse)
       setSyncedSignature(itemsSignature)
     } catch (error) {
+      if ((error as { response?: { status?: number } })?.response?.status === 401) {
+        setShowAuthDialog(true)
+        return
+      }
       toast.error(t('technicalError'))
     } finally {
       setSyncing(false)

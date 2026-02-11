@@ -898,7 +898,7 @@ export default function FireHistoryPage() {
                         dataKey="frp"
                         fill="var(--color-frp)"
                         radius={[4, 4, 0, 0]}
-                        label={{ position: 'top', formatter: (v: number) => v.toFixed(0), fill: 'var(--color-foreground)', fontSize: 11 }}
+                        label={{ position: 'top', formatter: (v: number) => v.toFixed(0), fontSize: 11 }}
                       />
                     </BarChart>
                   </ResponsiveContainer>

@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Download,
   Loader2,
-  MapPin,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -25,13 +24,6 @@ import {
 } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   Form,
   FormControl,
@@ -62,11 +54,9 @@ const mapFallback = (
   </div>
 )
 
-type SearchType = 'address' | 'locality' | 'park' | 'province'
-
 type AuditFormValues = {
   search?: string
-  search_type: SearchType
+  search_type: 'address'
   radius_m: number
   lat?: string
   lon?: string
@@ -79,24 +69,14 @@ const AREA_PRESETS = [
   { label: 'Amplio (3 km)', value: 3000 },
 ]
 
-const SEARCH_TYPE_RULES: Record<SearchType, { minLength: number; pattern: RegExp }> = {
-  address: { minLength: 5, pattern: /^[a-zA-Z0-9\s,.-]+$/ },
-  locality: { minLength: 3, pattern: /^[a-zA-Z\s]+$/ },
-  park: { minLength: 3, pattern: /^[a-zA-Z\s]+$/ },
-  province: { minLength: 2, pattern: /^[a-zA-Z\s]+$/ },
-}
-
 const buildAuditSchema = (messages: {
-  required: string
   invalid: string
   outOfRange: string
-  invalidFormat: string
-  minLength: (value: number) => string
 }) =>
   z
     .object({
       search: z.string().trim().optional(),
-      search_type: z.enum(['address', 'locality', 'park', 'province']),
+      search_type: z.literal('address'),
       radius_m: z.number().min(100, { message: messages.outOfRange }).max(5000, { message: messages.outOfRange }),
       lat: z
         .string()
@@ -112,32 +92,33 @@ const buildAuditSchema = (messages: {
         .refine((val) => !val || (Number(val) >= -180 && Number(val) <= 180), { message: messages.outOfRange }),
       cadastral_id: z.string().trim().optional(),
     })
-    .superRefine((values, ctx) => {
-      const searchValue = values.search?.trim() ?? ''
-      if (!searchValue) return
-      const rule = SEARCH_TYPE_RULES[values.search_type]
-      if (searchValue.length < rule.minLength) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['search'],
-          message: messages.minLength(rule.minLength),
-        })
-        return
-      }
-      if (!rule.pattern.test(searchValue)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['search'],
-          message: messages.invalidFormat,
-        })
-      }
-    })
+
 
 const formatDate = (value: string | null | undefined, locale: string) => {
   if (!value) return '-'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
   return new Intl.DateTimeFormat(locale).format(date)
+}
+
+
+const getDurationDays = (startDate: string, endDate?: string | null) => {
+  const start = new Date(startDate)
+  const end = endDate ? new Date(endDate) : new Date()
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null
+  const diffMs = Math.max(end.getTime() - start.getTime(), 0)
+  return Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
+}
+
+const getRecoverySignal = (status?: string | null) => {
+  const normalized = (status ?? '').toLowerCase()
+  if (normalized === 'extinct' || normalized === 'extinguished') {
+    return { label: 'Recuperación positiva', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' }
+  }
+  if (normalized === 'monitoring') {
+    return { label: 'Recuperación en monitoreo', className: 'bg-amber-100 text-amber-800 border-amber-200' }
+  }
+  return { label: 'Impacto activo', className: 'bg-rose-100 text-rose-800 border-rose-200' }
 }
 
 const getProtectedAreaLabel = (fire: AuditFire, fallback: string) => {
@@ -153,7 +134,6 @@ export default function AuditPage() {
   const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const [analysisPreset, setAnalysisPreset] = useState(1000)
-  const [mapVisible, setMapVisible] = useState(true)
   const [localError, setLocalError] = useState<string | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchResult, setSearchResult] = useState<AuditSearchResponse | null>(null)
@@ -164,11 +144,8 @@ export default function AuditPage() {
   const schema = useMemo(
     () =>
       buildAuditSchema({
-        required: t('requiredField'),
         invalid: t('invalidNumber'),
         outOfRange: t('outOfRange'),
-        invalidFormat: t('searchTypeInvalidFormat'),
-        minLength: (value) => t('searchTypeMinLength').replace('{min}', String(value)),
       }),
     [t],
   )
@@ -343,26 +320,12 @@ export default function AuditPage() {
 
         <div className="grid gap-6 lg:grid-cols-2 lg:auto-rows-[minmax(0,1fr)]">
           {/* Mapa */}
-          <div className="space-y-3 h-full">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-muted-foreground">{t('map')}</h2>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => setMapVisible((prev) => !prev)}
-              >
-                <MapPin className="h-4 w-4" />
-                {mapVisible ? t('hideMap') : t('pickOnMap')}
-              </Button>
+          <div className="h-full">
+            <div className="h-full min-h-[400px] w-full rounded-lg border border-border bg-muted/20 p-2">
+              <Suspense fallback={mapFallback}>
+                <AuditMap onLocationSelect={handleMapSelect} />
+              </Suspense>
             </div>
-            {mapVisible && (
-              <div className="h-full min-h-[400px] w-full rounded-lg border border-border bg-muted/20 p-2">
-                <Suspense fallback={mapFallback}>
-                  <AuditMap onLocationSelect={handleMapSelect} />
-                </Suspense>
-              </div>
-            )}
           </div>
 
           {/* Panel derecho */}
@@ -374,30 +337,7 @@ export default function AuditPage() {
             <CardContent className="flex-1 space-y-4">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
-                    <FormField
-                      control={form.control}
-                      name="search_type"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('searchTypeLabel')}</FormLabel>
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={t('searchTypeLabel')} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="address">{t('searchTypeAddress')}</SelectItem>
-                              <SelectItem value="locality">{t('searchTypeLocality')}</SelectItem>
-                              <SelectItem value="park">{t('searchTypePark')}</SelectItem>
-                              <SelectItem value="province">{t('searchTypeProvince')}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  <div className="grid gap-3">
                     <FormField
                       control={form.control}
                       name="search"
@@ -566,7 +506,7 @@ export default function AuditPage() {
                     {searchResult.date_range?.earliest && (
                       <span>
                         {t('dateRange')}:{' '}
-                        {formatDate(searchResult.date_range.earliest, locale)} â€“{' '}
+                        {formatDate(searchResult.date_range.earliest, locale)} a{' '}
                         {formatDate(searchResult.date_range.latest ?? null, locale)}
                       </span>
                     )}
@@ -591,7 +531,7 @@ export default function AuditPage() {
                             <TableRow key={episode.id}>
                               <TableCell>
                                 {formatDate(episode.start_date, locale)}
-                                {episode.end_date ? ` â†’ ${formatDate(episode.end_date, locale)}` : ''}
+                                {episode.end_date ? ` a ${formatDate(episode.end_date, locale)}` : ''}
                               </TableCell>
                               <TableCell>{episode.status ?? '-'}</TableCell>
                               <TableCell>{episode.provinces?.[0] ?? '-'}</TableCell>
@@ -609,7 +549,49 @@ export default function AuditPage() {
                           ))}
                         </TableBody>
                       </Table>
-                      
+
+                      <Accordion type="single" collapsible className="w-full space-y-2">
+                        {paginatedEpisodes.map((episode) => {
+                          const durationDays = getDurationDays(episode.start_date, episode.end_date)
+                          const recoverySignal = getRecoverySignal(episode.status)
+                          const timelineLabel = `${formatDate(episode.start_date, locale)}${episode.end_date ? ` a ${formatDate(episode.end_date, locale)}` : ''}`
+
+                          return (
+                            <AccordionItem key={`details-${episode.id}`} value={`episode-${episode.id}`} className="rounded-md border px-3">
+                              <AccordionTrigger className="text-sm">Más información del episodio</AccordionTrigger>
+                              <AccordionContent>
+                                <div className="space-y-3 text-sm">
+                                  <div>
+                                    <p className="font-medium text-foreground">Línea de tiempo</p>
+                                    <div className="mt-2 h-2 w-full rounded-full bg-muted">
+                                      <div className="h-2 w-full rounded-full bg-primary/70" />
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                      <span>{timelineLabel}</span>
+                                      {durationDays ? <Badge variant="outline">Duración: {durationDays} días</Badge> : null}
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <p className="font-medium text-foreground">Evolución de vegetación (indicadores)</p>
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                      <Badge variant="secondary">FRP máx: {episode.frp_max ? numberFormatter.format(Math.round(episode.frp_max)) : '-'}</Badge>
+                                      <Badge variant="secondary">Área estimada: {episode.estimated_area_hectares ? `${numberFormatter.format(Math.round(episode.estimated_area_hectares))} ha` : '-'}</Badge>
+                                      <Badge variant="secondary">Detecciones: {episode.detection_count ? numberFormatter.format(episode.detection_count) : '-'}</Badge>
+                                    </div>
+                                  </div>
+
+                                  <div>
+                                    <p className="font-medium text-foreground">Señales de recuperación</p>
+                                    <Badge className={`mt-2 border ${recoverySignal.className}`}>{recoverySignal.label}</Badge>
+                                  </div>
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          )
+                        })}
+                      </Accordion>
+
                       {/* Controles de paginación */}
                       {totalPages > 1 && (
                         <div className="flex items-center justify-between pt-4">
