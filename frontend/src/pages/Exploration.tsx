@@ -306,6 +306,7 @@ export default function ExplorationPage() {
   const [syncedSignature, setSyncedSignature] = useState('')
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [showAuthDialog, setShowAuthDialog] = useState(false)
+  const [pauseAutoSync, setPauseAutoSync] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [trackingId, setTrackingId] = useState<string | null>(null)
 
@@ -367,9 +368,9 @@ export default function ExplorationPage() {
 
   useEffect(() => {
     if (step !== 3 || !preview || !selectedFire) return
-    if (!needsSync || syncing || draftItems.length === 0) return
+    if (!needsSync || syncing || draftItems.length === 0 || showAuthDialog || pauseAutoSync) return
     void syncDraftAndQuote()
-  }, [step, preview, selectedFire, needsSync, syncing, draftItems])
+  }, [step, preview, selectedFire, needsSync, syncing, draftItems, showAuthDialog, pauseAutoSync])
 
   const resetDraftState = () => {
     setDraftId(null)
@@ -377,6 +378,7 @@ export default function ExplorationPage() {
     setQuote(null)
     setSyncedSignature('')
     setTrackingId(null)
+    setPauseAutoSync(false)
   }
 
   const handleSearch = async (page: number = 1, append: boolean = false) => {
@@ -590,8 +592,10 @@ export default function ExplorationPage() {
       const quoteResponse = await getExplorationQuote(currentId!)
       setQuote(quoteResponse)
       setSyncedSignature(itemsSignature)
+      setPauseAutoSync(false)
     } catch (error) {
       if ((error as { response?: { status?: number } })?.response?.status === 401) {
+        setPauseAutoSync(true)
         setShowAuthDialog(true)
         return
       }
@@ -617,10 +621,16 @@ export default function ExplorationPage() {
     if (!canContinueToStep3 || status === 'loading') return
     if (isAuthenticated) {
       setShowAuthDialog(false)
+      setPauseAutoSync(false)
       setStep(3)
       return
     }
     setShowAuthDialog(true)
+  }
+
+  const handleAuthBack = () => {
+    setShowAuthDialog(false)
+    setStep(2)
   }
 
   const handleAuthRedirect = () => {
@@ -682,7 +692,7 @@ export default function ExplorationPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t('explorationAuthBack')}</AlertDialogCancel>
+            <AlertDialogCancel onClick={handleAuthBack}>{t('explorationAuthBack')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleAuthRedirect}>
               {t('explorationAuthLogin')}
             </AlertDialogAction>
