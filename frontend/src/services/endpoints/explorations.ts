@@ -19,7 +19,9 @@ export async function createExploration(
   payload: ExplorationCreateRequest,
 ): Promise<ExplorationResponse> {
   const headers = await buildAuthHeaders()
-  const response = await apiClient.post<ExplorationResponse>('/explorations/', payload, { headers })
+  const response = await apiClient.post<ExplorationResponse>('/explorations/', payload, {
+    headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' },
+  })
   return response.data
 }
 
@@ -31,7 +33,7 @@ export async function updateExploration(
   const response = await apiClient.patch<ExplorationResponse>(
     `/explorations/${explorationId}`,
     payload,
-    { headers },
+    { headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' } },
   )
   return response.data
 }
@@ -44,7 +46,7 @@ export async function addExplorationItem(
   const response = await apiClient.post<ExplorationItemResponse>(
     `/explorations/${explorationId}/items`,
     payload,
-    { headers },
+    { headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' } },
   )
   return response.data
 }
@@ -55,7 +57,7 @@ export async function deleteExplorationItem(
 ): Promise<void> {
   const headers = await buildAuthHeaders()
   await apiClient.delete(`/explorations/${explorationId}/items/${itemId}`, {
-    headers,
+    headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' },
   })
 }
 
@@ -66,7 +68,7 @@ export async function getExplorationQuote(
   const response = await apiClient.post<ExplorationQuoteResponse>(
     `/explorations/${explorationId}/quote`,
     undefined,
-    { headers },
+    { headers: { ...(headers ?? {}), 'X-Skip-Auth-Redirect': 'true' } },
   )
   return response.data
 }
@@ -76,7 +78,11 @@ export async function generateExploration(
   idempotencyKey: string,
 ): Promise<ExplorationGenerateResponse> {
   const authHeaders = await buildAuthHeaders()
-  const headers = { 'Idempotency-Key': idempotencyKey, ...(authHeaders ?? {}) }
+  const headers = {
+    'Idempotency-Key': idempotencyKey,
+    ...(authHeaders ?? {}),
+    'X-Skip-Auth-Redirect': 'true',
+  }
   const response = await apiClient.post<ExplorationGenerateResponse>(
     `/explorations/${explorationId}/generate`,
     {},
