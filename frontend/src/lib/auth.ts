@@ -6,8 +6,28 @@
 
 import { apiClient } from '@/services/api'
 
-// Match Supabase storage format for compatibility with getAuthToken()
-const STORAGE_KEY = 'sb-forestguard-auth-token'
+/**
+ * Derives the localStorage key for storing auth tokens
+ * Matches the logic in services/api.ts getAuthToken()
+ * Key format: sb-{projectRef}-auth-token where projectRef is extracted from VITE_SUPABASE_URL
+ */
+function getStorageKey(): string {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+  if (!supabaseUrl) {
+    return 'sb-forestguard-auth-token' // fallback for dev without Supabase
+  }
+
+  try {
+    const url = new URL(supabaseUrl)
+    const projectRef = url.hostname.split('.')[0]
+    return `sb-${projectRef}-auth-token`
+  } catch {
+    return 'sb-forestguard-auth-token'
+  }
+}
+
+// Dynamic storage key - matches getAuthToken() in services/api.ts
+const STORAGE_KEY = getStorageKey()
 
 interface AuthResponse {
   access_token: string
