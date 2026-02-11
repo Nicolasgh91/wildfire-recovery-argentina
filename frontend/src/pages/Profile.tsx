@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { User as UserIcon, Wallet } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/auth'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
