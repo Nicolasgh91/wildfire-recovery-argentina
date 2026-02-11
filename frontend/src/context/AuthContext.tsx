@@ -29,7 +29,13 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   signIn: (email: string, password: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
-  signUpWithEmail: (payload: { email: string; firstName: string; lastName: string }) => Promise<void>
+  signUpWithEmail: (payload: {
+    email: string
+    password: string
+    firstName: string
+    lastName: string
+    dni: string
+  }) => Promise<void>
   signOut: () => Promise<void>
   isAuthenticated: boolean
 }
@@ -38,7 +44,7 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 function mapRole(user: User | null): UserRole {
   if (!user) return 'anonymous'
-  return user.app_metadata?.role === 'admin' ? 'admin' : 'user'
+  return user.role === 'admin' ? 'admin' : 'user'
 }
 
 function buildState(session: Session | null): AuthState {
@@ -78,13 +84,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword(email, password)
     if (error) throw error
+    setState(buildState(data.session))
   }, [])
 
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    setState(buildState(null))
   }, [])
 
   const signInWithGoogle = useCallback(async () => {
@@ -95,22 +103,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     })
     if (error) throw error
+
+    const { data: { session } } = await supabase.auth.getSession()
+    setState(buildState(session))
   }, [])
 
   const signUpWithEmail = useCallback(
-    async (payload: { email: string; firstName: string; lastName: string }) => {
-      const { error } = await supabase.auth.signInWithOtp({
+    async (payload: {
+      email: string
+      password: string
+      firstName: string
+      lastName: string
+      dni: string
+    }) => {
+      const { data, error } = await supabase.auth.register({
         email: payload.email,
-        options: {
-          data: {
-            full_name: `${payload.firstName} ${payload.lastName}`.trim(),
-            first_name: payload.firstName,
-            last_name: payload.lastName,
-          },
-          emailRedirectTo: window.location.origin,
-        },
+        password: payload.password,
+        dni: payload.dni,
+        full_name: `${payload.firstName} ${payload.lastName}`.trim(),
       })
       if (error) throw error
+      setState(buildState(data.session))
     },
     []
   )

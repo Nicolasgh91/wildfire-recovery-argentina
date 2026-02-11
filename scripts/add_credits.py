@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import text
-from app.core.database import SessionLocal
+from app.db.session import SessionLocal
 
 
 def add_credits_to_user(user_id: str, amount: int, description: str = "Testing grant"):

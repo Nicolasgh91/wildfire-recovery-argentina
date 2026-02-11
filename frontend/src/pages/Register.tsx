@@ -17,6 +17,8 @@ const registerSchema = z.object({
   firstName: z.string().min(2, 'Campo requerido').max(50, 'Max 50 caracteres'),
   lastName: z.string().min(2, 'Campo requerido').max(50, 'Max 50 caracteres'),
   email: z.string().email('Email inválido'),
+  dni: z.string().regex(/^\d{7,8}$/, 'DNI debe tener 7-8 dígitos'),
+  password: z.string().min(8, 'Mínimo 8 caracteres'),
 })
 
 type RegisterValues = z.infer<typeof registerSchema>
@@ -45,6 +47,8 @@ export default function RegisterPage() {
     try {
       await signUpWithEmail({
         email: values.email,
+        password: values.password,
+        dni: values.dni,
         firstName: values.firstName,
         lastName: values.lastName,
       })
@@ -108,6 +112,22 @@ export default function RegisterPage() {
                 <Input id="email" type="email" autoComplete="email" {...register('email')} />
                 {errors.email && (
                   <p className="text-xs text-destructive">{errors.email.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="dni">DNI</Label>
+                <Input id="dni" inputMode="numeric" maxLength={8} {...register('dni')} />
+                {errors.dni && (
+                  <p className="text-xs text-destructive">{errors.dni.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">{t('password')}</Label>
+                <Input id="password" type="password" autoComplete="new-password" {...register('password')} />
+                {errors.password && (
+                  <p className="text-xs text-destructive">{errors.password.message}</p>
                 )}
               </div>
 

@@ -6,6 +6,22 @@
 
 import { apiClient } from '@/services/api'
 
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string
+            callback: (response: { credential?: string }) => void
+          }) => void
+          prompt: () => void
+        }
+      }
+    }
+  }
+}
+
 /**
  * Derives the localStorage key for storing auth tokens
  * Matches the logic in services/api.ts getAuthToken()
@@ -58,6 +74,13 @@ interface User {
   avatar_url: string | null
 }
 
+interface RegisterPayload {
+  email: string
+  password: string
+  full_name: string
+  dni: string
+}
+
 export const nativeAuth = {
   /**
    * Sign in with email and password
@@ -91,11 +114,56 @@ export const nativeAuth = {
       return { data: {}, error: new Error('Only Google OAuth is supported') }
     }
 
-    // For Google OAuth, we need to use the Google Sign-In SDK on the client side
-    // This is a placeholder - actual implementation should use google.accounts.id
-    return {
-      data: {},
-      error: new Error('Google OAuth not fully implemented - use Google Sign-In SDK')
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      return { data: {}, error: new Error('VITE_GOOGLE_CLIENT_ID is not configured') }
+    }
+
+    const google = window.google
+    if (!google?.accounts?.id) {
+      return { data: {}, error: new Error('Google Sign-In SDK is not loaded') }
+    }
+
+    return new Promise((resolve) => {
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: async (response) => {
+          if (!response.credential) {
+            resolve({ data: {}, error: new Error('Google OAuth cancelled') })
+            return
+          }
+
+          const result = await this.signInWithGoogleCredential(response.credential)
+          if (result.error) {
+            resolve({ data: {}, error: result.error })
+            return
+          }
+
+          resolve({ data: {}, error: null })
+        },
+      })
+
+      google.accounts.id.prompt()
+    })
+  },
+
+  /**
+   * Register a user with backend auth endpoint.
+   */
+  async register(payload: RegisterPayload): Promise<{ data: { session: Session | null }, error: Error | null }> {
+    try {
+      const response = await apiClient.post<AuthResponse>('/auth/register', payload)
+
+      const session: Session = {
+        access_token: response.data.access_token,
+        user: response.data.user,
+        expires_at: Date.now() + 24 * 60 * 60 * 1000,
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+
+      return { data: { session }, error: null }
+    } catch (error) {
+      return { data: { session: null }, error: error as Error }
     }
   },
 
