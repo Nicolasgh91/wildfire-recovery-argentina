@@ -6,6 +6,7 @@ from app.schemas.alerts import ClimateSnapshot
 
 @dataclass
 class AlertAssessment:
+    """Computed alert status for park capacity and climate risk."""
     occupancy_pct: float
     risk_score: float
     risk_level: str
@@ -14,6 +15,7 @@ class AlertAssessment:
 
 
 def _clamp(value: float, min_value: float, max_value: float) -> float:
+    """Clamp a numeric value to the provided range."""
     return max(min_value, min(max_value, value))
 
 

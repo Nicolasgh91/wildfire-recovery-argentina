@@ -14,6 +14,8 @@ export type EpisodeListItem = {
   start_date: string
   end_date?: string | null
   last_seen_at?: string | null
+  centroid_lat?: number | null
+  centroid_lon?: number | null
   provinces?: string[] | null
   event_count: number
   detection_count: number

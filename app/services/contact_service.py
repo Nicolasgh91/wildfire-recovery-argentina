@@ -27,11 +27,13 @@ MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024  # 5MB
 
 @dataclass
 class ContactAttachment:
+    """Attachment payload for contact requests."""
     meta: ContactAttachmentMeta
     content: bytes
 
 
 class ContactService:
+    """Service to validate and deliver contact emails."""
     def _validate_content_type(self, content_type: Optional[str]) -> None:
         if content_type is None:
             return

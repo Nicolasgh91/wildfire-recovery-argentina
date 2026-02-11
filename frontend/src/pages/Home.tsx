@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, Trees } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/context/LanguageContext'
-import { useActiveEpisodes } from '@/hooks/queries/useActiveEpisodes'
+import { useEpisodesByMode } from '@/hooks/queries/useEpisodesByMode'
 import { queryClient, queryKeys } from '@/lib/queryClient'
-import { getActiveEpisodes } from '@/services/endpoints/episodes'
+import { getEpisodes } from '@/services/endpoints/episodes'
 import { FireCardSkeleton } from '@/components/fires/fire-card'
 
 const StoriesBar = lazy(() => import('@/components/stories-bar').then((m) => ({ default: m.StoriesBar })))
@@ -20,27 +21,57 @@ export default function HomePage() {
   const gridRef = useRef<HTMLDivElement | null>(null)
   const [gridVisible, setGridVisible] = useState(false)
   const [slideStage, setSlideStage] = useState(1) // 1: primer thumbnail, 2: segundo, 3: tercero
+  const [showRecents, setShowRecents] = useState(false)
 
-  const { data, isLoading } = useActiveEpisodes(DEFAULT_LIMIT)
-  const episodes = data?.episodes ?? []
+  const { data: activeData, isLoading: loadingActive } = useEpisodesByMode('active', DEFAULT_LIMIT)
+  const { data: recentData, isLoading: loadingRecent } = useEpisodesByMode('recent', DEFAULT_LIMIT)
+  const activeEpisodes = activeData?.episodes ?? []
+  const recentEpisodes = recentData?.episodes ?? []
+  const isLoading = loadingActive || loadingRecent
 
   useEffect(() => {
     // Prefetch same query so return navigation hits cache
     queryClient.prefetchQuery({
-      queryKey: queryKeys.episodes.active(DEFAULT_LIMIT),
-      queryFn: ({ signal }) => getActiveEpisodes(DEFAULT_LIMIT, signal),
+      queryKey: queryKeys.episodes.mode('active', DEFAULT_LIMIT),
+      queryFn: ({ signal }) =>
+        getEpisodes({ mode: 'active', page: 1, page_size: DEFAULT_LIMIT }, signal),
+      staleTime: 5 * 60 * 1000,
+      cacheTime: 30 * 60 * 1000,
+    })
+    queryClient.prefetchQuery({
+      queryKey: queryKeys.episodes.mode('recent', DEFAULT_LIMIT),
+      queryFn: ({ signal }) =>
+        getEpisodes({ mode: 'recent', page: 1, page_size: DEFAULT_LIMIT }, signal),
       staleTime: 5 * 60 * 1000,
       cacheTime: 30 * 60 * 1000,
     })
   }, [])
 
+  const displayEpisodes = useMemo(() => {
+    if (activeEpisodes.length === 0) return recentEpisodes
+    if (!showRecents) return activeEpisodes
+
+    const seen = new Set<string>()
+    const merged = []
+    for (const episode of activeEpisodes) {
+      seen.add(episode.id)
+      merged.push(episode)
+    }
+    for (const episode of recentEpisodes) {
+      if (!seen.has(episode.id)) {
+        merged.push(episode)
+      }
+    }
+    return merged
+  }, [activeEpisodes, recentEpisodes, showRecents])
+
   const filteredEpisodes = useMemo(() => {
-    return episodes.filter((episode) => {
+    return displayEpisodes.filter((episode) => {
       const province = episode.provinces?.[0]
       const matchesProvince = selectedProvince === 'all' || province === selectedProvince
-      return matchesProvince && (episode.slides_data?.length ?? 0) > 0
+      return matchesProvince
     })
-  }, [episodes, selectedProvince])
+  }, [displayEpisodes, selectedProvince])
 
   useEffect(() => {
     if (!gridRef.current) return
@@ -68,7 +99,7 @@ export default function HomePage() {
       clearTimeout(t1)
       clearTimeout(t2)
     }
-  }, [gridVisible, episodes.length])
+  }, [gridVisible, displayEpisodes.length])
 
   return (
     <div className="min-h-screen bg-background">
@@ -93,6 +124,16 @@ export default function HomePage() {
                 onProvinceChange={setSelectedProvince}
               />
             </Suspense>
+            {activeEpisodes.length > 0 && recentEpisodes.length > 0 && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Switch
+                  id="show-recents"
+                  checked={showRecents}
+                  onCheckedChange={setShowRecents}
+                />
+                <label htmlFor="show-recents">{t('recentFiresToggle')}</label>
+              </div>
+            )}
             <Button asChild variant="outline" className="ml-auto gap-2 sm:ml-0">
               <Link to="/fires/history">
                 {t('fireHistory')}
@@ -117,7 +158,7 @@ export default function HomePage() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Trees className="mb-4 h-16 w-16 text-muted-foreground" />
             <p className="text-lg text-muted-foreground">
-              No fires found matching your filters
+              {t('recentFiresEmpty')}
             </p>
           </div>
         )}

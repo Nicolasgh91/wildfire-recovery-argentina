@@ -69,6 +69,7 @@ from app.schemas.exploration import (
     ExplorationUpdateRequest,
 )
 from app.services.exploration_service import ExplorationService
+from workers.tasks.exploration_hd_task import generate_exploration_hd
 
 router = APIRouter()
 
@@ -324,6 +325,8 @@ def generate_exploration(
         raise
 
     items_count = job.progress_total
+    if credits_spent > 0 and job.status == "queued":
+        generate_exploration_hd.delay(str(job.id))
     return ExplorationGenerateResponse(
         job_id=job.id,
         status=job.status,

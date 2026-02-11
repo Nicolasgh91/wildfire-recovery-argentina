@@ -69,6 +69,7 @@ from app.services.storage_service import BUCKETS, StorageService
 
 
 class ExplorationService:
+    """Service for satellite exploration workflows and pricing."""
     def __init__(self, db: Session):
         self.db = db
 

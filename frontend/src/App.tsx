@@ -87,11 +87,7 @@ export default function App() {
                   />
                   <Route
                     path="/exploracion"
-                    element={
-                      <ProtectedRoute>
-                        <ExplorationPage />
-                      </ProtectedRoute>
-                    }
+                    element={<ExplorationPage />}
                   />
                   <Route path="/reports" element={<Navigate to="/exploracion" replace />} />
                   <Route

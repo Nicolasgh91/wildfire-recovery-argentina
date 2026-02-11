@@ -1,64 +1,21 @@
 import logging
-import re
 import sys
 from pathlib import Path
 
 from app.core.config import settings
+from app.core.sanitizer import redact_pii
 
-
-def redact_pii(message: str) -> str:
-    """Redact personally identifiable information from log messages.
-
-    Sanitizes emails, IPs, JWT tokens, API keys, and passwords to comply
-    with Argentina's Ley 25.326 (Personal Data Protection) and GDPR.
-
-    Args:
-        message: The log message to sanitize.
-
-    Returns:
-        Sanitized message with PII redacted.
-    """
-    if not isinstance(message, str):
-        return str(message)
-
-    # Emails: user@example.com -> u***@example.com
-    message = re.sub(
-        r"[\w.-]+@[\w.-]+\.\w+",
-        lambda m: m.group()[0] + "***@" + m.group().split("@")[1],
-        message,
-    )
-
-    # IPs (IPv4): 192.168.1.100 -> 192.168.1.***
-    message = re.sub(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.)\d{1,3}\b", r"\1***", message)
-
-    # JWT tokens: eyJ... -> [JWT_REDACTED]
-    message = re.sub(
-        r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+",
-        "[JWT_REDACTED]",
-        message,
-    )
-
-    # API Keys: long hex strings (32+ chars)
-    message = re.sub(r"\b[a-fA-F0-9]{32,}\b", "[API_KEY_REDACTED]", message)
-
-    # Password values in common patterns
-    message = re.sub(
-        r'(password|passwd|pwd|secret)["\']?\s*[:=]\s*["\']?[^"\'&\s]+',
-        r"\1=[REDACTED]",
-        message,
-        flags=re.IGNORECASE,
-    )
-
-    return message
+try:
+    import structlog
+except Exception:  # pragma: no cover - fallback for test envs
+    structlog = None
 
 
 class PIIRedactingFormatter(logging.Formatter):
     """Custom formatter that redacts PII from log messages."""
 
     def format(self, record: logging.LogRecord) -> str:
-        # Redact the message
         record.msg = redact_pii(str(record.msg))
-        # Redact any args that might contain PII
         if record.args:
             record.args = tuple(
                 redact_pii(str(arg)) if isinstance(arg, str) else arg
@@ -67,39 +24,96 @@ class PIIRedactingFormatter(logging.Formatter):
         return super().format(record)
 
 
-def setup_logging():
-    """Configure logging for the application with PII redaction."""
-
-    # Create logs directory
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-
-    # Create PII-redacting formatter
+def _configure_standard_logging(log_dir: Path, log_level: int):
     formatter = PIIRedactingFormatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
-    # Console handler with PII redaction
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
 
-    # File handler with PII redaction
     file_handler = logging.FileHandler(log_dir / "wildfire_api.log")
     file_handler.setFormatter(formatter)
 
-    # Configure root logger
     root_logger = logging.getLogger()
-    root_logger.setLevel(getattr(logging, settings.LOG_LEVEL))
+    root_logger.handlers = []
+    root_logger.setLevel(log_level)
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
 
-    # Reduce noise from third-party libraries
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     logger = logging.getLogger(__name__)
     logger.info(
-        f"Logging configured - Level: {settings.LOG_LEVEL} (PII redaction enabled)"
+        "Logging configured (structlog unavailable). Level: %s", settings.LOG_LEVEL
+    )
+    return logger
+
+
+def _redact_structlog(_, __, event_dict):
+    for key, value in list(event_dict.items()):
+        if isinstance(value, str):
+            event_dict[key] = redact_pii(value)
+    return event_dict
+
+
+def _configure_structlog(log_dir: Path, log_level: int):
+    structlog.configure(
+        processors=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            _redact_structlog,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        wrapper_class=structlog.make_filtering_bound_logger(log_level),
+        cache_logger_on_first_use=True,
+    )
+
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processor=structlog.processors.JSONRenderer(),
+        foreign_pre_chain=[
+            structlog.contextvars.merge_contextvars,
+            structlog.processors.add_log_level,
+            structlog.processors.TimeStamper(fmt="iso"),
+            _redact_structlog,
+        ],
+    )
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+
+    file_handler = logging.FileHandler(log_dir / "wildfire_api.log")
+    file_handler.setFormatter(formatter)
+
+    root_logger = logging.getLogger()
+    root_logger.handlers = []
+    root_logger.setLevel(log_level)
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
+    logger = structlog.get_logger(__name__)
+    logger.info(
+        "logging_configured",
+        level=settings.LOG_LEVEL,
+        pii_redaction=True,
     )
 
     return logger
+
+
+def setup_logging():
+    """Configure logging for the application with PII redaction."""
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+
+    log_level = getattr(logging, settings.LOG_LEVEL, logging.INFO)
+    if structlog is None:
+        return _configure_standard_logging(log_dir, log_level)
+
+    return _configure_structlog(log_dir, log_level)

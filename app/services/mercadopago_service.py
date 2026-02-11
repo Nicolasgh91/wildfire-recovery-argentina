@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class PreferenceItem(BaseModel):
+    """Single item for MercadoPago preference creation."""
     title: str
     quantity: int = 1
     unit_price: Decimal
@@ -31,12 +32,14 @@ class PreferenceItem(BaseModel):
 
 
 class PreferenceResponse(BaseModel):
+    """Response payload for MercadoPago preference creation."""
     preference_id: str
     init_point: str
     sandbox_init_point: Optional[str] = None
 
 
 class PaymentInfo(BaseModel):
+    """Simplified payment info returned by MercadoPago."""
     id: str
     status: str
     status_detail: str
@@ -48,10 +51,12 @@ class PaymentInfo(BaseModel):
 
 
 class MercadoPagoError(Exception):
+    """Raised for MercadoPago integration errors."""
     pass
 
 
 class MercadoPagoService:
+    """Singleton wrapper around MercadoPago SDK operations."""
     _instance: Optional["MercadoPagoService"] = None
 
     def __new__(cls) -> "MercadoPagoService":

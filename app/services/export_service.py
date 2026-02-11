@@ -24,6 +24,7 @@ EXPORT_MAX_RECORDS = 10000
 
 
 class ExportService:
+    """Service for exporting fire event datasets."""
     def __init__(self, db: Session):
         self.db = db
 

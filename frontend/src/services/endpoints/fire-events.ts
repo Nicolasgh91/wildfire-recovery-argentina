@@ -23,6 +23,7 @@ export async function searchFireEvents(
   const response = await apiClient.get<FireSearchResponse>('/fire-events/search', {
     params,
     signal,
+    headers: { 'X-Skip-Auth-Redirect': 'true' },
   })
   return response.data
 }
@@ -33,7 +34,7 @@ export async function getExplorationPreview(
 ): Promise<ExplorationPreviewResponse> {
   const response = await apiClient.get<ExplorationPreviewResponse>(
     `/fire-events/${fireEventId}/exploration-preview`,
-    { signal },
+    { signal, headers: { 'X-Skip-Auth-Redirect': 'true' } },
   )
   return response.data
 }

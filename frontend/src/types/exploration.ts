@@ -53,3 +53,11 @@ export type ExplorationQuoteResponse = {
   credits_required: number
   suggestions: string[]
 }
+
+export type ExplorationGenerateResponse = {
+  job_id: string
+  status: string
+  items_count: number
+  credits_spent: number
+  credits_remaining: number
+}

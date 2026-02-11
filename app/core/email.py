@@ -7,6 +7,7 @@ from email.message import EmailMessage
 from typing import Optional
 
 from app.core.config import settings
+from app.core.sanitizer import redact_pii
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ async def send_email(
             return
         except Exception as exc:
             last_error = exc
-            logger.warning("Email send attempt %s failed: %s", attempt + 1, exc)
+            logger.warning("SMTP send attempt %s failed: %s", attempt + 1, redact_pii(str(exc)))
             if attempt < retries:
                 await asyncio.sleep(retry_delay)
 

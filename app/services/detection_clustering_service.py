@@ -28,6 +28,7 @@ except ImportError:
 
 @dataclass(frozen=True)
 class ClusteringVersion:
+    """Clustering parameters loaded from the database."""
     id: UUID
     epsilon_km: float
     min_points: int
@@ -37,6 +38,7 @@ class ClusteringVersion:
 
 @dataclass(frozen=True)
 class DetectionRow:
+    """Minimal detection payload for clustering."""
     id: UUID
     detected_at: datetime
     lat: float
@@ -46,12 +48,14 @@ class DetectionRow:
 
 
 def _ensure_tz(value: datetime) -> datetime:
+    """Ensure datetime values are timezone-aware (UTC)."""
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value
 
 
 def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Compute distance between two coordinates in meters."""
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
@@ -64,6 +68,7 @@ def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 def _compute_h3_index(lat: float, lon: float, resolution: int) -> Optional[int]:
+    """Compute H3 index if the library is available."""
     if not H3_AVAILABLE:
         return None
     if hasattr(h3, "latlng_to_cell"):
@@ -74,6 +79,7 @@ def _compute_h3_index(lat: float, lon: float, resolution: int) -> Optional[int]:
 
 
 class DetectionClusteringService:
+    """Service for clustering detections into fire events."""
     def __init__(self, db: Session):
         self.db = db
 

@@ -164,7 +164,9 @@ export function FireMarkers({ fires, onFireSelect, popupVariant = 'default' }: F
                     )}
                 </div>
                 <Button asChild size="sm" className="w-full">
-                  <Link to={`/fires/${fire.id}`}>{t('viewDetails')}</Link>
+                  <Link to={`/fires/${fire.representative_event_id ?? fire.id}`}>
+                    {t('viewDetails')}
+                  </Link>
                 </Button>
               </div>
             )}

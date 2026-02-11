@@ -14,6 +14,7 @@ from app.api.routes import (
     health,
     historical,
     monitoring,
+    metrics,
     reports,
     visitor_logs,
     workers,
@@ -40,6 +41,7 @@ from app.core.middleware import (
     LatencyMonitorMiddleware,
     RequestIdMiddleware,
 )
+from app.core.metrics import MetricsMiddleware
 from app.core.rate_limiter import check_ip_rate_limit
 from app.core.security import verify_api_key
 
@@ -178,6 +180,9 @@ app.add_middleware(DeprecationMiddleware)
 # Latency Monitoring (SLO Check)
 app.add_middleware(LatencyMonitorMiddleware)
 
+# Request metrics (internal)
+app.add_middleware(MetricsMiddleware)
+
 # Request ID Tracing (ROB-002)
 app.add_middleware(RequestIdMiddleware)
 
@@ -292,6 +297,13 @@ app.include_router(
     historical.router,
     prefix=f"{settings.API_V1_PREFIX}/historical",
     tags=["historical"],
+    dependencies=[Depends(verify_api_key)],
+)
+
+# Internal metrics (protected, no schema)
+app.include_router(
+    metrics.router,
+    prefix=f"{settings.API_V1_PREFIX}",
     dependencies=[Depends(verify_api_key)],
 )
 

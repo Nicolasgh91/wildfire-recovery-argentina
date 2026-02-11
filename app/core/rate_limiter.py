@@ -107,7 +107,7 @@ ForestGuard API Security
             server.send_message(msg)
 
     except Exception as e:
-        logger.error(f"Failed to send block alert email: {e}")
+        logger.error(f"Failed to send block alert notification: {e}")
 
 
 def get_client_ip(request: Request) -> str:

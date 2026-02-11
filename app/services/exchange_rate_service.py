@@ -17,11 +17,13 @@ ARG_TZ = ZoneInfo("America/Argentina/Buenos_Aires")
 
 
 class ExchangeRateError(Exception):
+    """Raised when exchange rate retrieval or parsing fails."""
     pass
 
 
 @dataclass(frozen=True)
 class ExchangeRate:
+    """Exchange rate snapshot with metadata."""
     rate: Decimal
     fetched_at: datetime
     source_url: str
@@ -32,11 +34,13 @@ _cached_rate: Optional[ExchangeRate] = None
 
 
 def _normalize_decimal(value: str) -> Decimal:
+    """Normalize decimal strings from local formatting."""
     cleaned = value.replace(".", "").replace(",", ".")
     return Decimal(cleaned)
 
 
 def _extract_bna_rate(html: str) -> Decimal:
+    """Extract USD/ARS rate from Banco Nacion HTML page."""
     text = re.sub(r"<[^>]+>", " ", html)
     text = re.sub(r"\s+", " ", text)
 
@@ -54,6 +58,7 @@ def _extract_bna_rate(html: str) -> Decimal:
 
 
 def _fetch_bna_rate_sync() -> Decimal:
+    """Fetch USD/ARS rate from Banco Nacion (blocking)."""
     if not settings.BNA_EXCHANGE_RATE_URL:
         raise ExchangeRateError("BNA_EXCHANGE_RATE_URL is not configured")
 
@@ -67,6 +72,7 @@ def _fetch_bna_rate_sync() -> Decimal:
 
 
 async def get_bna_usd_ars_rate(force_refresh: bool = False) -> ExchangeRate:
+    """Return cached USD/ARS rate, refreshing from BNA if needed."""
     global _cached_rate
     today = datetime.now(ARG_TZ).date()
 

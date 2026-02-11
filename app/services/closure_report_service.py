@@ -61,6 +61,7 @@ VISUALS = {
 
 @dataclass(frozen=True)
 class ClosureFireRow:
+    """Lightweight projection of fire rows for closure report processing."""
     id: str
     lat: float
     lon: float

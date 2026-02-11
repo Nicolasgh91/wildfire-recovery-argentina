@@ -37,6 +37,7 @@ METADATA_PENALTY = 5.0
 
 
 class QualityService:
+    """Service for data quality scoring and explanations."""
     def __init__(self, db: Session):
         self.db = db
 

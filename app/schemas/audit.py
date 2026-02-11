@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -55,6 +55,44 @@ class AuditResponse(BaseModel):
     cadastral_id: Optional[str] = None
     warnings: List[str] = Field(default_factory=list)
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# Audit search (historical episodes)
+class AuditSearchBBox(BaseModel):
+    minx: float
+    miny: float
+    maxx: float
+    maxy: float
+
+
+class AuditSearchResolvedPlace(BaseModel):
+    label: str
+    type: Literal["province", "protected_area", "address"]
+    bbox: Optional[AuditSearchBBox] = None
+    point: Optional[Dict[str, float]] = None
+
+
+class AuditSearchEpisode(BaseModel):
+    id: UUID
+    start_date: datetime
+    end_date: Optional[datetime] = None
+    status: Optional[str] = None
+    provinces: Optional[List[str]] = None
+    estimated_area_hectares: Optional[float] = None
+    detection_count: Optional[int] = None
+    frp_max: Optional[float] = None
+
+
+class AuditSearchDateRange(BaseModel):
+    earliest: Optional[datetime] = None
+    latest: Optional[datetime] = None
+
+
+class AuditSearchResponse(BaseModel):
+    resolved_place: AuditSearchResolvedPlace
+    episodes: List[AuditSearchEpisode]
+    total: int
+    date_range: AuditSearchDateRange
 
 
 # Backwards compatibility aliases

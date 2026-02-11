@@ -17,6 +17,7 @@ DEFAULT_CELL_LIMIT = 5000
 
 @dataclass(frozen=True)
 class BBox:
+    """Bounding box parameters for recurrence queries."""
     min_lon: float
     min_lat: float
     max_lon: float
@@ -32,6 +33,7 @@ class BBox:
 
 
 class RecurrenceService:
+    """Service for H3 recurrence heatmap queries."""
     def __init__(self, db: Session):
         self.db = db
 

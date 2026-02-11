@@ -3,7 +3,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import asc, desc, text
+from sqlalchemy import asc, bindparam, desc, text
 from sqlalchemy.orm import Session
 
 from app.api import deps
@@ -18,6 +18,9 @@ from app.schemas.episode import (
 )
 
 router = APIRouter()
+
+RECENT_DAYS = 60
+VALID_MODES = {"active", "recent"}
 
 
 def build_bbox(episode: FireEpisode) -> Optional[EpisodeBBox]:
@@ -65,6 +68,40 @@ def resolve_representative_event_id(events: List[FireEvent]) -> Optional[UUID]:
     return sorted(events, key=sort_key, reverse=True)[0].id
 
 
+def _load_representative_event_map(
+    db: Session, episode_ids: List[UUID]
+) -> dict[UUID, UUID]:
+    if not episode_ids:
+        return {}
+
+    rows = (
+        db.execute(
+            text(
+                """
+                SELECT DISTINCT ON (fee.episode_id)
+                       fee.episode_id,
+                       ev.id AS event_id
+                  FROM fire_episode_events fee
+                  JOIN fire_events ev ON ev.id = fee.event_id
+                 WHERE fee.episode_id IN :episode_ids
+                 ORDER BY fee.episode_id,
+                          CASE WHEN ev.status IN ('active', 'monitoring') THEN 0 ELSE 1 END,
+                          ev.end_date DESC NULLS LAST,
+                          ev.start_date DESC NULLS LAST
+                """
+            ).bindparams(bindparam("episode_ids", expanding=True)),
+            {"episode_ids": [str(eid) for eid in episode_ids]},
+        )
+        .mappings()
+        .all()
+    )
+    return {
+        row["episode_id"]: row["event_id"]
+        for row in rows
+        if row.get("episode_id") and row.get("event_id")
+    }
+
+
 @router.get(
     "/",
     response_model=FireEpisodeListResponse,
@@ -78,6 +115,7 @@ def list_fire_episodes(
         None,
         description="Filtrar por estado (active/monitoring/extinct/closed)",
     ),
+    mode: str = Query("active", description="Modo de consulta (active|recent)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     sort_by: str = Query("gee_priority"),
@@ -86,6 +124,19 @@ def list_fire_episodes(
 ) -> FireEpisodeListResponse:
     query = db.query(FireEpisode)
 
+    mode_value = mode.strip().lower() if mode else "active"
+    if mode_value not in VALID_MODES:
+        raise HTTPException(status_code=400, detail="Invalid mode. Use active or recent.")
+
+    if mode_value == "active":
+        query = query.filter(FireEpisode.status.in_(["active", "monitoring"]))
+    elif mode_value == "recent":
+        query = query.filter(FireEpisode.end_date.isnot(None))
+        query = query.filter(
+            FireEpisode.end_date
+            >= text(f"NOW() AT TIME ZONE 'utc' - INTERVAL '{RECENT_DAYS} days'")
+        )
+
     if gee_candidate is not None:
         query = query.filter(FireEpisode.gee_candidate == gee_candidate)
     if status:
@@ -93,19 +144,27 @@ def list_fire_episodes(
 
     total = query.count()
 
-    sort_map = {
-        "gee_priority": FireEpisode.gee_priority,
-        "start_date": FireEpisode.start_date,
-        "end_date": FireEpisode.end_date,
-        "frp_sum": FireEpisode.frp_sum,
-        "frp_max": FireEpisode.frp_max,
-        "detections": FireEpisode.detection_count,
-        "events": FireEpisode.event_count,
-    }
-    sort_field = sort_map.get(sort_by, FireEpisode.gee_priority)
-    query = query.order_by(desc(sort_field) if sort_desc else asc(sort_field))
+    if mode_value == "recent":
+        query = query.order_by(
+            desc(FireEpisode.end_date), desc(FireEpisode.event_count)
+        )
+    else:
+        sort_map = {
+            "gee_priority": FireEpisode.gee_priority,
+            "start_date": FireEpisode.start_date,
+            "end_date": FireEpisode.end_date,
+            "frp_sum": FireEpisode.frp_sum,
+            "frp_max": FireEpisode.frp_max,
+            "detections": FireEpisode.detection_count,
+            "events": FireEpisode.event_count,
+        }
+        sort_field = sort_map.get(sort_by, FireEpisode.gee_priority)
+        query = query.order_by(desc(sort_field) if sort_desc else asc(sort_field))
 
     episodes = query.offset((page - 1) * page_size).limit(page_size).all()
+    representative_map = _load_representative_event_map(
+        db, [episode.id for episode in episodes]
+    )
 
     items: List[FireEpisodeListItem] = []
     for episode in episodes:
@@ -117,6 +176,12 @@ def list_fire_episodes(
                 end_date=episode.end_date,
                 last_seen_at=episode.last_seen_at,
                 bbox=build_bbox(episode),
+                centroid_lat=float(episode.centroid_lat)
+                if episode.centroid_lat is not None
+                else None,
+                centroid_lon=float(episode.centroid_lon)
+                if episode.centroid_lon is not None
+                else None,
                 provinces=episode.provinces,
                 event_count=episode.event_count or 0,
                 detection_count=episode.detection_count or 0,
@@ -132,7 +197,7 @@ def list_fire_episodes(
                 gee_candidate=bool(episode.gee_candidate),
                 gee_priority=episode.gee_priority,
                 slides_data=episode.slides_data,
-                representative_event_id=None,
+                representative_event_id=representative_map.get(episode.id),
             )
         )
 
@@ -171,6 +236,8 @@ def list_active_episodes_for_home(
                        fe.bbox_miny,
                        fe.bbox_maxx,
                        fe.bbox_maxy,
+                       fe.centroid_lat,
+                       fe.centroid_lon,
                        fe.provinces,
                        fe.event_count,
                        fe.detection_count,
@@ -216,6 +283,12 @@ def list_active_episodes_for_home(
                 end_date=row.get("end_date"),
                 last_seen_at=row.get("last_seen_at"),
                 bbox=build_bbox_from_row(row),
+                centroid_lat=float(row["centroid_lat"])
+                if row.get("centroid_lat") is not None
+                else None,
+                centroid_lon=float(row["centroid_lon"])
+                if row.get("centroid_lon") is not None
+                else None,
                 provinces=row.get("provinces"),
                 event_count=int(row.get("event_count") or 0),
                 detection_count=int(row.get("detection_count") or 0),
@@ -295,6 +368,12 @@ def get_fire_episode(
         end_date=episode.end_date,
         last_seen_at=episode.last_seen_at,
         bbox=build_bbox(episode),
+        centroid_lat=float(episode.centroid_lat)
+        if episode.centroid_lat is not None
+        else None,
+        centroid_lon=float(episode.centroid_lon)
+        if episode.centroid_lon is not None
+        else None,
         provinces=episode.provinces,
         event_count=episode.event_count or 0,
         detection_count=episode.detection_count or 0,

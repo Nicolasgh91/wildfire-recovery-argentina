@@ -14,4 +14,5 @@ export type FireMapItem = {
   overlap_percentage?: number | null
   protected_area_name?: string | null
   count_protected_areas?: number | null
+  representative_event_id?: string | null
 }

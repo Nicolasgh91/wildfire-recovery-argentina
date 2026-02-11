@@ -17,6 +17,7 @@ INTERVAL_MARGIN = 0.2
 
 
 class TrendsService:
+    """Service for computing fire activity trends."""
     def __init__(self, db: Session):
         self.db = db
 

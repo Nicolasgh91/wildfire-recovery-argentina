@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class GeocodingService:
+    """Service for forward geocoding via Nominatim."""
     def __init__(self):
         self.base_url = settings.GEOCODE_BASE_URL
         self.user_agent = settings.GEOCODE_USER_AGENT

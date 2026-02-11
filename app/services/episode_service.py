@@ -48,6 +48,7 @@ from sqlalchemy.orm import Session
 
 
 class EventPayload(Protocol):
+    """Protocol describing the minimal fire event payload."""
     id: UUID
     start_date: datetime
     end_date: datetime
@@ -64,6 +65,7 @@ logger = logging.getLogger(__name__)
 
 
 class EpisodeService:
+    """Service for managing fire episodes."""
     def __init__(self, db: Session):
         self.db = db
 

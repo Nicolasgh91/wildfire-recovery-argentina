@@ -1,11 +1,11 @@
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import { Map, List, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useI18n } from '@/context/LanguageContext'
-import { fires } from '@/data/mockdata'
+import { useEpisodesByMode } from '@/hooks/queries/useEpisodesByMode'
 import type { FireMapItem } from '@/types/map'
 
 const FireMap = lazy(() =>
@@ -25,12 +25,64 @@ export default function MapPage() {
   const { t } = useI18n()
   const [selectedFire, setSelectedFire] = useState<FireMapItem | null>(null)
   const [showSidebar, setShowSidebar] = useState(true)
+  const { data: activeData, isLoading: loadingActive } = useEpisodesByMode('active', 100)
+  const { data: recentData, isLoading: loadingRecent } = useEpisodesByMode('recent', 100)
+  const isLoading = loadingActive || loadingRecent
+
+  const mapItems = useMemo(() => {
+    const activeEpisodes = activeData?.episodes ?? []
+    const recentEpisodes = recentData?.episodes ?? []
+    const seen = new Set<string>()
+    const merged = []
+
+    for (const episode of activeEpisodes) {
+      seen.add(episode.id)
+      merged.push(episode)
+    }
+    for (const episode of recentEpisodes) {
+      if (!seen.has(episode.id)) {
+        merged.push(episode)
+      }
+    }
+
+    return merged
+      .filter(
+        (episode) =>
+          episode.centroid_lat !== null &&
+          episode.centroid_lat !== undefined &&
+          episode.centroid_lon !== null &&
+          episode.centroid_lon !== undefined
+      )
+      .map((episode) => {
+        const frp = episode.frp_max ?? 0
+        const severity = frp >= 50 ? 'high' : frp >= 20 ? 'medium' : 'low'
+        const status =
+          episode.status === 'active' || episode.status === 'monitoring'
+            ? (episode.status as 'active' | 'monitoring')
+            : 'extinguished'
+        const title =
+          episode.provinces && episode.provinces.length > 0
+            ? `Incendio en ${episode.provinces[0]}`
+            : 'Incendio sin provincia'
+        return {
+          id: episode.id,
+          title,
+          lat: Number(episode.centroid_lat),
+          lon: Number(episode.centroid_lon),
+          severity,
+          province: episode.provinces?.[0] ?? null,
+          status,
+          hectares: episode.estimated_area_hectares ?? null,
+          representative_event_id: episode.representative_event_id ?? episode.id,
+        } satisfies FireMapItem
+      })
+  }, [activeData?.episodes, recentData?.episodes])
 
   return (
     <div className="relative h-full">
       <Suspense fallback={mapFallback}>
         <FireMap
-          fires={fires}
+          fires={mapItems}
           selectedFire={selectedFire}
           onFireSelect={setSelectedFire}
           height="h-full"
@@ -53,11 +105,21 @@ export default function MapPage() {
               <Map className="h-5 w-5 text-primary" />
               {t('interactiveMap')}
             </CardTitle>
+            <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <Badge variant="outline">{t('mapLegendActive')}</Badge>
+              <Badge variant="secondary">{t('mapLegendRecent')}</Badge>
+            </div>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-[400px] pr-4">
               <div className="space-y-2">
-                {fires.map((fire) => (
+                {isLoading && (
+                  <div className="text-sm text-muted-foreground">{t('loading')}</div>
+                )}
+                {!isLoading && mapItems.length === 0 && (
+                  <div className="text-sm text-muted-foreground">{t('recentFiresEmpty')}</div>
+                )}
+                {mapItems.map((fire) => (
                   <button
                     key={fire.id}
                     type="button"
@@ -89,7 +151,7 @@ export default function MapPage() {
           <CardContent className="p-3">
             <ScrollArea className="h-32">
               <div className="flex gap-2 pb-2">
-                {fires.map((fire) => (
+                {mapItems.map((fire) => (
                   <button
                     key={fire.id}
                     type="button"

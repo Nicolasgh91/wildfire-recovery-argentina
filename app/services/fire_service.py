@@ -90,6 +90,7 @@ MAX_PAGE_SIZE = 100
 
 @dataclass(frozen=True)
 class FireFilterParams:
+    """Filter parameters for fire listing queries."""
     province: Optional[List[str]] = None
     department: Optional[str] = None
     protected_area_id: Optional[UUID] = None
@@ -107,6 +108,7 @@ class FireFilterParams:
 
 
 class FireService:
+    """Service for fire event queries and aggregations."""
     def __init__(self, db: Session):
         self.db = db
 

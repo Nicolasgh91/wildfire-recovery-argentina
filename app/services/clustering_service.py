@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Sequence, Set
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class ClusteringVersion:
+    """Clustering parameters snapshot for episode generation."""
     id: UUID
     epsilon_km: float
     min_points: int
@@ -24,6 +26,7 @@ class ClusteringVersion:
 
 @dataclass(frozen=True)
 class EventRecord:
+    """Normalized fire event row for clustering routines."""
     id: UUID
     start_date: datetime
     end_date: datetime
@@ -37,6 +40,7 @@ class EventRecord:
 
 
 class ClusteringService:
+    """Service for clustering fire events into episodes."""
     def __init__(self, db: Session):
         self.db = db
         self.episodes = EpisodeService(db)
@@ -242,6 +246,7 @@ class ClusteringService:
         *,
         days_back: int = 90,
         max_events: int = 5000,
+        dry_run: bool = False,
     ) -> dict:
         version = self._get_active_version()
         since = datetime.now(timezone.utc) - timedelta(days=days_back)
@@ -269,7 +274,21 @@ class ClusteringService:
 
         if not events:
             logger.info("No fire events found for clustering")
-            return {"events_processed": 0, "episodes_created": 0, "episodes_updated": 0}
+            return {
+                "events_processed": 0,
+                "episodes_created": 0,
+                "episodes_updated": 0,
+                "episodes_merged": 0,
+                "candidate_metrics": {
+                    "total_events": 0,
+                    "min": 0,
+                    "avg": 0,
+                    "p95": 0,
+                    "max": 0,
+                    "over_3_count": 0,
+                    "over_3_pct": 0,
+                },
+            }
 
         event_ids = [event.id for event in events]
         event_episode_map = self._load_event_episode_map(event_ids)
@@ -285,6 +304,7 @@ class ClusteringService:
         episodes_created = 0
         episodes_updated = 0
         episodes_merged = 0
+        candidate_counts: List[int] = []
 
         epsilon_meters = version.epsilon_km * 1000.0
 
@@ -294,6 +314,7 @@ class ClusteringService:
                 epsilon_meters=epsilon_meters,
                 temporal_window_hours=version.temporal_window_hours,
             )
+            candidate_counts.append(len(candidates))
 
             if not candidates:
                 episode_id = self.episodes.create_episode(event, version.id)
@@ -329,7 +350,12 @@ class ClusteringService:
                 min_points=version.min_points,
             )
 
-        self.db.commit()
+        candidate_metrics = self._build_candidate_metrics(candidate_counts)
+
+        if dry_run:
+            self.db.rollback()
+        else:
+            self.db.commit()
 
         logger.info(
             "Clustering complete: events=%s created=%s updated=%s merged=%s",
@@ -338,10 +364,52 @@ class ClusteringService:
             episodes_updated,
             episodes_merged,
         )
+        logger.info(f"Clustering candidate metrics: {candidate_metrics}")
 
         return {
             "events_processed": len(to_process),
             "episodes_created": episodes_created,
             "episodes_updated": episodes_updated,
             "episodes_merged": episodes_merged,
+            "candidate_metrics": candidate_metrics,
+        }
+
+    @staticmethod
+    def _build_candidate_metrics(candidate_counts: Sequence[int]) -> Dict[str, float]:
+        if not candidate_counts:
+            return {
+                "total_events": 0,
+                "min": 0,
+                "avg": 0,
+                "p95": 0,
+                "max": 0,
+                "over_3_count": 0,
+                "over_3_pct": 0,
+            }
+
+        values = sorted(candidate_counts)
+        total = len(values)
+        avg = sum(values) / total
+        over_3 = sum(1 for value in values if value > 3)
+
+        def percentile(pct: float) -> float:
+            if total == 1:
+                return float(values[0])
+            k = (total - 1) * pct
+            f = math.floor(k)
+            c = math.ceil(k)
+            if f == c:
+                return float(values[int(k)])
+            d0 = values[f] * (c - k)
+            d1 = values[c] * (k - f)
+            return float(d0 + d1)
+
+        return {
+            "total_events": total,
+            "min": float(values[0]),
+            "avg": round(avg, 2),
+            "p95": round(percentile(0.95), 2),
+            "max": float(values[-1]),
+            "over_3_count": over_3,
+            "over_3_pct": round((over_3 / total) * 100, 2),
         }

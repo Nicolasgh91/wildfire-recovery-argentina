@@ -5,12 +5,12 @@ import { useForm } from 'react-hook-form'
 import {
   AlertTriangle,
   CheckCircle2,
-  ClipboardCheck,
   Download,
   Loader2,
   MapPin,
   Search,
-  Sparkles,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,13 @@ import {
 } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Form,
   FormControl,
@@ -43,8 +50,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import { useAuditMutation } from '@/hooks/mutations/useAudit'
-import { geocodeLocation } from '@/services/endpoints/geocode'
+import { searchAuditEpisodes } from '@/services/endpoints/audit-search'
 import type { AuditFire, EvidenceThumbnail } from '@/types/audit'
+import type { AuditSearchResponse } from '@/types/audit-search'
 
 const AuditMap = lazy(() => import('@/components/audit-map').then((mod) => ({ default: mod.AuditMap })))
 
@@ -54,12 +62,15 @@ const mapFallback = (
   </div>
 )
 
+type SearchType = 'address' | 'locality' | 'park' | 'province'
+
 type AuditFormValues = {
-  search: string
+  search?: string
+  search_type: SearchType
   radius_m: number
-  lat: string
-  lon: string
-  cadastral_id: string
+  lat?: string
+  lon?: string
+  cadastral_id?: string
 }
 
 const AREA_PRESETS = [
@@ -68,24 +79,59 @@ const AREA_PRESETS = [
   { label: 'Amplio (3 km)', value: 3000 },
 ]
 
-const buildAuditSchema = (messages: { required: string; invalid: string; outOfRange: string }) =>
-  z.object({
-    search: z.string().trim().optional(),
-    radius_m: z.number().min(100, { message: messages.outOfRange }).max(5000, { message: messages.outOfRange }),
-    lat: z
-      .string()
-      .trim()
-      .optional()
-      .refine((val) => !val || !Number.isNaN(Number(val)), { message: messages.invalid })
-      .refine((val) => !val || (Number(val) >= -90 && Number(val) <= 90), { message: messages.outOfRange }),
-    lon: z
-      .string()
-      .trim()
-      .optional()
-      .refine((val) => !val || !Number.isNaN(Number(val)), { message: messages.invalid })
-      .refine((val) => !val || (Number(val) >= -180 && Number(val) <= 180), { message: messages.outOfRange }),
-    cadastral_id: z.string().trim().optional(),
-  })
+const SEARCH_TYPE_RULES: Record<SearchType, { minLength: number; pattern: RegExp }> = {
+  address: { minLength: 5, pattern: /^[a-zA-Z0-9\s,.-]+$/ },
+  locality: { minLength: 3, pattern: /^[a-zA-Z\s]+$/ },
+  park: { minLength: 3, pattern: /^[a-zA-Z\s]+$/ },
+  province: { minLength: 2, pattern: /^[a-zA-Z\s]+$/ },
+}
+
+const buildAuditSchema = (messages: {
+  required: string
+  invalid: string
+  outOfRange: string
+  invalidFormat: string
+  minLength: (value: number) => string
+}) =>
+  z
+    .object({
+      search: z.string().trim().optional(),
+      search_type: z.enum(['address', 'locality', 'park', 'province']),
+      radius_m: z.number().min(100, { message: messages.outOfRange }).max(5000, { message: messages.outOfRange }),
+      lat: z
+        .string()
+        .trim()
+        .optional()
+        .refine((val) => !val || !Number.isNaN(Number(val)), { message: messages.invalid })
+        .refine((val) => !val || (Number(val) >= -90 && Number(val) <= 90), { message: messages.outOfRange }),
+      lon: z
+        .string()
+        .trim()
+        .optional()
+        .refine((val) => !val || !Number.isNaN(Number(val)), { message: messages.invalid })
+        .refine((val) => !val || (Number(val) >= -180 && Number(val) <= 180), { message: messages.outOfRange }),
+      cadastral_id: z.string().trim().optional(),
+    })
+    .superRefine((values, ctx) => {
+      const searchValue = values.search?.trim() ?? ''
+      if (!searchValue) return
+      const rule = SEARCH_TYPE_RULES[values.search_type]
+      if (searchValue.length < rule.minLength) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['search'],
+          message: messages.minLength(rule.minLength),
+        })
+        return
+      }
+      if (!rule.pattern.test(searchValue)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['search'],
+          message: messages.invalidFormat,
+        })
+      }
+    })
 
 const formatDate = (value: string | null | undefined, locale: string) => {
   if (!value) return '-'
@@ -109,7 +155,10 @@ export default function AuditPage() {
   const [analysisPreset, setAnalysisPreset] = useState(1000)
   const [mapVisible, setMapVisible] = useState(true)
   const [localError, setLocalError] = useState<string | null>(null)
-  const [geocodeLoading, setGeocodeLoading] = useState(false)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchResult, setSearchResult] = useState<AuditSearchResponse | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
   const locale = language === 'es' ? 'es-AR' : 'en-US'
 
   const schema = useMemo(
@@ -118,6 +167,8 @@ export default function AuditPage() {
         required: t('requiredField'),
         invalid: t('invalidNumber'),
         outOfRange: t('outOfRange'),
+        invalidFormat: t('searchTypeInvalidFormat'),
+        minLength: (value) => t('searchTypeMinLength').replace('{min}', String(value)),
       }),
     [t],
   )
@@ -126,6 +177,7 @@ export default function AuditPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       search: '',
+      search_type: 'address',
       radius_m: analysisPreset,
       lat: '',
       lon: '',
@@ -147,6 +199,13 @@ export default function AuditPage() {
     [locale],
   )
 
+  const resolvePlaceTypeLabel = (type?: string | null) => {
+    if (type === 'province') return t('placeTypeProvince')
+    if (type === 'protected_area') return t('placeTypeProtectedArea')
+    if (type === 'address') return t('placeTypeAddress')
+    return type ?? '-'
+  }
+
   const handleMapSelect = (latitude: number, longitude: number) => {
     form.setValue('lat', latitude.toFixed(6), { shouldDirty: true, shouldValidate: true })
     form.setValue('lon', longitude.toFixed(6), { shouldDirty: true, shouldValidate: true })
@@ -156,6 +215,7 @@ export default function AuditPage() {
   const handleSubmit = async (values: AuditFormValues) => {
     auditMutation.reset()
     setLocalError(null)
+    setCurrentPage(1) // Resetear página al hacer nueva búsqueda
     if (!values.lat || !values.lon) {
       const query = values.search?.trim()
       if (!query) {
@@ -163,24 +223,18 @@ export default function AuditPage() {
         return
       }
 
-      setGeocodeLoading(true)
+      setSearchLoading(true)
+      setSearchResult(null)
       try {
-        const response = await geocodeLocation(query)
-        const lat = response.result.lat
-        const lon = response.result.lon
-        form.setValue('lat', lat.toFixed(6), { shouldDirty: true, shouldValidate: true })
-        form.setValue('lon', lon.toFixed(6), { shouldDirty: true, shouldValidate: true })
-        auditMutation.mutate({
-          lat,
-          lon,
-          radius_meters: values.radius_m,
-          cadastral_id: values.cadastral_id?.trim() || undefined,
-          metadata: { is_test: import.meta.env.MODE === 'test' },
+        const response = await searchAuditEpisodes(query, {
+          limit: 20,
+          radius_km: (values.radius_m ?? analysisPreset) / 1000,
         })
+        setSearchResult(response)
       } catch {
         setLocalError(t('geocodeNotFound'))
       } finally {
-        setGeocodeLoading(false)
+        setSearchLoading(false)
       }
       return
     }
@@ -194,6 +248,23 @@ export default function AuditPage() {
   }
 
   const result = auditMutation.data
+
+  // Lógica de paginación para episodios
+  const paginatedEpisodes = useMemo(() => {
+    if (!searchResult?.episodes) return []
+    const startIndex = (currentPage - 1) * itemsPerPage
+    const endIndex = startIndex + itemsPerPage
+    return searchResult.episodes.slice(startIndex, endIndex)
+  }, [searchResult, currentPage])
+
+  const totalPages = useMemo(() => {
+    if (!searchResult?.episodes) return 0
+    return Math.ceil(searchResult.episodes.length / itemsPerPage)
+  }, [searchResult])
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
 
   const renderThumbnails = (thumbnails: EvidenceThumbnail[]) => {
     if (!thumbnails?.length) return null
@@ -262,9 +333,6 @@ export default function AuditPage() {
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6 flex flex-col gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <ClipboardCheck className="h-6 w-6 text-primary" />
-            </div>
             <div>
               <h1 className="text-3xl font-bold text-foreground">{t('verifyTerrain')}</h1>
               <p className="text-sm text-muted-foreground">{t('verifySubtitle')}</p>
@@ -275,7 +343,7 @@ export default function AuditPage() {
 
         <div className="grid gap-6 lg:grid-cols-2 lg:auto-rows-[minmax(0,1fr)]">
           {/* Mapa */}
-          <div className="space-y-3 lg:h-full">
+          <div className="space-y-3 h-full">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-muted-foreground">{t('map')}</h2>
               <Button
@@ -289,7 +357,7 @@ export default function AuditPage() {
               </Button>
             </div>
             {mapVisible && (
-              <div className="h-full min-h-[420px] rounded-lg border border-border bg-muted/20 p-2">
+              <div className="h-full min-h-[400px] w-full rounded-lg border border-border bg-muted/20 p-2">
                 <Suspense fallback={mapFallback}>
                   <AuditMap onLocationSelect={handleMapSelect} />
                 </Suspense>
@@ -306,23 +374,48 @@ export default function AuditPage() {
             <CardContent className="flex-1 space-y-4">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="search"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('searchPlace')}</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            placeholder={t('searchPlaceholder')}
-                            data-testid="search-place"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+                    <FormField
+                      control={form.control}
+                      name="search_type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('searchTypeLabel')}</FormLabel>
+                          <Select value={field.value} onValueChange={field.onChange}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={t('searchTypeLabel')} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="address">{t('searchTypeAddress')}</SelectItem>
+                              <SelectItem value="locality">{t('searchTypeLocality')}</SelectItem>
+                              <SelectItem value="park">{t('searchTypePark')}</SelectItem>
+                              <SelectItem value="province">{t('searchTypeProvince')}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="search"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('searchPlace')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder={t('searchPlaceholder')}
+                              data-testid="search-place"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
                   <div className="space-y-2">
                     <FormLabel>{t('analysisArea')}</FormLabel>
@@ -416,13 +509,13 @@ export default function AuditPage() {
                   <Button
                     type="submit"
                     data-testid="audit-submit"
-                  disabled={auditMutation.isPending || geocodeLoading || !form.formState.isValid}
+                  disabled={auditMutation.isPending || searchLoading || !form.formState.isValid}
                   className="w-full gap-2"
                 >
-                  {auditMutation.isPending || geocodeLoading ? (
+                  {auditMutation.isPending || searchLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      {geocodeLoading ? t('geocodeLoading') : t('loading')}
+                      {searchLoading ? t('geocodeLoading') : t('loading')}
                     </>
                   ) : (
                       <>
@@ -438,26 +531,123 @@ export default function AuditPage() {
           </Card>
         </div>
 
-        <div className="mt-6 grid gap-6 lg:grid-cols-2 lg:auto-rows-[minmax(0,1fr)]">
-          <Card className="flex h-full flex-col">
-            <CardHeader>
-              <CardTitle>{t('verificationChecklist')}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 space-y-2 text-sm text-muted-foreground">
-              <ul className="space-y-2">
-                <li>• {t('checklist1')}</li>
-                <li>• {t('checklist2')}</li>
-                <li>• {t('checklist3')}</li>
-                <li>• {t('checklist4')}</li>
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card className="flex h-full flex-col">
+        <div className="mt-6">
+          <Card className="flex flex-col">
             <CardHeader>
               <CardTitle>{t('results')}</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 space-y-4">
+            <CardContent className="flex-1 space-y-4 overflow-y-auto">
+              {searchLoading && (
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    {t('auditSearchLoading')}
+                  </div>
+                </div>
+              )}
+
+              {searchResult && !searchLoading && (
+                <div className="space-y-4 rounded-lg border border-border bg-muted/10 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="text-xs uppercase text-muted-foreground">{t('resolvedPlace')}</p>
+                      <p className="text-sm font-semibold text-foreground">
+                        {searchResult.resolved_place.label}
+                      </p>
+                    </div>
+                    <Badge variant="secondary">
+                      {resolvePlaceTypeLabel(searchResult.resolved_place.type)}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                    <span>
+                      {t('episodesFound')}: {searchResult.total}
+                    </span>
+                    {searchResult.date_range?.earliest && (
+                      <span>
+                        {t('dateRange')}:{' '}
+                        {formatDate(searchResult.date_range.earliest, locale)} â€“{' '}
+                        {formatDate(searchResult.date_range.latest ?? null, locale)}
+                      </span>
+                    )}
+                  </div>
+
+                  {searchResult.episodes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{t('auditSearchEmpty')}</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>{t('date')}</TableHead>
+                            <TableHead>{t('status')}</TableHead>
+                            <TableHead>{t('province')}</TableHead>
+                            <TableHead>{t('area')}</TableHead>
+                            <TableHead>{t('detections')}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedEpisodes.map((episode) => (
+                            <TableRow key={episode.id}>
+                              <TableCell>
+                                {formatDate(episode.start_date, locale)}
+                                {episode.end_date ? ` â†’ ${formatDate(episode.end_date, locale)}` : ''}
+                              </TableCell>
+                              <TableCell>{episode.status ?? '-'}</TableCell>
+                              <TableCell>{episode.provinces?.[0] ?? '-'}</TableCell>
+                              <TableCell>
+                                {episode.estimated_area_hectares
+                                  ? `${numberFormatter.format(Math.round(episode.estimated_area_hectares))} ha`
+                                  : '-'}
+                              </TableCell>
+                              <TableCell>
+                                {episode.detection_count
+                                  ? numberFormatter.format(episode.detection_count)
+                                  : '-'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                      
+                      {/* Controles de paginación */}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between pt-4">
+                          <div className="text-sm text-muted-foreground">
+                            Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, searchResult.episodes.length)} de {searchResult.episodes.length} resultados
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePageChange(currentPage - 1)}
+                              disabled={currentPage === 1}
+                              className="gap-1"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Anterior
+                            </Button>
+                            <span className="text-sm text-muted-foreground px-2">
+                              Página {currentPage} de {totalPages}
+                            </span>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePageChange(currentPage + 1)}
+                              disabled={currentPage === totalPages}
+                              className="gap-1"
+                            >
+                              Siguiente
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {!result && !auditMutation.isPending && !auditMutation.error && !localError && (
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p className="font-semibold text-foreground">{t('whatYouWillSee')}</p>
@@ -552,42 +742,38 @@ export default function AuditPage() {
                   {result.fires.length > 0 && (
                     <div className="space-y-3">
                       <h3 className="text-lg font-semibold text-foreground">{t('firesFound')}</h3>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>{t('date')}</TableHead>
-                            <TableHead>{t('province')}</TableHead>
-                            <TableHead>{t('distanceMeters')}</TableHead>
-                            <TableHead>{t('protectedArea')}</TableHead>
-                            <TableHead>{t('prohibitedUntil')}</TableHead>
-                            <TableHead>{t('yearsRemaining')}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {result.fires.map((fire) => {
-                            const protectedLabel = getProtectedAreaLabel(fire, t('protectedArea'))
-
-                            return (
-                              <TableRow key={fire.fire_event_id}>
-                                <TableCell>{formatDate(fire.fire_date, locale)}</TableCell>
-                                <TableCell>{fire.province ?? '-'}</TableCell>
-                                <TableCell>
-                                  {numberFormatter.format(Math.round(fire.distance_meters))} m
-                                </TableCell>
-                                <TableCell className="whitespace-normal">
-                                  {protectedLabel ? (
-                                    <Badge variant="secondary">{protectedLabel}</Badge>
-                                  ) : (
-                                    <span className="text-muted-foreground">{t('noRestrictions')}</span>
-                                  )}
-                                </TableCell>
-                                <TableCell>{formatDate(fire.prohibition_until, locale)}</TableCell>
-                                <TableCell>{fire.years_remaining ?? '-'}</TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
+                      <div className="space-y-3">
+                        {result.fires.map((fire) => {
+                          const protectedLabel = getProtectedAreaLabel(fire, t('protectedArea'))
+                          const protectedBadge =
+                            protectedLabel || (fire.in_protected_area ? t('protectedArea') : '')
+                          return (
+                            <div key={fire.fire_event_id} className="rounded-lg border border-border p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-semibold text-foreground">
+                                  {formatDate(fire.fire_date, locale)}
+                                </p>
+                                {protectedBadge ? (
+                                  <Badge variant="secondary">{protectedBadge}</Badge>
+                                ) : null}
+                              </div>
+                              <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                <span>
+                                  {t('province')}: {fire.province ?? '-'}
+                                </span>
+                                <span>
+                                  {t('distanceMeters')}: {numberFormatter.format(Math.round(fire.distance_meters))} m
+                                </span>
+                                {fire.prohibition_until && (
+                                  <span>
+                                    {t('prohibitedUntil')}: {formatDate(fire.prohibition_until, locale)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
                     </div>
                   )}
 

@@ -37,6 +37,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, Generic, Optional, TypeVar
 
+from app.core.alerts import send_alert
 logger = logging.getLogger(__name__)
 
 
@@ -167,6 +168,15 @@ class CircuitBreaker:
         logger.warning(
             f"Circuit breaker '{self.name}' transitioned: {old_state.value} -> {new_state.value}"
         )
+        if new_state == CircuitState.OPEN:
+            send_alert(
+                subject=f"Circuit breaker OPEN: {self.name}",
+                body=(
+                    f"Circuit '{self.name}' transitioned to OPEN at {self._last_state_change.isoformat()}.\n"
+                    f"Failures: {self._consecutive_failures} / Threshold: {self.failure_threshold}\n"
+                    f"Recovery timeout: {self.recovery_timeout}s"
+                ),
+            )
 
     def _record_success(self) -> None:
         """Record a successful call."""
@@ -356,9 +366,9 @@ def circuit_breaker(
 # Pre-configured circuit breaker for Google Earth Engine
 gee_circuit = CircuitBreaker(
     name="gee",
-    failure_threshold=3,  # GEE calls are expensive, open quickly
-    success_threshold=2,  # Require 2 successes to close
-    recovery_timeout=120,  # Wait 2 minutes before testing recovery
+    failure_threshold=5,  # Open after 5 consecutive failures (RES-001)
+    success_threshold=1,  # Close after 1 successful probe in HALF_OPEN
+    recovery_timeout=60,  # Wait 60s before testing recovery
     excluded_exceptions=(  # These shouldn't trigger the breaker
         ValueError,  # Validation errors (user input)
         KeyError,  # Missing data (not service failure)

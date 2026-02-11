@@ -27,6 +27,8 @@ class FireEpisodeListItem(BaseModel):
     end_date: Optional[datetime] = None
     last_seen_at: Optional[datetime] = None
     bbox: Optional[EpisodeBBox] = None
+    centroid_lat: Optional[float] = None
+    centroid_lon: Optional[float] = None
     provinces: Optional[List[str]] = None
     event_count: int
     detection_count: int

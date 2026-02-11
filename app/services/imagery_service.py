@@ -111,6 +111,7 @@ VISUALS = {
 
 @dataclass(frozen=True)
 class CarouselEpisodeRow:
+    """Episode row used to build carousel thumbnails."""
     id: str
     lat: Optional[float]
     lon: Optional[float]
@@ -121,6 +122,7 @@ class CarouselEpisodeRow:
 
 @dataclass(frozen=True)
 class CarouselFireRow:
+    """Fire row used to rank carousel candidates."""
     id: str
     lat: Optional[float]
     lon: Optional[float]
@@ -134,6 +136,7 @@ class CarouselFireRow:
 
 @dataclass(frozen=True)
 class RepresentativeEventRow:
+    """Representative fire event selection row."""
     id: str
     start_date: Optional[datetime]
     end_date: Optional[datetime]

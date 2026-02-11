@@ -228,6 +228,7 @@ class ClimateSnapshot:
 
 
 def _to_float(value: Any) -> Optional[float]:
+    """Safely coerce values to float."""
     if value is None:
         return None
     try:
@@ -237,6 +238,7 @@ def _to_float(value: Any) -> Optional[float]:
 
 
 def _to_int(value: Any) -> Optional[int]:
+    """Safely coerce values to int."""
     if value is None:
         return None
     try:

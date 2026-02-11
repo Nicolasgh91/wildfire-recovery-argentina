@@ -16,12 +16,23 @@ import {
   Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Select,
   SelectContent,
@@ -36,7 +47,9 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 import { useI18n } from '@/context/LanguageContext'
+import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
+import { groupEventsByEpisode } from '@/services/clustering'
 import {
   searchFireEvents,
   getExplorationPreview,
@@ -45,6 +58,7 @@ import {
   addExplorationItem,
   createExploration,
   deleteExplorationItem,
+  generateExploration,
   getExplorationQuote,
   updateExploration,
 } from '@/services/endpoints/explorations'
@@ -190,6 +204,20 @@ function buildDraftItems(
   return items
 }
 
+function buildRadiusBbox(lat: number, lon: number, radiusMeters: number): string {
+  const latDelta = radiusMeters / 111000
+  const cosLat = Math.cos((lat * Math.PI) / 180)
+  const safeCos = Math.max(Math.abs(cosLat), 0.000001)
+  const lngDelta = radiusMeters / (111000 * safeCos)
+
+  const west = lon - lngDelta
+  const south = lat - latDelta
+  const east = lon + lngDelta
+  const north = lat + latDelta
+
+  return [west, south, east, north].join(',')
+}
+
 function normalizeCounts(before: number, after: number) {
   let safeBefore = Math.max(0, Math.min(BEFORE_LIMIT, before))
   let safeAfter = Math.max(0, Math.min(AFTER_LIMIT, after))
@@ -231,7 +259,9 @@ function mapQualityToSeverity(score?: number | null): FireMapItem['severity'] {
 
 export default function ExplorationPage() {
   const { t, language } = useI18n()
+  const { isAuthenticated, status } = useAuth()
   const locale = language === 'es' ? 'es-AR' : 'en-US'
+  const navigate = useNavigate()
 
   const mapFallback = (
     <div className="flex h-64 items-center justify-center rounded-lg border border-border bg-muted/40">
@@ -252,6 +282,10 @@ export default function ExplorationPage() {
   const [searchHasNext, setSearchHasNext] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [coordLat, setCoordLat] = useState('')
+  const [coordLon, setCoordLon] = useState('')
+  const [coordRadius, setCoordRadius] = useState('5000')
+  const [coordError, setCoordError] = useState<string | null>(null)
 
   const [showMap, setShowMap] = useState(false)
   const [advancedId, setAdvancedId] = useState('')
@@ -270,6 +304,10 @@ export default function ExplorationPage() {
   const [quote, setQuote] = useState<ExplorationQuoteResponse | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncedSignature, setSyncedSignature] = useState('')
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [trackingId, setTrackingId] = useState<string | null>(null)
 
   const [newItemKind, setNewItemKind] = useState<'pre' | 'post'>('post')
   const [newItemDate, setNewItemDate] = useState('')
@@ -282,11 +320,15 @@ export default function ExplorationPage() {
 
   const totalCount = beforeCount + afterCount
 
+  const groupedResults = useMemo(() => groupEventsByEpisode(searchResults), [searchResults])
+
   const mapItems = useMemo(() => {
-    return searchResults
-      .map((fire) => {
-        const lat = fire.centroid?.latitude
-        const lon = fire.centroid?.longitude
+    return groupedResults
+      .map((group) => {
+        const fire = group.representative
+        const centroid = group.centroid ?? fire.centroid
+        const lat = centroid?.latitude
+        const lon = centroid?.longitude
         if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
         return {
           id: fire.id,
@@ -301,7 +343,7 @@ export default function ExplorationPage() {
         } as FireMapItem
       })
       .filter(Boolean) as FireMapItem[]
-  }, [searchResults])
+  }, [groupedResults])
 
   const selectedMapItem = useMemo(() => {
     if (!selectedFire?.centroid) return null
@@ -334,17 +376,53 @@ export default function ExplorationPage() {
     setDraftItemIds([])
     setQuote(null)
     setSyncedSignature('')
+    setTrackingId(null)
   }
 
   const handleSearch = async (page: number = 1, append: boolean = false) => {
     setSearchLoading(true)
     setSearchError(null)
+    setCoordError(null)
     try {
+      const hasCoordInput =
+        coordLat.trim().length > 0 ||
+        coordLon.trim().length > 0
+      let bbox: string | undefined
+
+      if (hasCoordInput) {
+        const latValue = coordLat.trim()
+        const lonValue = coordLon.trim()
+        const lat = Number(latValue)
+        const lon = Number(lonValue)
+        const radiusValue = coordRadius.trim().length > 0 ? Number(coordRadius) : 5000
+        const isValid =
+          latValue.length > 0 &&
+          lonValue.length > 0 &&
+          Number.isFinite(lat) &&
+          Number.isFinite(lon) &&
+          Number.isFinite(radiusValue) &&
+          lat >= -90 &&
+          lat <= 90 &&
+          lon >= -180 &&
+          lon <= 180 &&
+          radiusValue >= 100 &&
+          radiusValue <= 10000
+
+        if (!isValid) {
+          setCoordError(t('explorationCoordsError'))
+          setSearchLoading(false)
+          return
+        }
+
+        bbox = buildRadiusBbox(lat, lon, radiusValue)
+      }
+
       const response = await searchFireEvents({
         province: searchProvince ? [searchProvince] : undefined,
         date_from: searchFrom || undefined,
         date_to: searchTo || undefined,
         q: searchText || undefined,
+        bbox,
         page,
       })
 
@@ -406,9 +484,9 @@ export default function ExplorationPage() {
   }
 
   const handleMapSelect = (item: FireMapItem) => {
-    const fire = searchResults.find((result) => result.id === item.id)
-    if (fire) {
-      void handleSelectFire(fire)
+    const group = groupedResults.find((result) => result.representative.id === item.id)
+    if (group) {
+      void handleSelectFire(group.representative)
     }
   }
 
@@ -531,8 +609,48 @@ export default function ExplorationPage() {
     }
   }
 
+  const handleContinueToStep3 = () => {
+    if (!canContinueToStep3 || status === 'loading') return
+    if (isAuthenticated) {
+      setShowAuthDialog(false)
+      setStep(3)
+      return
+    }
+    setShowAuthDialog(true)
+  }
+
+  const handleAuthRedirect = () => {
+    setShowAuthDialog(false)
+    navigate('/login')
+  }
+
   const handleGenerate = () => {
-    toast(t('explorationGenerateSoon'))
+    setShowConfirmDialog(true)
+  }
+
+  const confirmGenerate = async () => {
+    if (!draftId) {
+      toast.error(t('technicalError'))
+      return
+    }
+    setGenerating(true)
+    try {
+      const idempotencyKey = crypto.randomUUID()
+      const response = await generateExploration(draftId, idempotencyKey)
+      setTrackingId(response.job_id)
+      toast.success(`${t('explorationGenerationStarted')} ${response.job_id}`)
+    } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response?.status
+      if (status === 402) {
+        toast.error(t('explorationInsufficientCredits'))
+        navigate('/credits')
+      } else {
+        toast.error(t('technicalError'))
+      }
+    } finally {
+      setGenerating(false)
+      setShowConfirmDialog(false)
+    }
   }
 
   const costUnit = quote?.unit_price_ars ?? 500
@@ -550,14 +668,56 @@ export default function ExplorationPage() {
 
   return (
     <div className="bg-background">
+      <AlertDialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('explorationAuthTitle')}</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>{t('explorationAuthMessageLine1')}</p>
+              <p>{t('explorationAuthMessageLine2')}</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('explorationAuthBack')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAuthRedirect}>
+              {t('explorationAuthLogin')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={showConfirmDialog}
+        onOpenChange={(open) => {
+          if (!generating) setShowConfirmDialog(open)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('explorationConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('explorationConfirmDescription')} {costFormatter.format(costTotal)}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={generating}>{t('cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmGenerate} disabled={generating}>
+              {generating ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {t('loading')}
+                </span>
+              ) : (
+                t('explorationConfirmAction')
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="container mx-auto space-y-8 px-4 py-6">
         <Card className="border-border/60 bg-card/60">
           <CardContent className="grid gap-6 py-6 lg:grid-cols-[1.2fr_1fr]">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                  <Sparkles className="h-6 w-6 text-primary" />
-                </div>
                 <div>
                   <h1 className="text-3xl font-bold text-foreground">{t('reportsTitle')}</h1>
                   <p className="text-sm text-muted-foreground">{t('reportsDescription')}</p>
@@ -628,7 +788,7 @@ export default function ExplorationPage() {
             {step === 1 && (
               <div className="space-y-6">
                 <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-                  <Card className="border-border/70">
+                  <Card className="border-border/70 min-w-0">
                     <CardHeader>
                       <CardTitle className="text-base">{t('explorationStep1Title')}</CardTitle>
                       <CardDescription>{t('explorationStep1Subtitle')}</CardDescription>
@@ -713,6 +873,70 @@ export default function ExplorationPage() {
                       </div>
 
                       <Accordion type="single" collapsible>
+                        <AccordionItem value="coords">
+                          <AccordionTrigger className="text-sm font-semibold">
+                            {t('explorationCoordsTitle')}
+                          </AccordionTrigger>
+                          <AccordionContent className="space-y-3 pt-2">
+                            <p className="text-xs text-muted-foreground">
+                              {t('explorationCoordsHint')}
+                            </p>
+                            <div className="grid gap-3 sm:grid-cols-3">
+                              <div className="space-y-1">
+                                <span className="text-xs font-semibold text-muted-foreground">
+                                  {t('latitude')}
+                                </span>
+                                <Input
+                                  type="number"
+                                  step="0.0001"
+                                  inputMode="decimal"
+                                  value={coordLat}
+                                  onChange={(event) => {
+                                    setCoordLat(event.target.value)
+                                    setCoordError(null)
+                                  }}
+                                  placeholder="-34.6037"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-xs font-semibold text-muted-foreground">
+                                  {t('longitude')}
+                                </span>
+                                <Input
+                                  type="number"
+                                  step="0.0001"
+                                  inputMode="decimal"
+                                  value={coordLon}
+                                  onChange={(event) => {
+                                    setCoordLon(event.target.value)
+                                    setCoordError(null)
+                                  }}
+                                  placeholder="-58.3816"
+                                />
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-xs font-semibold text-muted-foreground">
+                                  {t('radiusMeters')}
+                                </span>
+                                <Input
+                                  type="number"
+                                  min={100}
+                                  max={10000}
+                                  inputMode="numeric"
+                                  value={coordRadius}
+                                  onChange={(event) => {
+                                    setCoordRadius(event.target.value)
+                                    setCoordError(null)
+                                  }}
+                                  placeholder="5000"
+                                />
+                              </div>
+                            </div>
+                            {coordError && (
+                              <p className="text-xs text-destructive">{coordError}</p>
+                            )}
+                          </AccordionContent>
+                        </AccordionItem>
                         <AccordionItem value="advanced">
                           <AccordionTrigger className="text-sm font-semibold">
                             {t('explorationAdvancedIdLabel')}
@@ -733,7 +957,7 @@ export default function ExplorationPage() {
                     </CardContent>
                   </Card>
 
-                  <Card className="border-border/70" data-testid="exploration-results">
+                  <Card className="border-border/70 min-w-0" data-testid="exploration-results">
                     <CardHeader>
                       <CardTitle className="text-base">{t('explorationResults')}</CardTitle>
                       <CardDescription>
@@ -761,65 +985,80 @@ export default function ExplorationPage() {
                           <p>{t('explorationNoResultsHint')}</p>
                         </div>
                       )}
-                      <div className="space-y-3">
-                        {searchResults.map((fire) => {
-                          const isSelected = selectedFire?.id === fire.id
-                          return (
-                            <Card
-                              key={fire.id}
-                              className={cn('border-border/70', isSelected && 'border-primary')}
-                            >
-                              <CardContent className="flex flex-col gap-3 p-3">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <Badge variant={isSelected ? 'default' : 'secondary'}>
-                                    {getStatusLabel(fire.status, t)}
-                                  </Badge>
-                                  {fire.has_satellite_imagery && (
-                                    <Badge variant="outline">HD</Badge>
-                                  )}
+                      {groupedResults.length > 0 && (
+                        <div className="overflow-x-auto pb-2">
+                          <div className="flex w-max gap-2">
+                            {groupedResults.map((group) => {
+                              const fire = group.representative
+                              const isSelected = selectedFire?.id === fire.id
+                              return (
+                                <div key={fire.id} className="w-[260px] shrink-0">
+                                  <Card
+                                    className={cn(
+                                      'border-border/70 gap-3 py-3',
+                                      isSelected && 'border-primary',
+                                    )}
+                                  >
+                                    <CardContent className="flex flex-col gap-2 p-3">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant={isSelected ? 'default' : 'secondary'}>
+                                          {getStatusLabel(fire.status, t)}
+                                        </Badge>
+                                        {group.events.length > 1 && (
+                                          <Badge variant="outline">
+                                            {group.events.length} {t('eventsLabel')}
+                                          </Badge>
+                                        )}
+                                        {fire.has_satellite_imagery && (
+                                          <Badge variant="outline">HD</Badge>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-semibold text-foreground">
+                                          {getFireTitle(fire.department, fire.province)}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">
+                                          <Calendar className="mr-1 inline h-3 w-3" />
+                                          {formatDisplayDate(fire.start_date, locale)} -{' '}
+                                          {formatDisplayDate(fire.end_date, locale)}
+                                        </p>
+                                      </div>
+                                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                                        <span>
+                                          {t('hectares')}:{' '}
+                                          {fire.estimated_area_hectares?.toFixed(1) ?? '-'}
+                                        </span>
+                                        <span>
+                                          {t('detections')}: {fire.total_detections ?? 0}
+                                        </span>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => handleSelectFire(fire)}
+                                        variant={isSelected ? 'default' : 'outline'}
+                                        className="gap-2"
+                                      >
+                                        {isSelected ? (
+                                          <>
+                                            <CheckCircle2 className="h-4 w-4" />
+                                            {t('explorationSelected')}
+                                          </>
+                                        ) : (
+                                          <>
+                                            <ArrowRight className="h-4 w-4" />
+                                            {t('explorationSelect')}
+                                          </>
+                                        )}
+                                      </Button>
+                                    </CardContent>
+                                  </Card>
                                 </div>
-                                <div>
-                                  <p className="text-sm font-semibold text-foreground">
-                                    {getFireTitle(fire.department, fire.province)}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                    <Calendar className="mr-1 inline h-3 w-3" />
-                                    {formatDisplayDate(fire.start_date, locale)} -{' '}
-                                    {formatDisplayDate(fire.end_date, locale)}
-                                  </p>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                                  <span>
-                                    {t('hectares')}: {fire.estimated_area_hectares?.toFixed(1) ?? '-'}
-                                  </span>
-                                  <span>
-                                    {t('detections')}: {fire.total_detections ?? 0}
-                                  </span>
-                                </div>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  onClick={() => handleSelectFire(fire)}
-                                  variant={isSelected ? 'default' : 'outline'}
-                                  className="gap-2"
-                                >
-                                  {isSelected ? (
-                                    <>
-                                      <CheckCircle2 className="h-4 w-4" />
-                                      {t('explorationSelected')}
-                                    </>
-                                  ) : (
-                                    <>
-                                      <ArrowRight className="h-4 w-4" />
-                                      {t('explorationSelect')}
-                                    </>
-                                  )}
-                                </Button>
-                              </CardContent>
-                            </Card>
-                          )
-                        })}
-                      </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
                       {searchHasNext && (
                         <Button
                           type="button"
@@ -1133,12 +1372,26 @@ export default function ExplorationPage() {
                         </ul>
                       ) : null}
                     </div>
+                    {trackingId && (
+                      <div className="w-full rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                        <div className="flex items-center gap-3 text-sm text-emerald-900">
+                          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                          <div className="space-y-1">
+                            <p className="font-semibold">{t('explorationTrackingTitle')}</p>
+                            <p className="text-xs text-emerald-800">
+                              {t('explorationTrackingIdLabel')}{' '}
+                              <code className="rounded bg-emerald-100 px-2 py-0.5">{trackingId}</code>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex w-full flex-wrap items-center gap-2">
                       <Button
                         variant="outline"
                         className="gap-2"
-                        disabled={syncing || needsSync}
+                        disabled={syncing || needsSync || generating}
                         onClick={handleSaveDraft}
                       >
                         <FileText className="h-4 w-4" />
@@ -1146,7 +1399,7 @@ export default function ExplorationPage() {
                       </Button>
                       <Button
                         className="gap-2"
-                        disabled={syncing || needsSync}
+                        disabled={syncing || needsSync || generating}
                         onClick={handleGenerate}
                       >
                         <Sparkles className="h-4 w-4" />
@@ -1265,8 +1518,8 @@ export default function ExplorationPage() {
             )}
             {step === 2 && (
               <Button
-                onClick={() => setStep(3)}
-                disabled={!canContinueToStep3}
+                onClick={handleContinueToStep3}
+                disabled={!canContinueToStep3 || status === 'loading'}
                 className="gap-2"
               >
                 {t('next')}

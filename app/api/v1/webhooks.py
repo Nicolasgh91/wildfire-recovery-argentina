@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
-# SEC-006: Webhook replay protection - max age for valid webhooks
+# SEC-008: Webhook replay protection - max age for valid webhooks
 WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS = 300  # 5 minutes
 
 _processed_webhooks: set[str] = set()
@@ -109,7 +109,7 @@ def validate_webhook_timestamp(
     x_signature: Optional[str], date_created: str
 ) -> bool:
     """
-    SEC-006: Validate webhook timestamp to prevent replay attacks.
+    SEC-008: Validate webhook timestamp to prevent replay attacks.
 
     Args:
         x_signature: X-Signature header containing "ts"
@@ -150,14 +150,14 @@ async def mercadopago_webhook(
         logger.warning("Webhook without event id")
         return {"status": "error", "message": "webhook without event id"}
 
-    # SEC-006: Validate timestamp to prevent replay attacks
+    # SEC-008: Validate timestamp to prevent replay attacks
     if not validate_webhook_timestamp(x_signature, payload.date_created):
         logger.warning(
             "Webhook replay attack detected - stale timestamp for %s", data_id
         )
         return {"status": "rejected", "reason": "stale_timestamp"}
 
-    # SEC-006: Idempotency check (in-memory fallback; use Redis in prod)
+    # SEC-008: Idempotency check (in-memory fallback; use Redis in prod)
     if _is_duplicate_webhook(event_id):
         return {"status": "already_processed"}
 

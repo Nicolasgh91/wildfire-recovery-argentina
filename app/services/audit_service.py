@@ -59,6 +59,7 @@ MAX_RADIUS_METERS = 5000
 
 
 class AuditService:
+    """Service layer for land use audit workflows."""
     def __init__(self, db: Session):
         self.db = db
 

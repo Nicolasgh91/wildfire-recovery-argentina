@@ -326,7 +326,9 @@ class GEEService:
                     )
                 credentials = ee.ServiceAccountCredentials(gee_email, str(key_path))
                 ee.Initialize(credentials, project=self._project_id)
-                logger.info("GEE autenticado con service account email + key path")
+                logger.info(
+                    "GEE autenticado con credenciales de service account + key path"
+                )
                 self._initialized = True
                 return True
 
@@ -382,7 +384,7 @@ class GEEService:
         Ejecuta una función con rate limiting y circuit breaker.
 
         Máximo 1 request por segundo para mantenerse bajo el límite diario.
-        Circuit breaker abre después de 3 fallos consecutivos (ROB-005).
+        Circuit breaker abre después de 5 fallos consecutivos (RES-001).
         """
         self._request_count += 1
         if self._request_count % 100 == 0:

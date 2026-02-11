@@ -5,8 +5,47 @@ Workers: Ingestion, Clustering, Recovery/Destruction Analysis
 """
 
 import os
-from celery import Celery
+from datetime import datetime, timezone
+
+from celery import Celery, Task
+from celery.exceptions import Ignore, Retry
 from celery.schedules import crontab
+
+from app.workers.dlq import enqueue_failure
+
+class DlqTask(Task):
+    """Base task that sends terminal failures to the DLQ."""
+
+    abstract = True
+
+    def on_failure(self, exc, task_id, args, kwargs, einfo):
+        if isinstance(exc, (Retry, Ignore)):
+            return super().on_failure(exc, task_id, args, kwargs, einfo)
+
+        max_retries = getattr(self, "max_retries", None)
+        retries = getattr(self.request, "retries", 0)
+        if max_retries is not None and retries < max_retries:
+            return super().on_failure(exc, task_id, args, kwargs, einfo)
+
+        delivery = getattr(self.request, "delivery_info", {}) or {}
+        payload = {
+            "task_id": task_id,
+            "task_name": self.name,
+            "queue": delivery.get("routing_key"),
+            "args": args,
+            "kwargs": kwargs,
+            "retries": retries,
+            "max_retries": max_retries,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+            "traceback": getattr(einfo, "traceback", None),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "hostname": getattr(self.request, "hostname", None),
+        }
+        enqueue_failure(payload)
+
+        return super().on_failure(exc, task_id, args, kwargs, einfo)
+
 
 # Inicializar app Celery
 celery_app = Celery(
@@ -23,8 +62,11 @@ celery_app = Celery(
         'workers.tasks.recovery',
         'workers.tasks.destruction',
         'workers.tasks.notification',
+        'workers.tasks.exploration_hd_task',
     ]
 )
+
+celery_app.Task = DlqTask
 
 # Configuración principal
 celery_app.conf.update(
@@ -42,6 +84,7 @@ celery_app.conf.update(
         'workers.tasks.clustering_task.cluster_fire_episodes': {'queue': 'clustering'},
         'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
         'workers.tasks.closure_report_task.generate_closure_reports': {'queue': 'analysis'},
+        'workers.tasks.exploration_hd_task.generate_exploration_hd': {'queue': 'analysis'},
         'workers.tasks.recovery.analyze_recovery': {'queue': 'analysis'},
         'workers.tasks.destruction.detect_destruction': {'queue': 'analysis'},
         'workers.tasks.notification.send_contact_email': {'queue': 'notification'},
