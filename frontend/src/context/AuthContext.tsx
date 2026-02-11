@@ -1,6 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type { Session, User } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/auth'
+
+// Type definitions to match Supabase types
+type User = {
+  id: string
+  email: string
+  full_name: string | null
+  role: string
+  avatar_url: string | null
+}
+
+type Session = {
+  access_token: string
+  user: User
+  expires_at: number
+}
 
 export type UserRole = 'admin' | 'user' | 'anonymous'
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
