@@ -516,81 +516,58 @@ export default function AuditPage() {
                     <p className="text-sm text-muted-foreground">{t('auditSearchEmpty')}</p>
                   ) : (
                     <div className="space-y-4">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>{t('date')}</TableHead>
-                            <TableHead>{t('status')}</TableHead>
-                            <TableHead>{t('province')}</TableHead>
-                            <TableHead>{t('area')}</TableHead>
-                            <TableHead>{t('detections')}</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {paginatedEpisodes.map((episode) => (
-                            <TableRow key={episode.id}>
-                              <TableCell>
-                                {formatDate(episode.start_date, locale)}
-                                {episode.end_date ? ` a ${formatDate(episode.end_date, locale)}` : ''}
-                              </TableCell>
-                              <TableCell>{episode.status ?? '-'}</TableCell>
-                              <TableCell>{episode.provinces?.[0] ?? '-'}</TableCell>
-                              <TableCell>
-                                {episode.estimated_area_hectares
-                                  ? `${numberFormatter.format(Math.round(episode.estimated_area_hectares))} ha`
-                                  : '-'}
-                              </TableCell>
-                              <TableCell>
-                                {episode.detection_count
-                                  ? numberFormatter.format(episode.detection_count)
-                                  : '-'}
-                              </TableCell>
+                      <div className="w-full overflow-x-auto rounded-md border">
+                        <Table className="min-w-[980px]">
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="whitespace-nowrap">{t('date')}</TableHead>
+                              <TableHead className="whitespace-nowrap">{t('status')}</TableHead>
+                              <TableHead className="whitespace-nowrap">{t('province')}</TableHead>
+                              <TableHead className="whitespace-nowrap">Duración (días)</TableHead>
+                              <TableHead className="whitespace-nowrap">FRP máx</TableHead>
+                              <TableHead className="whitespace-nowrap">{t('area')}</TableHead>
+                              <TableHead className="whitespace-nowrap">{t('detections')}</TableHead>
+                              <TableHead className="whitespace-nowrap">Señal de recuperación</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {paginatedEpisodes.map((episode) => {
+                              const durationDays = getDurationDays(episode.start_date, episode.end_date)
+                              const recoverySignal = getRecoverySignal(episode.status)
 
-                      <Accordion type="single" collapsible className="w-full space-y-2">
-                        {paginatedEpisodes.map((episode) => {
-                          const durationDays = getDurationDays(episode.start_date, episode.end_date)
-                          const recoverySignal = getRecoverySignal(episode.status)
-                          const timelineLabel = `${formatDate(episode.start_date, locale)}${episode.end_date ? ` a ${formatDate(episode.end_date, locale)}` : ''}`
-
-                          return (
-                            <AccordionItem key={`details-${episode.id}`} value={`episode-${episode.id}`} className="rounded-md border px-3">
-                              <AccordionTrigger className="text-sm">Más información del episodio</AccordionTrigger>
-                              <AccordionContent>
-                                <div className="space-y-3 text-sm">
-                                  <div>
-                                    <p className="font-medium text-foreground">Línea de tiempo</p>
-                                    <div className="mt-2 h-2 w-full rounded-full bg-muted">
-                                      <div className="h-2 w-full rounded-full bg-primary/70" />
-                                    </div>
-                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                      <span>{timelineLabel}</span>
-                                      {durationDays ? <Badge variant="outline">Duración: {durationDays} días</Badge> : null}
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <p className="font-medium text-foreground">Evolución de vegetación (indicadores)</p>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                      <Badge variant="secondary">FRP máx: {episode.frp_max ? numberFormatter.format(Math.round(episode.frp_max)) : '-'}</Badge>
-                                      <Badge variant="secondary">Área estimada: {episode.estimated_area_hectares ? `${numberFormatter.format(Math.round(episode.estimated_area_hectares))} ha` : '-'}</Badge>
-                                      <Badge variant="secondary">Detecciones: {episode.detection_count ? numberFormatter.format(episode.detection_count) : '-'}</Badge>
-                                    </div>
-                                  </div>
-
-                                  <div>
-                                    <p className="font-medium text-foreground">Señales de recuperación</p>
-                                    <Badge className={`mt-2 border ${recoverySignal.className}`}>{recoverySignal.label}</Badge>
-                                  </div>
-                                </div>
-                              </AccordionContent>
-                            </AccordionItem>
-                          )
-                        })}
-                      </Accordion>
+                              return (
+                                <TableRow key={episode.id}>
+                                  <TableCell>
+                                    {formatDate(episode.start_date, locale)}
+                                    {episode.end_date ? ` a ${formatDate(episode.end_date, locale)}` : ''}
+                                  </TableCell>
+                                  <TableCell>{episode.status ?? '-'}</TableCell>
+                                  <TableCell>{episode.provinces?.[0] ?? '-'}</TableCell>
+                                  <TableCell>{durationDays ? numberFormatter.format(durationDays) : '-'}</TableCell>
+                                  <TableCell>
+                                    {episode.frp_max
+                                      ? numberFormatter.format(Math.round(episode.frp_max))
+                                      : '-'}
+                                  </TableCell>
+                                  <TableCell>
+                                    {episode.estimated_area_hectares
+                                      ? `${numberFormatter.format(Math.round(episode.estimated_area_hectares))} ha`
+                                      : '-'}
+                                  </TableCell>
+                                  <TableCell>
+                                    {episode.detection_count
+                                      ? numberFormatter.format(episode.detection_count)
+                                      : '-'}
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge className={`border ${recoverySignal.className}`}>{recoverySignal.label}</Badge>
+                                  </TableCell>
+                                </TableRow>
+                              )
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
 
                       {/* Controles de paginación */}
                       {totalPages > 1 && (
