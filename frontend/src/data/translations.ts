@@ -71,6 +71,7 @@ export const translations = {
     monitoring: 'Monitoreo',
     extinguished: 'Extinguido',
     loading: 'Cargando...',
+    authRequired: 'Inicia sesion para continuar.',
     
     // Fire Feed
     fireFeed: 'Incendios forestales',
@@ -453,6 +454,7 @@ export const translations = {
     monitoring: 'Monitoring',
     extinguished: 'Extinguished',
     loading: 'Loading...',
+    authRequired: 'Log in to continue.',
     
     // Fire Feed
     fireFeed: 'Wildfire Feed',

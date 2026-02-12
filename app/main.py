@@ -7,7 +7,6 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import (
     alerts,
-    auth,
     certificates,
     citizen,
     episodes,
@@ -71,7 +70,7 @@ tags_metadata = [
     },
     {
         "name": "audit",
-        "description": "**Land Use Audit (UC-01)** - Verify legal restrictions on land due to previous fires under Law 26.815 Art. 22 bis. **Requires API key.** / *Auditoría de restricciones legales por incendios previos.*",
+        "description": "**Land Use Audit (UC-01)** - Verify legal restrictions on land due to previous fires under Law 26.815 Art. 22 bis. **Requires JWT.** / *Auditoría de restricciones legales por incendios previos.*",
     },
     {
         "name": "certificates",
@@ -83,7 +82,7 @@ tags_metadata = [
     },
     {
         "name": "reports",
-        "description": "**Reports (UC-02, UC-11)** - Generate judicial forensic reports and historical fire reports with satellite evidence. **Requires API key.** / *Reportes judiciales e históricos con evidencia satelital.*",
+        "description": "**Reports (UC-02, UC-11)** - Generate judicial forensic reports and historical fire reports with satellite evidence. **Requires JWT.** / *Reportes judiciales e históricos con evidencia satelital.*",
     },
     {
         "name": "citizen",
@@ -190,9 +189,6 @@ app.add_middleware(RequestIdMiddleware)
 register_exception_handlers(app)
 
 # Include routers
-# Auth - no API key required
-app.include_router(auth.router, prefix=f"{settings.API_V1_PREFIX}/auth", tags=["auth"])
-
 app.include_router(
     fires.router, prefix=f"{settings.API_V1_PREFIX}/fires", tags=["fires"]
 )
@@ -219,7 +215,6 @@ app.include_router(
     audit.router,
     prefix=f"{settings.API_V1_PREFIX}/audit",
     tags=["audit"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 app.include_router(
@@ -241,7 +236,6 @@ app.include_router(
     reports.router,
     prefix=f"{settings.API_V1_PREFIX}/reports",
     tags=["reports"],
-    dependencies=[Depends(verify_api_key)],
 )
 
 # UC-13: Payments (MercadoPago)

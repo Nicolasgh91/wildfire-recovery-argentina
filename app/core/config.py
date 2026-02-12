@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     PAYMENT_SUCCESS_URL: str = "https://forestguard.ar/payments/return?status=success"
     PAYMENT_FAILURE_URL: str = "https://forestguard.ar/payments/return?status=failure"
     PAYMENT_PENDING_URL: str = "https://forestguard.ar/payments/return?status=pending"
+    PAYMENT_SUCCESS_URL_ANDROID: Optional[str] = None
+    PAYMENT_FAILURE_URL_ANDROID: Optional[str] = None
+    PAYMENT_PENDING_URL_ANDROID: Optional[str] = None
 
     # --- Feature Flags (MVP) ---
     FEATURE_CERTIFICATES: bool = False

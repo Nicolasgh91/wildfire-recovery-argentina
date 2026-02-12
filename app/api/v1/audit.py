@@ -15,7 +15,7 @@ Endpoints:
     GET /audit/geocode - Geocode an address to coordinates
 
 Authentication:
-    All endpoints require API key authentication.
+    All endpoints require JWT authentication.
 
 Legal Framework:
     - Ley 26.815 Art. 22 bis (Argentina)
@@ -37,8 +37,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api import deps
+from app.api.auth_deps import get_current_user
 from app.core.rate_limiter import check_rate_limit
-from app.core.security import verify_api_key
 from app.schemas.audit import (
     AuditRequest,
     AuditResponse,
@@ -52,7 +52,7 @@ from app.schemas.geocode import GeocodeResponse
 from app.services.audit_service import AuditService
 from app.services.geocoding_service import GeocodingService
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 def get_audit_service(db: Session = Depends(deps.get_db)) -> AuditService:
@@ -290,7 +290,7 @@ def _build_episode_items(rows: list[dict]) -> list[AuditSearchEpisode]:
     "/land-use",
     response_model=AuditResponse,
     summary="Legal land-use audit (UC-F06)",
-    dependencies=[Depends(verify_api_key), Depends(check_rate_limit)],
+    dependencies=[Depends(check_rate_limit)],
 )
 def audit_land_use(
     payload: AuditRequest,
@@ -318,7 +318,7 @@ def audit_land_use(
     "/geocode",
     response_model=GeocodeResponse,
     summary="Geocodificar una ubicaciÃ³n (audit)",
-    dependencies=[Depends(verify_api_key), Depends(check_rate_limit)],
+    dependencies=[Depends(check_rate_limit)],
 )
 def geocode_location(
     q: str = Query(
@@ -338,7 +338,7 @@ def geocode_location(
     "/search",
     response_model=AuditSearchResponse,
     summary="Buscar episodios histÃ³ricos por lugar",
-    dependencies=[Depends(verify_api_key), Depends(check_rate_limit)],
+    dependencies=[Depends(check_rate_limit)],
 )
 def audit_search(
     q: str = Query(..., min_length=2, max_length=120),

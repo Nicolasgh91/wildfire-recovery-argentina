@@ -1,20 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { supabase } from '@/lib/auth'
-
-// Type definitions to match Supabase types
-type User = {
-  id: string
-  email: string
-  full_name: string | null
-  role: string
-  avatar_url: string | null
-}
-
-type Session = {
-  access_token: string
-  user: User
-  expires_at: number
-}
+import type { Session, User } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
+import { setAuthToken } from '@/services/api'
 
 export type UserRole = 'admin' | 'user' | 'anonymous'
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
@@ -38,7 +25,8 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 function mapRole(user: User | null): UserRole {
   if (!user) return 'anonymous'
-  return user.app_metadata?.role === 'admin' ? 'admin' : 'user'
+  const role = (user.app_metadata as { role?: string } | undefined)?.role
+  return role === 'admin' ? 'admin' : 'user'
 }
 
 function buildState(session: Session | null): AuthState {
@@ -50,6 +38,14 @@ function buildState(session: Session | null): AuthState {
   }
 }
 
+function resolveAuthRedirectUrl() {
+  if (typeof window === 'undefined') return undefined
+  return (
+    import.meta.env.VITE_AUTH_REDIRECT_URL ||
+    `${window.location.origin}/auth/callback`
+  )
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -58,17 +54,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: 'anonymous',
   })
 
+  const updateState = useCallback((session: Session | null) => {
+    setState(buildState(session))
+    setAuthToken(session?.access_token ?? null)
+  }, [])
+
   useEffect(() => {
     let mounted = true
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return
-      setState(buildState(session))
+      updateState(session)
     })
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return
-      setState(buildState(session))
+      updateState(session)
     })
 
     return () => {
@@ -85,13 +86,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    setAuthToken(null)
   }, [])
 
   const signInWithGoogle = useCallback(async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: resolveAuthRedirectUrl(),
       },
     })
     if (error) throw error
@@ -107,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             first_name: payload.firstName,
             last_name: payload.lastName,
           },
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: resolveAuthRedirectUrl(),
         },
       })
       if (error) throw error

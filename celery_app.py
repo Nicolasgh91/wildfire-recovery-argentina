@@ -1,7 +1,30 @@
 """
-Celery configuration for ForestGuard
-Broker: Redis
-Workers: Ingestion, Clustering, Recovery/Destruction Analysis
+Celery Configuration for ForestGuard
+====================================
+
+This module initializes the Celery application and defines its configuration.
+It serves as the entry point for all background task processing in the ForestGuard system.
+
+Key Components:
+1.  **Broker**: Redis (default: redis://redis:6379/0). Used for message transport.
+2.  **Backend**: Redis (default: redis://redis:6379/1). Used for storing task results.
+3.  **Workers**:
+    -   `ingestion`: Handles data fetching (e.g., FIRMS API).
+    -   `clustering`: Runs DBSCAN and other clustering algorithms.
+    -   `analysis`: Performs heavy computations (recovery, destruction, carousel generation).
+
+Task Routing:
+-   `workers.tasks.ingestion.download_firms_daily` -> `ingestion` queue
+-   `workers.tasks.clustering.cluster_detections` -> `clustering` queue
+-   `workers.tasks.recovery.analyze_recovery` -> `analysis` queue
+-   `workers.tasks.destruction.detect_destruction` -> `analysis` queue
+-   `workers.tasks.carousel_task.generate_carousel` -> `analysis` queue
+
+Schedule (Beat):
+-   `download-firms-daily`: Runs at 00:00 UTC.
+-   `cluster-daily`: Runs at 01:00 UTC (processing previous day's data).
+
+Author: ForestGuard Team
 """
 
 import os
@@ -11,9 +34,10 @@ from celery.schedules import crontab
 from dotenv import load_dotenv
 
 # Load .env for local development (Pydantic only loads it for FastAPI)
+# This ensures that when running celery locally, environment variables are available.
 load_dotenv(Path(__file__).parent / ".env")
 
-# Inicializar app Celery
+# Initialize Celery app
 celery_app = Celery(
     'forestguard',
     broker=os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0'),
@@ -23,6 +47,7 @@ celery_app = Celery(
         'workers.tasks.clustering',
         'workers.tasks.recovery',
         'workers.tasks.destruction',
+        'workers.tasks.carousel_task',
     ]
 )
 
@@ -41,6 +66,7 @@ celery_app.conf.update(
         'workers.tasks.clustering.cluster_detections': {'queue': 'clustering'},
         'workers.tasks.recovery.analyze_recovery': {'queue': 'analysis'},
         'workers.tasks.destruction.detect_destruction': {'queue': 'analysis'},
+        'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
     },
     
     # Retry policy

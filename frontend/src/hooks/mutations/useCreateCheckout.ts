@@ -14,6 +14,7 @@ interface CreateCheckoutRequest {
   target_entity_id?: string
   credits_amount?: number
   metadata?: Record<string, unknown>
+  client_platform?: 'web' | 'android'
 }
 
 interface CreateCheckoutResponse {
@@ -29,10 +30,12 @@ interface CreateCheckoutResponse {
 export function useCreateCheckout() {
   return useMutation<CreateCheckoutResponse, Error, CreateCheckoutRequest>({
     mutationFn: async (data) => {
+      const clientPlatform =
+        (import.meta.env.VITE_CLIENT_PLATFORM as 'web' | 'android' | undefined) || 'web'
       console.info('[useCreateCheckout] mutationFn', data)
       const response = await apiClient.post<CreateCheckoutResponse>(
         '/payments/checkout',
-        data,
+        { ...data, client_platform: clientPlatform },
       )
       console.info('[useCreateCheckout] response', response.status)
       return response.data
@@ -40,6 +43,8 @@ export function useCreateCheckout() {
     onSuccess: (data) => {
       console.info('[useCreateCheckout] onSuccess', data)
       if (typeof window !== 'undefined') {
+        sessionStorage.setItem('payment:returnTo', window.location.pathname + window.location.search)
+        sessionStorage.setItem('payment:requestId', data.payment_request_id)
         window.location.href = data.checkout_url
       }
     },

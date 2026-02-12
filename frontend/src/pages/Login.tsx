@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Trees, AlertCircle, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ import bosqueLanding from '@/assets/bosque_landing.jpeg'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { t } = useI18n()
   const { signIn, signInWithGoogle } = useAuth()
 
@@ -21,6 +22,8 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+
+  const from = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname || '/'
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -35,7 +38,7 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password)
-      navigate('/')
+      navigate(from, { replace: true })
     } catch {
       setError(t('loginInvalid'))
     }
@@ -48,6 +51,9 @@ export default function LoginPage() {
     setIsGoogleLoading(true)
 
     try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('auth:returnTo', from)
+      }
       await signInWithGoogle()
     } catch {
       setError(t('loginInvalid'))

@@ -10,6 +10,7 @@ vi.mock('sonner', () => {
 describe('ApiService', () => {
   beforeEach(() => {
     vi.resetModules()
+    vi.clearAllMocks()
     vi.stubEnv('VITE_API_BASE_URL', 'http://example.com/api/v1')
     vi.stubEnv('VITE_SUPABASE_URL', 'https://test.supabase.co')
     vi.stubEnv('VITE_SUPABASE_ANON_KEY', 'anon-key')
@@ -34,6 +35,25 @@ describe('ApiService', () => {
 
     expect(result.headers['X-API-Key']).toBe('anon-key')
     expect(result.headers['Authorization']).toBe('Bearer token')
+  })
+
+  it('attaches Authorization when setAuthToken is used', async () => {
+    const { requestInterceptor, setAuthToken } = await import('../services/api')
+    const config = { headers: {} } as InternalAxiosRequestConfig
+
+    setAuthToken('cached-token')
+    const result = requestInterceptor(config)
+
+    expect(result.headers['Authorization']).toBe('Bearer cached-token')
+  })
+
+  it('does not attach Authorization when no token is available', async () => {
+    const { requestInterceptor } = await import('../services/api')
+    const config = { headers: {} } as InternalAxiosRequestConfig
+
+    const result = requestInterceptor(config)
+
+    expect(result.headers['Authorization']).toBeUndefined()
   })
 
   it('removes content-type for FormData requests', async () => {
@@ -74,6 +94,7 @@ describe('ApiService', () => {
   })
 
   it('redirects to login on 401', async () => {
+    vi.stubEnv('VITE_USE_SUPABASE_JWT', 'true')
     const { handleHttpError } = await import('../services/api')
     const assignSpy = vi.fn()
     vi.stubGlobal('location', { ...window.location, assign: assignSpy })

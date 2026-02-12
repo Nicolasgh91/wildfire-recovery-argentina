@@ -16,6 +16,7 @@ const CreditsPage = lazy(() => import('@/pages/Credits'))
 const ExplorationPage = lazy(() => import('@/pages/Exploration'))
 const ProfilePage = lazy(() => import('@/pages/Profile'))
 const RegisterPage = lazy(() => import('@/pages/Register'))
+const AuthCallbackPage = lazy(() => import('@/pages/AuthCallback'))
 const PaymentReturnPage = lazy(() => import('@/pages/PaymentReturnPage'))
 const CertificatesPage = lazy(() => import('@/pages/Certificates'))
 const CitizenReportPage = lazy(() => import('@/pages/CitizenReport'))
@@ -116,6 +117,7 @@ export default function App() {
                   <Route path="/fires/:id" element={<FireDetailPage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
+                  <Route path="/auth/callback" element={<AuthCallbackPage />} />
                   <Route
                     path="/shelters"
                     element={isFeatureEnabled('refuges') ? <SheltersPage /> : <NotFoundPage />}

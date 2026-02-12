@@ -54,7 +54,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.api.routes.auth import get_current_user, get_current_user_optional
+from app.api.auth_deps import get_current_user, get_current_user_optional
 from app.core.rate_limiter import check_rate_limit
 from app.models.payment import UserCredits
 from app.schemas.exploration import (

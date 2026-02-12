@@ -18,13 +18,18 @@ interface PaymentStatusResponse {
 
 export function usePaymentStatus(
   paymentRequestId: string,
-  options?: { enabled?: boolean; refetchInterval?: number | false },
+  options?: {
+    enabled?: boolean
+    refetchInterval?: number | false
+    skipAuthRedirect?: boolean
+  },
 ) {
   return useQuery<PaymentStatusResponse>({
     queryKey: ['payment', paymentRequestId],
     queryFn: async () => {
       const response = await apiClient.get<PaymentStatusResponse>(
         `/payments/${paymentRequestId}`,
+        (options?.skipAuthRedirect ? { skipAuthRedirect: true } : undefined) as any,
       )
       return response.data
     },

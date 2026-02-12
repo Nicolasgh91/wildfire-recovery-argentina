@@ -370,7 +370,18 @@ export default function ExplorationPage() {
     if (step !== 3 || !preview || !selectedFire) return
     if (!needsSync || syncing || draftItems.length === 0 || showAuthDialog || pauseAutoSync) return
     void syncDraftAndQuote()
-  }, [step, preview, selectedFire, needsSync, syncing, draftItems, showAuthDialog, pauseAutoSync])
+  }, [
+    step,
+    preview,
+    selectedFire,
+    needsSync,
+    syncing,
+    draftItems,
+    showAuthDialog,
+    pauseAutoSync,
+    status,
+    isAuthenticated,
+  ])
 
   const resetDraftState = () => {
     setDraftId(null)
@@ -559,6 +570,12 @@ export default function ExplorationPage() {
   const syncDraftAndQuote = async () => {
     if (!selectedFire || !preview) return
     if (draftItems.length === 0) return
+    if (status === 'loading') return
+    if (!isAuthenticated) {
+      setPauseAutoSync(true)
+      setShowAuthDialog(true)
+      return
+    }
     setSyncing(true)
     try {
       let currentId = draftId
@@ -643,6 +660,11 @@ export default function ExplorationPage() {
   }
 
   const confirmGenerate = async () => {
+    if (status === 'loading') return
+    if (!isAuthenticated) {
+      setShowAuthDialog(true)
+      return
+    }
     if (!draftId) {
       toast.error(t('technicalError'))
       return

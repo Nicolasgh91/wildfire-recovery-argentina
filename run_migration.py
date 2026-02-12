@@ -12,8 +12,8 @@ db_name = os.getenv("DB_NAME")
 db_user = os.getenv("DB_USER")
 db_password = os.getenv("DB_PASSWORD")
 
-# Ruta al archivo SQL                                   database/migrations/database\migrations\013_add_episode_inactive_grace_hours.sql.sql
-migration_path = os.path.join(os.path.dirname(__file__), "database", "migrations", "013_add_episode_inactive_grace_hours.sql")
+# Ruta al archivo SQL                                   database/migrations/016_add_hd_generation_job_idempotency.sql
+migration_path = os.path.join(os.path.dirname(__file__), "database", "migrations", "016_add_hd_generation_job_idempotency.sql")
 
 try:
     print(f"📡 Conectando a Supabase en: {db_host}:{db_port}...")

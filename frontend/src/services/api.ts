@@ -17,6 +17,8 @@ const RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504]
 
 type HeaderBag = InternalAxiosRequestConfig['headers']
 
+let cachedAuthToken: string | null = null
+
 function getHeaderValue(headers: HeaderBag, key: string): string | undefined {
   if (!headers) return undefined
   if (typeof (headers as { get?: (name: string) => string | undefined }).get === 'function') {
@@ -48,6 +50,7 @@ function removeHeaderValue(headers: HeaderBag, key: string) {
 }
 
 export function getAuthToken(): string | null {
+  if (cachedAuthToken) return cachedAuthToken
   if (!SUPABASE_URL) return null
 
   try {
@@ -56,20 +59,19 @@ export function getAuthToken(): string | null {
     const storageKey = `sb-${projectRef}-auth-token`
     const sessionStr = localStorage.getItem(storageKey)
     if (!sessionStr) return null
-    return JSON.parse(sessionStr)?.access_token || null
+    const token = JSON.parse(sessionStr)?.access_token || null
+    if (token) {
+      cachedAuthToken = token
+    }
+    return token
   } catch {
     // ignore
   }
+  return null
+}
 
-  const fallbackKey = Object.keys(localStorage).find((key) => key.endsWith('-auth-token'))
-  if (!fallbackKey) return null
-  try {
-    const sessionStr = localStorage.getItem(fallbackKey)
-    if (!sessionStr) return null
-    return JSON.parse(sessionStr)?.access_token || null
-  } catch {
-    return null
-  }
+export function setAuthToken(token: string | null) {
+  cachedAuthToken = token
 }
 
 export function requestInterceptor(config: InternalAxiosRequestConfig) {

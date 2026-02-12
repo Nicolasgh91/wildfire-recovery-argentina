@@ -46,7 +46,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.api.routes.auth import get_current_user
+from app.api.auth_deps import get_current_user
 from app.core.config import settings
 from app.core.rate_limiter import check_rate_limit
 from app.models.payment import CreditTransaction, PaymentRequest
@@ -66,6 +66,7 @@ class CreateCheckoutRequest(BaseModel):
     target_entity_id: Optional[UUID] = None
     credits_amount: Optional[int] = Field(None, ge=1, le=100)
     metadata: Optional[dict] = None
+    client_platform: Optional[str] = Field(None, pattern="^(web|android)$")
 
 
 class CreateCheckoutResponse(BaseModel):
@@ -97,6 +98,28 @@ CREDIT_PACKAGES = {
 }
 
 
+def _append_payment_request_id(url: str, payment_request_id: UUID) -> str:
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}payment_request_id={payment_request_id}"
+
+
+def _build_back_urls(payment_request_id: UUID, platform: str) -> dict:
+    if platform == "android":
+        success = settings.PAYMENT_SUCCESS_URL_ANDROID or settings.PAYMENT_SUCCESS_URL
+        failure = settings.PAYMENT_FAILURE_URL_ANDROID or settings.PAYMENT_FAILURE_URL
+        pending = settings.PAYMENT_PENDING_URL_ANDROID or settings.PAYMENT_PENDING_URL
+    else:
+        success = settings.PAYMENT_SUCCESS_URL
+        failure = settings.PAYMENT_FAILURE_URL
+        pending = settings.PAYMENT_PENDING_URL
+
+    return {
+        "success": _append_payment_request_id(success, payment_request_id),
+        "failure": _append_payment_request_id(failure, payment_request_id),
+        "pending": _append_payment_request_id(pending, payment_request_id),
+    }
+
+
 def calculate_price(purpose: str, credits_amount: Optional[int]) -> Decimal:
     if purpose == "credits":
         if credits_amount in CREDIT_PACKAGES:
@@ -121,6 +144,7 @@ async def create_checkout(
     db: Session = Depends(deps.get_db),
     current_user=Depends(get_current_user),
 ):
+    platform = request.client_platform or "web"
     if request.purpose == "credits" and not request.credits_amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -160,11 +184,13 @@ async def create_checkout(
     db.add(payment_request)
     db.flush()
 
+    back_urls = _build_back_urls(payment_request.id, platform)
+
     if settings.MP_MOCK_MODE:
         payment_request.provider_preference_id = (
             f"mock_pref_{uuid4().hex[:12]}"
         )
-        payment_request.checkout_url = f"{settings.PAYMENT_SUCCESS_URL}&payment_request_id={payment_request.id}"
+        payment_request.checkout_url = back_urls["success"]
 
         if settings.MP_MOCK_APPROVE:
             payment_request.status = "approved"
@@ -234,11 +260,7 @@ async def create_checkout(
             items=items,
             payer_email=current_user.email,
             notification_url=settings.MP_NOTIFICATION_URL,
-            back_urls={
-                "success": f"{settings.PAYMENT_SUCCESS_URL}&payment_request_id={payment_request.id}",
-                "failure": f"{settings.PAYMENT_FAILURE_URL}&payment_request_id={payment_request.id}",
-                "pending": f"{settings.PAYMENT_PENDING_URL}&payment_request_id={payment_request.id}",
-            },
+            back_urls=back_urls,
             expires_in_hours=24,
             metadata={
                 "user_id": str(current_user.id),

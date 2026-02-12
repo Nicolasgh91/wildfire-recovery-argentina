@@ -44,7 +44,6 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.core.config import settings
 from app.core.security import api_key_header
 from app.core.security import get_current_user as verify_api_key_user
 from app.models.user import User
@@ -60,9 +59,8 @@ from app.schemas.fire import (
     StatsResponse,
     StatusScope,
 )
-from app.services.auth_service import (
+from app.services.supabase_auth import (
     AuthError,
-    decode_access_token,
     decode_supabase_token,
     get_or_create_supabase_user,
 )
@@ -87,29 +85,12 @@ async def _resolve_jwt_user(
 ) -> User:
     token = credentials.credentials
     try:
-        payload = decode_access_token(token)
-        user_id = UUID(payload.get("sub"))
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(
-                status_code=401, detail="Usuario no encontrado"
-            )
-        return user
-    except (AuthError, ValueError, TypeError) as exc:
-        if settings.SUPABASE_JWT_SECRET:
-            try:
-                payload = decode_supabase_token(token)
-                return get_or_create_supabase_user(db, payload)
-            except AuthError as supa_error:
-                raise HTTPException(
-                    status_code=supa_error.status_code,
-                    detail=supa_error.message,
-                )
-        if isinstance(exc, AuthError):
-            raise HTTPException(
-                status_code=exc.status_code, detail=exc.message
-            )
-        raise HTTPException(status_code=401, detail="Token invalido")
+        payload = decode_supabase_token(token)
+        return get_or_create_supabase_user(db, payload)
+    except AuthError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Token invalido") from exc
 
 
 async def require_fire_access(

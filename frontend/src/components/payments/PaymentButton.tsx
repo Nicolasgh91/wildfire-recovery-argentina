@@ -1,6 +1,9 @@
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { useI18n } from '@/context/LanguageContext'
+import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
 import { useCreateCheckout } from '@/hooks/mutations/useCreateCheckout'
 
@@ -26,6 +29,9 @@ export function PaymentButton({
   disabled,
 }: PaymentButtonProps) {
   const { mutate: createCheckout, isPending } = useCreateCheckout()
+  const { isAuthenticated, status } = useAuth()
+  const { t } = useI18n()
+  const navigate = useNavigate()
   const isDisabled = disabled || isPending
 
   const handleClick = () => {
@@ -37,6 +43,17 @@ export function PaymentButton({
       isPending,
     })
     if (isPending) return
+    if (status === 'loading') {
+      return
+    }
+    if (!isAuthenticated) {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('auth:returnTo', window.location.pathname + window.location.search)
+      }
+      toast.error(t('authRequired'))
+      navigate('/login')
+      return
+    }
     if (purpose === 'credits' && !creditsAmount) {
       toast.error('Ingresá una cantidad válida de créditos.')
       return

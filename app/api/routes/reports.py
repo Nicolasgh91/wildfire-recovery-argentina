@@ -34,7 +34,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
@@ -49,6 +49,7 @@ except ImportError:
 # Use correct imports from the new service structure
 from app.core.idempotency import IdempotencyManager, get_idempotency_key
 from app.core.rate_limiter import check_rate_limit
+from app.api.auth_deps import get_current_user
 from app.services.ers_service import (
     ERSService,
     ReportRequest,
@@ -61,7 +62,7 @@ from app.services.ers_service import (
 # ROUTER
 # =============================================================================
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 # =============================================================================
@@ -197,9 +198,9 @@ class VerifyReportResponse(BaseModel):
 )
 async def generate_judicial_report(
     request: JudicialReportRequest,
-    x_api_key: Optional[str] = Header(None),
     db: Session = Depends(get_db),
     idempotency_key: Optional[str] = Depends(get_idempotency_key),
+    current_user=Depends(get_current_user),
 ) -> JudicialReportResponse:
     """
     Generate forensic judicial report for a fire event.
@@ -225,23 +226,23 @@ async def generate_judicial_report(
     # Initialize ERS Service
     ers = ERSService(db=db)
 
-    requester_id = None
-    if x_api_key:
-        requester_id = hashlib.sha256(x_api_key.encode("utf-8")).hexdigest()
+    requester_id = hashlib.sha256(
+        str(current_user.id).encode("utf-8")
+    ).hexdigest()
 
-        # Create ERS ReportRequest
-        ers_request = ReportRequest(
-            report_type=ReportType.JUDICIAL,
-            fire_event_id=str(request.fire_event_id),
-            requester_name=request.requester_name,
-            requester_email=None,  # Could be added to request
-            requester_id=requester_id,
-            case_reference=request.case_reference,
-            include_climate=request.include_climate,
-            include_imagery=request.include_imagery,
-            language=request.language,
-            output_format="pdf",
-        )
+    # Create ERS ReportRequest
+    ers_request = ReportRequest(
+        report_type=ReportType.JUDICIAL,
+        fire_event_id=str(request.fire_event_id),
+        requester_name=request.requester_name,
+        requester_email=current_user.email,
+        requester_id=requester_id,
+        case_reference=request.case_reference,
+        include_climate=request.include_climate,
+        include_imagery=request.include_imagery,
+        language=request.language,
+        output_format="pdf",
+    )
 
     try:
         # Generate report using new service

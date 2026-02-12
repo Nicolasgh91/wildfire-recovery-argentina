@@ -131,7 +131,7 @@ const getProtectedAreaLabel = (fire: AuditFire, fallback: string) => {
 
 export default function AuditPage() {
   const { t, language } = useI18n()
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, status } = useAuth()
   const navigate = useNavigate()
   const [analysisPreset, setAnalysisPreset] = useState(1000)
   const [localError, setLocalError] = useState<string | null>(null)
@@ -193,6 +193,10 @@ export default function AuditPage() {
     auditMutation.reset()
     setLocalError(null)
     setCurrentPage(1) // Resetear página al hacer nueva búsqueda
+    if (status !== 'authenticated') {
+      setLocalError(t('authRequired'))
+      return
+    }
     if (!values.lat || !values.lon) {
       const query = values.search?.trim()
       if (!query) {
