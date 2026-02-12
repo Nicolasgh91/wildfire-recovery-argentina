@@ -1,4 +1,5 @@
 import math
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -164,9 +165,14 @@ def list_fire_episodes(
     representative_map = _load_representative_event_map(
         db, [episode.id for episode in episodes]
     )
+    now = datetime.now(timezone.utc)
+    recent_cutoff = now - timedelta(days=RECENT_DAYS)
 
     items: List[FireEpisodeListItem] = []
     for episode in episodes:
+        end = episode.end_date
+        is_recent_flag = end is not None and end >= recent_cutoff
+        recent_days_val = (now - end).days if end is not None else None
         items.append(
             FireEpisodeListItem(
                 id=episode.id,
@@ -197,6 +203,8 @@ def list_fire_episodes(
                 gee_priority=episode.gee_priority,
                 slides_data=episode.slides_data,
                 representative_event_id=representative_map.get(episode.id),
+                is_recent=is_recent_flag,
+                recent_days=recent_days_val,
             )
         )
 
@@ -225,7 +233,7 @@ def list_active_episodes_for_home(
     rows = (
         db.execute(
             text(
-                """
+                f"""
                 SELECT fe.id,
                        fe.status,
                        fe.start_date,
@@ -246,6 +254,17 @@ def list_active_episodes_for_home(
                        fe.gee_candidate,
                        fe.gee_priority,
                        fe.slides_data,
+                       CASE
+                           WHEN fe.end_date IS NOT NULL
+                                AND fe.end_date >= NOW() AT TIME ZONE 'utc' - INTERVAL '{RECENT_DAYS} days'
+                           THEN true
+                           ELSE false
+                       END AS is_recent,
+                       CASE
+                           WHEN fe.end_date IS NOT NULL
+                           THEN EXTRACT(DAY FROM NOW() AT TIME ZONE 'utc' - fe.end_date)::int
+                           ELSE NULL
+                       END AS recent_days,
                        rep.event_id AS representative_event_id
                   FROM fire_episodes fe
                  LEFT JOIN LATERAL (
@@ -258,12 +277,25 @@ def list_active_episodes_for_home(
                                   ev.start_date DESC NULLS LAST
                          LIMIT 1
                  ) rep ON TRUE
-                 WHERE fe.status IN ('active', 'monitoring')
-                   AND fe.gee_candidate = true
-                   AND fe.slides_data IS NOT NULL
+                 WHERE fe.slides_data IS NOT NULL
                    AND jsonb_array_length(fe.slides_data) > 0
-                 ORDER BY fe.gee_priority DESC NULLS LAST, fe.start_date DESC NULLS LAST
-                 LIMIT :limit
+                   AND (
+                        fe.status IN ('active', 'monitoring')
+                        OR (
+                            fe.status IN ('extinct', 'closed')
+                            AND fe.end_date >= NOW() AT TIME ZONE 'utc' - INTERVAL '{RECENT_DAYS} days'
+                        )
+                   )
+                 ORDER BY CASE fe.status
+                            WHEN 'active' THEN 0
+                            WHEN 'monitoring' THEN 1
+                            WHEN 'extinct' THEN 2
+                            WHEN 'closed' THEN 3
+                            ELSE 4
+                          END,
+                          fe.gee_priority DESC NULLS LAST,
+                          fe.end_date DESC NULLS LAST
+                LIMIT :limit
                 """
             ),
             {"limit": limit},
@@ -304,6 +336,8 @@ def list_active_episodes_for_home(
                 gee_priority=row.get("gee_priority"),
                 slides_data=row.get("slides_data"),
                 representative_event_id=row.get("representative_event_id"),
+                is_recent=bool(row.get("is_recent")),
+                recent_days=row.get("recent_days"),
             )
         )
 

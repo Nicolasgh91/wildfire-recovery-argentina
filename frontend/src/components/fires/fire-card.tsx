@@ -134,8 +134,11 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
           </Carousel>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="rounded-full bg-white/60 p-6 shadow-sm backdrop-blur-sm">
+            <div className="flex flex-col items-center gap-2 rounded-2xl bg-white/60 px-6 py-4 shadow-sm backdrop-blur-sm">
               <Flame className={cn('h-12 w-12', severity.iconColor)} />
+              <span className="max-w-[180px] truncate text-sm font-medium text-slate-700">
+                {fire.provinces?.[0] ?? 'Sin provincia'}
+              </span>
             </div>
           </div>
         )}
@@ -159,6 +162,22 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
             >
               {STATUS_LABELS[statusKey]}
             </Badge>
+            {fire.is_recent && (
+              <Badge
+                variant="outline"
+                className="border-amber-200 bg-amber-50 text-amber-700 text-xs whitespace-nowrap"
+              >
+                Reciente
+              </Badge>
+            )}
+            {slidesToShow.length === 0 && (
+              <Badge
+                variant="outline"
+                className="border-slate-200 bg-slate-50 text-slate-500 text-xs whitespace-nowrap"
+              >
+                Imagen pendiente
+              </Badge>
+            )}
           </div>
         </div>
 

@@ -39,6 +39,8 @@ class FireEpisodeListItem(BaseModel):
     gee_priority: Optional[int] = None
     slides_data: Optional[List[EpisodeSlideItem]] = None
     representative_event_id: Optional[UUID] = None
+    is_recent: bool = False
+    recent_days: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
