@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState, type ChangeEvent } from 'react'
+import { Suspense, lazy, useRef, useState, type ChangeEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useI18n } from '@/context/LanguageContext'
 import { fires } from '@/data/mockdata'
+import { reverseGeocode } from '@/services/endpoints/geocode'
 
 const AuditMap = lazy(() =>
   import('@/components/audit-map').then((mod) => ({ default: mod.AuditMap })),
@@ -34,9 +35,18 @@ function CitizenReportContent() {
   const preselectedFire = fireId ? fires.find((f) => f.id === fireId) : null
 
   const [step, setStep] = useState(1)
-  const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lon: number } | null>(
-    preselectedFire ? { lat: preselectedFire.lat, lon: preselectedFire.lon } : null,
+  const [selectedLocation, setSelectedLocation] = useState<{
+    lat: number
+    lon: number
+    label?: string | null
+  } | null>(
+    preselectedFire
+      ? { lat: preselectedFire.lat, lon: preselectedFire.lon, label: preselectedFire.title }
+      : null,
   )
+  const [isResolvingLocation, setIsResolvingLocation] = useState(false)
+  const [locationError, setLocationError] = useState('')
+  const latestResolveRef = useRef(0)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [description, setDescription] = useState('')
   const [isSubmitted, setIsSubmitted] = useState(false)
@@ -48,8 +58,26 @@ function CitizenReportContent() {
     { number: 4, label: t('submitReport'), icon: CheckCircle2 },
   ]
 
-  const handleLocationSelect = (lat: number, lon: number) => {
+  const handleLocationSelect = async (lat: number, lon: number) => {
     setSelectedLocation({ lat, lon })
+    setLocationError('')
+    setIsResolvingLocation(true)
+    const requestId = latestResolveRef.current + 1
+    latestResolveRef.current = requestId
+
+    try {
+      const result = await reverseGeocode(lat, lon)
+      if (latestResolveRef.current !== requestId) return
+      setSelectedLocation({ lat, lon, label: result.display_name })
+    } catch {
+      if (latestResolveRef.current !== requestId) return
+      setLocationError('No se pudo resolver el lugar, pero podés verificar.')
+      setSelectedLocation({ lat, lon })
+    } finally {
+      if (latestResolveRef.current === requestId) {
+        setIsResolvingLocation(false)
+      }
+    }
   }
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -168,9 +196,21 @@ function CitizenReportContent() {
                   <AuditMap onLocationSelect={handleLocationSelect} />
                 </Suspense>
                 {selectedLocation && (
-                  <p className="text-sm text-muted-foreground">
-                    Selected: {selectedLocation.lat.toFixed(4)}, {selectedLocation.lon.toFixed(4)}
-                  </p>
+                  <div className="space-y-1 text-sm text-muted-foreground">
+                    {isResolvingLocation ? (
+                      <p>Resolviendo ubicación...</p>
+                    ) : selectedLocation.label ? (
+                      <p>Ubicación: {selectedLocation.label}</p>
+                    ) : (
+                      <p>
+                        Coordenadas: {selectedLocation.lat.toFixed(4)},{' '}
+                        {selectedLocation.lon.toFixed(4)}
+                      </p>
+                    )}
+                    {locationError && (
+                      <p className="text-xs text-destructive">{locationError}</p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
@@ -217,7 +257,8 @@ function CitizenReportContent() {
                     <p>
                       <strong>Location:</strong>{' '}
                       {selectedLocation
-                        ? `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lon.toFixed(4)}`
+                        ? selectedLocation.label ||
+                          `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lon.toFixed(4)}`
                         : 'Not selected'}
                     </p>
                     <p>

@@ -32,6 +32,7 @@ vi.mock('react-leaflet', () => ({
 describe('FireMarkers', () => {
   const fire: FireMapItem = {
     id: 'fire-123',
+    representative_event_id: 'event-123',
     title: 'Test Fire',
     lat: -34.6,
     lon: -58.38,
@@ -54,10 +55,28 @@ describe('FireMarkers', () => {
     )
 
     const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', `/fires/${fire.id}`)
+    expect(link).toHaveAttribute('href', `/fires/${fire.representative_event_id}`)
     expect(screen.getByText('Test Fire')).toBeInTheDocument()
     expect(screen.getByText(/12.3%/)).toBeInTheDocument()
     expect(screen.getByText(/Reserva/)).toBeInTheDocument()
+  })
+
+  it('falls back to fire id when representative_event_id is missing', () => {
+    const fireNoRep: FireMapItem = {
+      ...fire,
+      representative_event_id: null,
+    }
+
+    render(
+      <MemoryRouter>
+        <I18nProvider>
+          <FireMarkers fires={[fireNoRep]} />
+        </I18nProvider>
+      </MemoryRouter>
+    )
+
+    const link = screen.getByRole('link')
+    expect(link).toHaveAttribute('href', `/fires/${fireNoRep.id}`)
   })
 
   it('fires onFireSelect when marker is clicked', () => {

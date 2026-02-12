@@ -146,12 +146,39 @@ export function handleHttpError(
 }
 
 export async function responseErrorInterceptor(error: AxiosError) {
-  const config = error.config as (InternalAxiosRequestConfig & { _retryCount?: number }) | undefined
+  const config = error.config as
+    | (InternalAxiosRequestConfig & { _retryCount?: number; _authRetried?: boolean })
+    | undefined
 
   const skipAuthRedirect =
     (config as { skipAuthRedirect?: boolean } | undefined)?.skipAuthRedirect ||
     shouldSkipAuthRedirect(config)
   const hasAuthHeader = Boolean(getHeaderValue(config?.headers, 'Authorization'))
+  const status = error.response?.status
+
+  if (
+    status === 401 &&
+    config &&
+    !config._authRetried &&
+    USE_SUPABASE_JWT &&
+    !skipAuthRedirect &&
+    hasAuthHeader
+  ) {
+    config._authRetried = true
+    try {
+      const { supabase } = await import('@/lib/supabase')
+      const { data, error: refreshError } = await supabase.auth.refreshSession()
+      const refreshedToken = data?.session?.access_token
+      if (refreshError || !refreshedToken) {
+        throw refreshError || new Error('No refreshed session')
+      }
+      setAuthToken(refreshedToken)
+      setHeaderValue(config.headers, 'Authorization', `Bearer ${refreshedToken}`)
+      return apiClient.request(config)
+    } catch {
+      // fall through to existing auth handling
+    }
+  }
 
   if (config && (config._retryCount || 0) < MAX_RETRIES) {
     if (!error.response || RETRYABLE_STATUS_CODES.includes(error.response.status)) {

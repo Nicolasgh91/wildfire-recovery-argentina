@@ -18,6 +18,7 @@ export type Episode = {
   overlap_percentage?: number | null
   protected_area_name?: string | null
   count_protected_areas?: number | null
+  representative_event_id?: string | null
 }
 
 interface EpisodeLayerProps {
@@ -62,7 +63,8 @@ export function EpisodeLayer({ episodes, onEpisodeClick }: EpisodeLayerProps) {
     const protectedLabel = escapeHtml(t('protectedArea'))
     const hectares = escapeHtml(formatHectares(episode.hectares))
     const province = escapeHtml(episode.province ?? 'N/A')
-    const detailsHref = `/fires/${encodeURIComponent(episode.id)}`
+    const detailId = episode.representative_event_id ?? episode.id
+    const detailsHref = `/fires/${encodeURIComponent(detailId)}`
 
     const protectedLine =
       episode.in_protected_area && episode.overlap_percentage !== null && episode.overlap_percentage !== undefined

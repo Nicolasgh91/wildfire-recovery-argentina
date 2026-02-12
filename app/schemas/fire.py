@@ -1,7 +1,7 @@
 import math
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -291,6 +291,8 @@ class FireEventDetail(FireEventListItem):
 class FireDetailResponse(BaseModel):
     """Response del detalle de incendio."""
 
+    source_type: Literal["event", "episode"] = "event"
+    episode_id: Optional[UUID] = None
     fire: FireEventDetail
     detections: List[DetectionBrief] = []
     related_fires_count: int = 0

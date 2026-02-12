@@ -13,6 +13,7 @@ interface FireCardProps {
 
 export function FireCard({ fire }: FireCardProps) {
   const { t } = useI18n()
+  const detailId = fire.id
 
   const severityColors = {
     high: 'bg-destructive text-destructive-foreground',
@@ -75,12 +76,18 @@ export function FireCard({ fire }: FireCardProps) {
       </CardContent>
 
       <CardFooter className="border-t border-border p-4">
-        <Button asChild variant="default" className="w-full gap-2">
-          <Link to={`/fires/${fire.id}`}>
-            {t('viewDetails')}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </Button>
+        {detailId ? (
+          <Button asChild variant="default" className="w-full gap-2">
+            <Link to={`/fires/${detailId}`}>
+              {t('viewDetails')}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        ) : (
+          <Button variant="outline" className="w-full" disabled>
+            Detalle no disponible
+          </Button>
+        )}
       </CardFooter>
     </Card>
   )

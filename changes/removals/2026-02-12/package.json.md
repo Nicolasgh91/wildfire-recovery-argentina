@@ -1,3 +1,8 @@
+# Removal log: package.json
+Date: 2026-02-12
+
+Removed:
+`json
 {
   "devDependencies": {
     "autoprefixer": "^10.4.23",
@@ -45,3 +50,12 @@
   },
   "homepage": "https://github.com/Nicolasgh91/wildfire-recovery-argentina#readme"
 }
+
+`
+
+Reason:
+Root-level Node manifest had no references in repo; frontend has its own package.json and scripts.
+
+Recovery:
+Restore package.json with the content above and re-run 
+pm install at repo root if needed.

@@ -72,3 +72,57 @@ class GeocodingService:
             display_name=display_name,
             boundingbox=boundingbox if isinstance(boundingbox, list) else None,
         )
+
+    def reverse_geocode(self, lat: float, lon: float) -> Optional[GeocodeResult]:
+        reverse_url = (
+            self.base_url.replace("/search", "/reverse")
+            if "/search" in self.base_url
+            else f"{self.base_url.rstrip('/')}/reverse"
+        )
+
+        params = {
+            "lat": lat,
+            "lon": lon,
+            "format": "jsonv2",
+        }
+
+        if self.country:
+            params["countrycodes"] = self.country
+        if self.email:
+            params["email"] = self.email
+
+        headers = {"User-Agent": self.user_agent}
+
+        try:
+            response = requests.get(
+                reverse_url, params=params, headers=headers, timeout=self.timeout
+            )
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            logger.warning("reverse geocoding request failed: %s", exc)
+            return None
+
+        try:
+            data = response.json()
+        except ValueError:
+            logger.warning("reverse geocoding response is not valid json")
+            return None
+
+        if not isinstance(data, dict):
+            return None
+
+        try:
+            resolved_lat = float(data.get("lat"))
+            resolved_lon = float(data.get("lon"))
+        except (TypeError, ValueError):
+            return None
+
+        display_name = data.get("display_name") or f"{lat}, {lon}"
+        boundingbox = data.get("boundingbox")
+
+        return GeocodeResult(
+            lat=resolved_lat,
+            lon=resolved_lon,
+            display_name=display_name,
+            boundingbox=boundingbox if isinstance(boundingbox, list) else None,
+        )

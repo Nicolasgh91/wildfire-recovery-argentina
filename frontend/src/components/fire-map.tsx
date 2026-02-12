@@ -27,7 +27,7 @@ export function FireMap({
   }, [selectedFire])
 
   return (
-    <div className={`${height} w-full overflow-hidden rounded-lg border border-border`}>
+    <div className={`${height} w-full overflow-hidden rounded-lg border border-border isolate`}>
       <MapView
         fires={fires}
         center={safeCenter}

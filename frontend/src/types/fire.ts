@@ -209,6 +209,8 @@ export type FireDetail = FireEventListItem & {
 }
 
 export type FireDetailResponse = {
+  source_type?: 'event' | 'episode'
+  episode_id?: string | null
   fire: FireDetail
   detections: FireDetection[]
   related_fires_count: number

@@ -1,13 +1,14 @@
 import { Suspense, lazy, type ReactNode } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Footer } from '@/components/layout/footer'
 import { Navbar } from '@/components/layout/navbar'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
-import { AuthProvider } from '@/context/AuthContext'
+import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { I18nProvider } from '@/context/LanguageContext'
 import { isFeatureEnabled } from '@/lib/featureFlags'
+import { useIdleTimer } from '@/hooks/useIdleTimer'
 
 const HomePage = lazy(() => import('@/pages/Home'))
 const MapPage = lazy(() => import('@/pages/MapPage'))
@@ -41,6 +42,8 @@ function AppLoading() {
 
 function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const { isAuthenticated, signOut } = useAuth()
   const isMapPage = pathname === '/map'
   const hideChrome = pathname === '/login' || pathname === '/register'
   const shellClass = isMapPage ? 'flex h-screen flex-col' : 'flex min-h-screen flex-col'
@@ -49,6 +52,14 @@ function AppShell({ children }: { children: ReactNode }) {
     : isMapPage
       ? 'flex-1 overflow-hidden pt-0 pb-24 md:pt-24 md:pb-0'
       : 'flex-1 pt-0 pb-24 md:pt-24 md:pb-0'
+
+  useIdleTimer({
+    enabled: isAuthenticated,
+    onIdle: async () => {
+      await signOut()
+      navigate('/login', { state: { reason: 'idle' } })
+    },
+  })
 
   return (
     <div className={shellClass}>

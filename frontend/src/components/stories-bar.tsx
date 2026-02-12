@@ -35,22 +35,25 @@ export function StoriesBar({ fires }: StoriesBarProps) {
         </h2>
         <ScrollArea className="w-full whitespace-nowrap">
           <div className="flex gap-4">
-            {highSeverityFires.map((fire) => (
-              <Link
-                key={fire.id}
-                to={`/fires/${fire.representative_event_id ?? fire.id}`}
-                className="group flex flex-col items-center gap-2"
-              >
-                <div className="relative h-16 w-16 overflow-hidden rounded-full bg-gradient-to-br from-destructive/80 to-destructive p-0.5">
-                  <div className="flex h-full w-full items-center justify-center rounded-full bg-card transition-transform group-hover:scale-95">
-                    <Flame className="h-6 w-6 text-destructive" />
+            {highSeverityFires.map((fire) => {
+              const detailId = fire.representative_event_id ?? fire.id
+              return (
+                <Link
+                  key={fire.id}
+                  to={`/fires/${detailId}`}
+                  className="group flex flex-col items-center gap-2"
+                >
+                  <div className="relative h-16 w-16 overflow-hidden rounded-full bg-gradient-to-br from-destructive/80 to-destructive p-0.5">
+                    <div className="flex h-full w-full items-center justify-center rounded-full bg-card transition-transform group-hover:scale-95">
+                      <Flame className="h-6 w-6 text-destructive" />
+                    </div>
                   </div>
-                </div>
-                <span className="max-w-[80px] truncate text-xs text-muted-foreground">
-                  {fire.provinces?.[0] ?? 'Sin provincia'}
-                </span>
-              </Link>
-            ))}
+                  <span className="max-w-[80px] truncate text-xs text-muted-foreground">
+                    {fire.provinces?.[0] ?? 'Sin provincia'}
+                  </span>
+                </Link>
+              )
+            })}
           </div>
           <ScrollBar orientation="horizontal" />
         </ScrollArea>

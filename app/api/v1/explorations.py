@@ -39,6 +39,7 @@ Last Updated: 2026-02-08
 """
 from __future__ import annotations
 
+import logging
 from typing import Optional
 from uuid import UUID
 
@@ -48,6 +49,7 @@ from fastapi import (
     Header,
     HTTPException,
     Query,
+    Request,
     Response,
     status,
 )
@@ -70,6 +72,8 @@ from app.schemas.exploration import (
 )
 from app.services.exploration_service import ExplorationService
 from workers.tasks.exploration_hd_task import generate_exploration_hd
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -282,10 +286,12 @@ def get_exploration_quote(
 )
 def generate_exploration(
     investigation_id: UUID,
+    request: Request,
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     service: ExplorationService = Depends(get_exploration_service),
     current_user=Depends(get_current_user),
 ) -> ExplorationGenerateResponse:
+    request_id = getattr(request.state, "request_id", None)
     try:
         job, credits_spent, credits_remaining = service.generate_images(
             user_id=current_user.id,
@@ -294,6 +300,13 @@ def generate_exploration(
         )
     except ValueError as exc:
         code = str(exc)
+        logger.warning(
+            "exploration_generate_error code=%s request_id=%s investigation_id=%s user_id=%s",
+            code,
+            request_id,
+            investigation_id,
+            current_user.id,
+        )
         if code == "investigation_not_found":
             raise HTTPException(
                 status_code=404, detail="Investigacion no encontrada"
@@ -320,13 +333,28 @@ def generate_exploration(
                     "message": "Creditos insuficientes",
                     "credits_required": items_count,
                     "credits_balance": credits_balance,
+                    "request_id": request_id,
                 },
             ) from exc
         raise
 
     items_count = job.progress_total
     if credits_spent > 0 and job.status == "queued":
-        generate_exploration_hd.delay(str(job.id))
+        try:
+            generate_exploration_hd.delay(str(job.id))
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.exception(
+                "exploration_generate_enqueue_failed request_id=%s job_id=%s",
+                request_id,
+                job.id,
+            )
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "message": "No se pudo iniciar la generacion",
+                    "request_id": request_id,
+                },
+            ) from exc
     return ExplorationGenerateResponse(
         job_id=job.id,
         status=job.status,

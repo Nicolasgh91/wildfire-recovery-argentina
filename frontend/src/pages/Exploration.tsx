@@ -48,12 +48,14 @@ import {
 } from '@/components/ui/accordion'
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
+import { useCreditBalance } from '@/hooks/queries/useCreditBalance'
 import { cn } from '@/lib/utils'
 import { groupEventsByEpisode } from '@/services/clustering'
 import {
   searchFireEvents,
   getExplorationPreview,
 } from '@/services/endpoints/fire-events'
+import { getFireProvinces } from '@/services/endpoints/fires'
 import {
   addExplorationItem,
   createExploration,
@@ -144,14 +146,16 @@ function buildDateList(
   baseDate: Date | null,
   offsets: number[],
   count: number,
+  maxDate?: string,
 ) {
   const result: string[] = []
   const seen = new Set<string>()
   const baseValues = base ?? []
+  const isAllowed = (value: string) => (maxDate ? value <= maxDate : true)
 
   for (const value of baseValues) {
     if (result.length >= count) break
-    if (!seen.has(value)) {
+    if (!seen.has(value) && isAllowed(value)) {
       result.push(value)
       seen.add(value)
     }
@@ -162,7 +166,7 @@ function buildDateList(
   for (const offset of offsets) {
     if (result.length >= count) break
     const next = toDateOnly(addMonths(baseDate, offset))
-    if (!seen.has(next)) {
+    if (!seen.has(next) && isAllowed(next)) {
       result.push(next)
       seen.add(next)
     }
@@ -175,6 +179,7 @@ function buildDraftItems(
   preview: ExplorationPreviewResponse,
   beforeCount: number,
   afterCount: number,
+  maxDate?: string,
 ): DraftItem[] {
   const startDate = parseIsoDate(preview.start_date)
   const endDate = parseIsoDate(preview.end_date) ?? startDate
@@ -184,12 +189,14 @@ function buildDraftItems(
     startDate,
     BEFORE_OFFSETS,
     beforeCount,
+    maxDate,
   )
   const afterDates = buildDateList(
     preview.timeline?.after ?? [],
     endDate,
     AFTER_OFFSETS,
     afterCount,
+    maxDate,
   )
 
   const items: DraftItem[] = []
@@ -262,6 +269,7 @@ export default function ExplorationPage() {
   const { isAuthenticated, status } = useAuth()
   const locale = language === 'es' ? 'es-AR' : 'en-US'
   const navigate = useNavigate()
+  const today = new Date().toISOString().slice(0, 10)
 
   const mapFallback = (
     <div className="flex h-64 items-center justify-center rounded-lg border border-border bg-muted/40">
@@ -273,6 +281,7 @@ export default function ExplorationPage() {
   )
 
   const [step, setStep] = useState<StepId>(1)
+  const [provinceOptions, setProvinceOptions] = useState<string[]>(PROVINCES)
   const [searchProvince, setSearchProvince] = useState<string>('')
   const [searchFrom, setSearchFrom] = useState<string>('')
   const [searchTo, setSearchTo] = useState<string>('')
@@ -305,10 +314,12 @@ export default function ExplorationPage() {
   const [syncing, setSyncing] = useState(false)
   const [syncedSignature, setSyncedSignature] = useState('')
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+  const [showCreditDialog, setShowCreditDialog] = useState(false)
   const [showAuthDialog, setShowAuthDialog] = useState(false)
   const [pauseAutoSync, setPauseAutoSync] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [trackingId, setTrackingId] = useState<string | null>(null)
+  const [titleError, setTitleError] = useState(false)
 
   const [newItemKind, setNewItemKind] = useState<'pre' | 'post'>('post')
   const [newItemDate, setNewItemDate] = useState('')
@@ -322,6 +333,7 @@ export default function ExplorationPage() {
   const totalCount = beforeCount + afterCount
 
   const groupedResults = useMemo(() => groupEventsByEpisode(searchResults), [searchResults])
+  const { data: creditData } = useCreditBalance()
 
   const mapItems = useMemo(() => {
     return groupedResults
@@ -362,9 +374,30 @@ export default function ExplorationPage() {
   }, [selectedFire])
 
   useEffect(() => {
+    let mounted = true
+    const loadProvinces = async () => {
+      try {
+        const response = await getFireProvinces()
+        const names = response.provinces
+          .map((province) => province.name)
+          .filter((name): name is string => Boolean(name))
+        if (mounted && names.length) {
+          setProvinceOptions(names)
+        }
+      } catch {
+        // keep fallback list
+      }
+    }
+    void loadProvinces()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (step !== 2 || !preview) return
-    setDraftItems(buildDraftItems(preview, beforeCount, afterCount))
-  }, [step, preview, beforeCount, afterCount])
+    setDraftItems(buildDraftItems(preview, beforeCount, afterCount, today))
+  }, [step, preview, beforeCount, afterCount, today])
 
   useEffect(() => {
     if (step !== 3 || !preview || !selectedFire) return
@@ -556,6 +589,10 @@ export default function ExplorationPage() {
 
   const handleAddItem = () => {
     if (!newItemDate) return
+    if (newItemDate > today) {
+      toast.error('La fecha no puede ser futura.')
+      return
+    }
     if (draftItems.length >= TOTAL_LIMIT) {
       toast.error(t('reportMaxImagesRange'))
       return
@@ -624,6 +661,11 @@ export default function ExplorationPage() {
 
   const handleSaveDraft = async () => {
     if (!draftId) return
+    if (!draftTitle.trim()) {
+      setTitleError(true)
+      return
+    }
+    setTitleError(false)
     try {
       if (draftTitle) {
         await updateExploration(draftId, { title: draftTitle })
@@ -656,6 +698,14 @@ export default function ExplorationPage() {
   }
 
   const handleGenerate = () => {
+    if (!isAuthenticated) {
+      setShowAuthDialog(true)
+      return
+    }
+    if (creditData && creditData.balance < draftItems.length) {
+      setShowCreditDialog(true)
+      return
+    }
     setShowConfirmDialog(true)
   }
 
@@ -676,13 +726,24 @@ export default function ExplorationPage() {
       setTrackingId(response.job_id)
       toast.success(`${t('explorationGenerationStarted')} ${response.job_id}`)
     } catch (error) {
-      const status = (error as { response?: { status?: number } })?.response?.status
-      if (status === 402) {
-        toast.error(t('explorationInsufficientCredits'))
-        navigate('/credits')
-      } else {
-        toast.error(t('technicalError'))
+      const response = (error as { response?: { status?: number; data?: any; headers?: any } })
+        ?.response
+      const requestId = response?.headers?.['x-request-id']
+      if (response?.data) {
+        // eslint-disable-next-line no-console
+        console.error('Exploration generation failed', response.data, requestId)
       }
+      const detail = response?.data?.detail
+      let message = t('technicalError')
+      if (typeof detail === 'string') {
+        message = detail
+      } else if (detail?.message) {
+        message = detail.message
+      }
+      if (requestId) {
+        message = `${message} (ID: ${requestId})`
+      }
+      toast.error(message)
     } finally {
       setGenerating(false)
       setShowConfirmDialog(false)
@@ -717,6 +778,27 @@ export default function ExplorationPage() {
             <AlertDialogCancel onClick={handleAuthBack}>{t('explorationAuthBack')}</AlertDialogCancel>
             <AlertDialogAction onClick={handleAuthRedirect}>
               {t('explorationAuthLogin')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={showCreditDialog} onOpenChange={setShowCreditDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Necesitas cargar creditos</AlertDialogTitle>
+            <AlertDialogDescription>
+              No tenes saldo suficiente para generar estas imagenes HD.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Volver</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowCreditDialog(false)
+                navigate('/credits')
+              }}
+            >
+              Ir a MercadoPago
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -842,7 +924,7 @@ export default function ExplorationPage() {
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="all">{t('all')}</SelectItem>
-                              {PROVINCES.map((province) => (
+                              {provinceOptions.map((province) => (
                                 <SelectItem key={province} value={province}>
                                   {province}
                                 </SelectItem>
@@ -857,11 +939,13 @@ export default function ExplorationPage() {
                               type="date"
                               value={searchFrom}
                               onChange={(event) => setSearchFrom(event.target.value)}
+                              max={today}
                             />
                             <Input
                               type="date"
                               value={searchTo}
                               onChange={(event) => setSearchTo(event.target.value)}
+                              max={today}
                             />
                           </div>
                         </div>
@@ -1111,7 +1195,7 @@ export default function ExplorationPage() {
                 </div>
 
                 {showMap && (
-                  <Card className="border-border/70">
+                  <Card className="border-border/70 isolate">
                     <CardHeader>
                       <CardTitle className="text-base">{t('map')}</CardTitle>
                       <CardDescription>{t('explorationMapSelect')}</CardDescription>
@@ -1282,6 +1366,86 @@ export default function ExplorationPage() {
                         </div>
                       )}
                     </div>
+
+                    <div className="space-y-4 lg:col-span-2">
+                      <Separator />
+                      <div className="space-y-2">
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          {t('explorationAddItemLabel')}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Select
+                            value={newItemKind}
+                            onValueChange={(value) => setNewItemKind(value as 'pre' | 'post')}
+                          >
+                            <SelectTrigger className="w-[160px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="pre">{t('explorationBeforeLabel')}</SelectItem>
+                              <SelectItem value="post">{t('explorationAfterLabel')}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="date"
+                            value={newItemDate}
+                            onChange={(event) => setNewItemDate(event.target.value)}
+                            max={today}
+                          />
+                          <Button variant="outline" onClick={handleAddItem}>
+                            {t('explorationAddItemAction')}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {draftItems.map((item, index) => (
+                          <div
+                            key={item.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
+                          >
+                            <div className="flex items-center gap-3">
+                              <Badge variant={item.kind === 'pre' ? 'secondary' : 'outline'}>
+                                {item.kind === 'pre' ? t('explorationBeforeLabel') : t('explorationAfterLabel')}
+                              </Badge>
+                              <div>
+                                <p className="text-sm font-semibold text-foreground">
+                                  {formatDisplayDate(item.targetDate, locale)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {item.kind === 'pre' ? t('explorationBeforeLabel') : t('explorationAfterLabel')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleMoveItem(index, -1)}
+                                disabled={index === 0}
+                              >
+                                <ArrowUp className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleMoveItem(index, 1)}
+                                disabled={index === draftItems.length - 1}
+                              >
+                                <ArrowDown className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleRemoveItem(item.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -1300,85 +1464,33 @@ export default function ExplorationPage() {
                       </span>
                       <Input
                         value={draftTitle}
-                        onChange={(event) => setDraftTitle(event.target.value)}
+                        onChange={(event) => {
+                          setDraftTitle(event.target.value)
+                          if (titleError) setTitleError(false)
+                        }}
                         placeholder={t('explorationTitlePlaceholder')}
                       />
+                      {titleError && (
+                        <p className="text-xs text-destructive">
+                          Ingresá un título para guardar la investigación.
+                        </p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
                       <span className="text-xs font-semibold text-muted-foreground">
-                        {t('explorationAddItemLabel')}
+                        Resumen de fechas
                       </span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <Select
-                          value={newItemKind}
-                          onValueChange={(value) => setNewItemKind(value as 'pre' | 'post')}
-                        >
-                          <SelectTrigger className="w-[160px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pre">{t('explorationBeforeLabel')}</SelectItem>
-                            <SelectItem value="post">{t('explorationAfterLabel')}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="date"
-                          value={newItemDate}
-                          onChange={(event) => setNewItemDate(event.target.value)}
-                        />
-                        <Button variant="outline" onClick={handleAddItem}>
-                          {t('explorationAddItemAction')}
-                        </Button>
+                      <div className="flex flex-wrap gap-2">
+                        {draftItems.map((item) => (
+                          <Badge
+                            key={item.id}
+                            variant={item.kind === 'pre' ? 'secondary' : 'outline'}
+                          >
+                            {formatDisplayDate(item.targetDate, locale)}
+                          </Badge>
+                        ))}
                       </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      {draftItems.map((item, index) => (
-                        <div
-                          key={item.id}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
-                        >
-                          <div className="flex items-center gap-3">
-                            <Badge variant={item.kind === 'pre' ? 'secondary' : 'outline'}>
-                              {item.kind === 'pre' ? t('explorationBeforeLabel') : t('explorationAfterLabel')}
-                            </Badge>
-                            <div>
-                              <p className="text-sm font-semibold text-foreground">
-                                {formatDisplayDate(item.targetDate, locale)}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {item.kind === 'pre' ? t('explorationBeforeLabel') : t('explorationAfterLabel')}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleMoveItem(index, -1)}
-                              disabled={index === 0}
-                            >
-                              <ArrowUp className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleMoveItem(index, 1)}
-                              disabled={index === draftItems.length - 1}
-                            >
-                              <ArrowDown className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleRemoveItem(item.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
                     </div>
                   </CardContent>
 
@@ -1427,7 +1539,7 @@ export default function ExplorationPage() {
                       <Button
                         variant="outline"
                         className="gap-2"
-                        disabled={syncing || needsSync || generating}
+                        disabled={syncing || needsSync || generating || !draftTitle.trim()}
                         onClick={handleSaveDraft}
                       >
                         <FileText className="h-4 w-4" />
@@ -1465,7 +1577,7 @@ export default function ExplorationPage() {
                 </Card>
 
                 <div className="space-y-4">
-                  <Card className="border-border/70">
+                  <Card className="border-border/70 isolate">
                     <CardHeader>
                       <CardTitle className="text-base">{t('explorationEventSummary')}</CardTitle>
                       <CardDescription>{t('explorationMapPreview')}</CardDescription>

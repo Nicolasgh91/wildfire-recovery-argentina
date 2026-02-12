@@ -93,11 +93,14 @@ export default function FireDetailPage() {
     error,
   } = useFire(fireId)
 
+  const isEpisodeDetail = data?.source_type === 'episode'
+  const qualityId = !isEpisodeDetail ? data?.fire?.id ?? '' : ''
+
   const {
     data: quality,
     isLoading: qualityLoading,
     error: qualityError,
-  } = useFireQuality(fireId)
+  } = useFireQuality(qualityId)
 
   const fire = data?.fire ?? null
   const title = fire ? getFireTitle(fire.department ?? undefined, fire.province ?? undefined) : ''
@@ -148,6 +151,21 @@ export default function FireDetailPage() {
 
   if (isLoading) {
     return <FireDetailSkeleton />
+  }
+
+  const errorStatus = (error as { response?: { status?: number } })?.response?.status
+
+  if (errorStatus === 404) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-4 py-12 text-center">
+          <p className="mb-4 text-lg font-semibold text-foreground">Incendio no disponible.</p>
+          <Button asChild variant="secondary">
+            <Link to="/fires/history">Volver al historial</Link>
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   if (error) {
@@ -276,7 +294,13 @@ export default function FireDetailPage() {
           {/* Carrusel de imágenes HD oculto temporalmente */}
 
           <div className="space-y-6">
-            <QualityIndicator quality={quality} isLoading={qualityLoading} error={qualityError} />
+            {isEpisodeDetail ? (
+              <div className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                Calidad no disponible para episodios sin evento asociado.
+              </div>
+            ) : (
+              <QualityIndicator quality={quality} isLoading={qualityLoading} error={qualityError} />
+            )}
 
             <Card>
               <CardHeader className="flex items-center justify-between gap-2 sm:flex-row">

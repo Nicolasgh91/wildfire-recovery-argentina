@@ -17,6 +17,7 @@ vi.mock('react-leaflet', () => ({
 describe('EpisodeLayer', () => {
   const episode = {
     id: 'episode-1',
+    representative_event_id: 'event-1',
     title: 'Episode Title',
     h3_index: latLngToCell(-34.6037, -58.3816, 5),
     severity: 'high' as const,
@@ -59,7 +60,7 @@ describe('EpisodeLayer', () => {
     latestProps.onEachFeature(feature, layer)
 
     expect(bindPopup).toHaveBeenCalledWith(
-      expect.stringContaining(`/fires/${encodeURIComponent(episode.id)}`)
+      expect.stringContaining(`/fires/${encodeURIComponent(episode.representative_event_id)}`)
     )
 
     handlers.click()
@@ -71,5 +72,39 @@ describe('EpisodeLayer', () => {
 
     handlers.mouseout({ target })
     expect(target.setStyle).toHaveBeenCalledWith(getEpisodeStyle(episode))
+  })
+
+  it('falls back to episode id when representative_event_id is missing', () => {
+    const episodeNoRep = {
+      ...episode,
+      representative_event_id: null,
+    }
+
+    render(
+      <I18nProvider>
+        <EpisodeLayer episodes={[episodeNoRep]} />
+      </I18nProvider>
+    )
+
+    const feature = {
+      type: 'Feature',
+      properties: episodeNoRep,
+      geometry: {
+        type: 'Polygon',
+        coordinates: [],
+      },
+    }
+
+    const bindPopup = vi.fn()
+    const layer = {
+      bindPopup,
+      on: vi.fn(),
+    }
+
+    latestProps.onEachFeature(feature, layer)
+
+    expect(bindPopup).toHaveBeenCalledWith(
+      expect.stringContaining(`/fires/${encodeURIComponent(episodeNoRep.id)}`)
+    )
   })
 })

@@ -52,7 +52,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.evidence import SatelliteImage
-from app.models.episode import FireEpisodeEvent
+from app.models.episode import FireEpisode, FireEpisodeEvent
 from app.models.fire import FireDetection, FireEvent
 from app.models.region import FireProtectedAreaIntersection, ProtectedArea
 from app.schemas.fire import (
@@ -927,6 +927,93 @@ class FireService:
             return None
 
         return self.get_fire_detail(representative_event.id)
+
+    def get_fire_detail_from_episode(
+        self, episode_id: UUID
+    ) -> Optional[FireDetailResponse]:
+        episode = (
+            self.db.query(FireEpisode)
+            .filter(FireEpisode.id == episode_id)
+            .first()
+        )
+        if not episode:
+            return None
+
+        centroid = None
+        if episode.centroid_lat is not None and episode.centroid_lon is not None:
+            centroid = {
+                "latitude": float(episode.centroid_lat),
+                "longitude": float(episode.centroid_lon),
+            }
+
+        end_date = episode.end_date or episode.start_date
+        duration_hours = (
+            (end_date - episode.start_date).total_seconds() / 3600
+            if end_date and episode.start_date
+            else 0
+        )
+
+        status_value = (episode.status or "").strip().lower()
+        if status_value == "active":
+            status = FireStatus.ACTIVE
+        elif status_value == "monitoring":
+            status = FireStatus.MONITORING
+        elif status_value == "controlled":
+            status = FireStatus.CONTROLLED
+        elif status_value in ("extinguished", "extinct", "closed"):
+            status = FireStatus.EXTINGUISHED
+        else:
+            status = FireStatus.EXTINGUISHED
+            if end_date:
+                now = datetime.now(timezone.utc)
+                try:
+                    if end_date >= now:
+                        status = FireStatus.ACTIVE
+                except TypeError:
+                    if end_date.replace(tzinfo=None) >= now.replace(tzinfo=None):
+                        status = FireStatus.ACTIVE
+
+        province = episode.provinces[0] if episode.provinces else None
+
+        detail = FireEventDetail(
+            id=episode.id,
+            start_date=episode.start_date,
+            end_date=end_date,
+            duration_hours=duration_hours,
+            centroid=centroid,
+            province=province,
+            department=None,
+            total_detections=episode.detection_count or 0,
+            avg_confidence=None,
+            max_frp=float(episode.frp_max) if episode.frp_max is not None else None,
+            estimated_area_hectares=float(episode.estimated_area_hectares)
+            if episode.estimated_area_hectares is not None
+            else None,
+            is_significant=False,
+            has_satellite_imagery=bool(episode.slides_data),
+            has_climate_data=False,
+            protected_area_name=None,
+            in_protected_area=False,
+            overlap_percentage=None,
+            count_protected_areas=0,
+            status=status,
+            slides_data=episode.slides_data,
+            avg_frp=None,
+            sum_frp=float(episode.frp_sum) if episode.frp_sum is not None else None,
+            has_legal_analysis=False,
+            processing_error=None,
+            protected_areas=[],
+            created_at=episode.created_at,
+            updated_at=episode.updated_at,
+        )
+
+        return FireDetailResponse(
+            fire=detail,
+            detections=[],
+            related_fires_count=0,
+            source_type="episode",
+            episode_id=episode.id,
+        )
 
     def _summary_query(self, filters: List[Any]):
         now = datetime.now(timezone.utc)

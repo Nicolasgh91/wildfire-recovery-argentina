@@ -5,14 +5,16 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, text
+from sqlalchemy import case, desc, func, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.climate import FireClimateAssociation
 from app.models.evidence import SatelliteImage, VegetationMonitoring
+from app.models.episode import FireEpisodeEvent
 from app.models.fire import FireDetection, FireEvent
 from app.models.quality import DataSourceMetadata
+from app.schemas.fire import FireStatus
 from app.schemas.quality import (
     QualityClass,
     QualityLimitation,
@@ -417,3 +419,29 @@ class QualityService:
             sources=sources,
             warnings=warnings,
         )
+
+    def get_quality_by_episode(self, episode_id: UUID) -> Optional[QualityResponse]:
+        representative_event = (
+            self.db.query(FireEvent.id)
+            .join(FireEpisodeEvent, FireEpisodeEvent.event_id == FireEvent.id)
+            .filter(FireEpisodeEvent.episode_id == episode_id)
+            .order_by(
+                case(
+                    (
+                        FireEvent.status.in_(
+                            [FireStatus.ACTIVE.value, FireStatus.MONITORING.value]
+                        ),
+                        0,
+                    ),
+                    else_=1,
+                ),
+                desc(FireEvent.end_date),
+                desc(FireEvent.start_date),
+            )
+            .first()
+        )
+
+        if not representative_event:
+            return None
+
+        return self.get_quality(representative_event.id)

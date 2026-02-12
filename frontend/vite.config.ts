@@ -1,20 +1,24 @@
-import { sentryVitePlugin } from "@sentry/vite-plugin";
+import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig(async () => {
-  const plugins = [
-    react(),
-    sentryVitePlugin({
-      org: "freelnace",
-      project: "javascript-react"
-    }),
-    sentryVitePlugin({
-      org: "freelnace",
-      project: "javascript-react"
-    })
-  ]
+  const plugins = [react()]
+
+  const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
+  const sentryOrg = process.env.SENTRY_ORG
+  const sentryProject = process.env.SENTRY_PROJECT
+
+  if (sentryAuthToken && sentryOrg && sentryProject) {
+    plugins.push(
+      sentryVitePlugin({
+        authToken: sentryAuthToken,
+        org: sentryOrg,
+        project: sentryProject,
+      }),
+    )
+  }
 
   // Optional critical CSS extraction (no-op if plugin is not installed)
   if (process.env.USE_CRITTERS !== 'false') {

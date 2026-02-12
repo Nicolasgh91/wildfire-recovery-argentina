@@ -56,123 +56,126 @@ export function FireMarkers({ fires, onFireSelect, popupVariant = 'default' }: F
 
   return (
     <>
-      {fires.map((fire) => (
-        <Marker
-          key={fire.id}
-          position={[fire.lat, fire.lon]}
-          icon={createFireIcon(fire.severity)}
-          eventHandlers={{
-            click: () => onFireSelect?.(fire),
-          }}
-        >
-          <Popup>
-            {popupVariant === 'fire_detail' ? (
-              <div className="min-w-[220px] p-2">
-                <h3 className="mb-2 font-semibold">
-                  {fire.status === 'monitoring'
-                    ? t('firePopupTitleMonitoring')
-                    : fire.status === 'controlled'
-                      ? t('firePopupTitleControlled')
-                      : fire.status === 'extinguished'
-                        ? t('firePopupTitleExtinguished')
-                        : t('firePopupTitleActive')}
-                </h3>
-                <div className="mb-3 flex flex-wrap gap-2">
-                  <Badge
-                    variant={fire.severity === 'high' ? 'destructive' : 'secondary'}
-                    className="text-xs"
-                  >
-                    {fire.severity === 'high'
-                      ? t('severityHigh')
-                      : fire.severity === 'medium'
-                        ? t('severityMedium')
-                        : t('severityLow')}
-                  </Badge>
-                  {fire.in_protected_area && (
-                    <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-700">
-                      {t('protectedAreaLabel')}
+      {fires.map((fire) => {
+        const detailId = fire.representative_event_id ?? fire.id
+        return (
+          <Marker
+            key={fire.id}
+            position={[fire.lat, fire.lon]}
+            icon={createFireIcon(fire.severity)}
+            eventHandlers={{
+              click: () => onFireSelect?.(fire),
+            }}
+          >
+            <Popup>
+              {popupVariant === 'fire_detail' ? (
+                <div className="min-w-[220px] p-2">
+                  <h3 className="mb-2 font-semibold">
+                    {fire.status === 'monitoring'
+                      ? t('firePopupTitleMonitoring')
+                      : fire.status === 'controlled'
+                        ? t('firePopupTitleControlled')
+                        : fire.status === 'extinguished'
+                          ? t('firePopupTitleExtinguished')
+                          : t('firePopupTitleActive')}
+                  </h3>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    <Badge
+                      variant={fire.severity === 'high' ? 'destructive' : 'secondary'}
+                      className="text-xs"
+                    >
+                      {fire.severity === 'high'
+                        ? t('severityHigh')
+                        : fire.severity === 'medium'
+                          ? t('severityMedium')
+                          : t('severityLow')}
                     </Badge>
-                  )}
-                </div>
-                <div className="space-y-0 text-sm text-muted-foreground [&>p]:m-0">
-                  <p>
-                    {t('province')}: {fire.province || 'N/A'}
-                  </p>
-                  <p>
-                    {t('popupProtectedAreaPercentage')}:{' '}
-                    {fire.in_protected_area &&
-                    fire.overlap_percentage !== null &&
-                    fire.overlap_percentage !== undefined
-                      ? `${fire.overlap_percentage.toFixed(1)}%`
-                      : 'N/A'}
-                  </p>
-                  <p>
-                    {t('popupProtectedAreas')}:{' '}
-                    {fire.in_protected_area && fire.protected_area_name ? fire.protected_area_name : 'N/A'}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="min-w-[200px] p-2">
-                <h3 className="mb-2 font-semibold">{fire.title}</h3>
-                <div className="mb-3 flex flex-wrap gap-2">
-                  <Badge
-                    variant={fire.severity === 'high' ? 'destructive' : 'secondary'}
-                    className="text-xs"
-                  >
-                    {fire.severity === 'high'
-                      ? t('highSeverity')
-                      : fire.severity === 'medium'
-                        ? t('mediumSeverity')
-                        : t('lowSeverity')}
-                  </Badge>
-                  {fire.in_protected_area && (
-                    <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-700">
-                      {t('protectedArea')}
-                    </Badge>
-                  )}
-                </div>
-                <div className="mb-3 space-y-1 text-sm text-muted-foreground">
-                  <p>
-                    {t('area')}:{' '}
-                    {fire.hectares !== null && fire.hectares !== undefined
-                      ? fire.hectares.toLocaleString()
-                      : 'N/A'}{' '}
-                    ha
-                  </p>
-                  <p>
-                    {t('province')}: {fire.province || 'N/A'}
-                  </p>
-                  {fire.overlap_percentage !== null &&
-                    fire.overlap_percentage !== undefined &&
-                    fire.in_protected_area && (
-                      <p>
-                        {t('protectedArea')}: {fire.overlap_percentage.toFixed(1)}%
-                      </p>
+                    {fire.in_protected_area && (
+                      <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-700">
+                        {t('protectedAreaLabel')}
+                      </Badge>
                     )}
-                  {fire.in_protected_area && fire.protected_area_name && (
+                  </div>
+                  <div className="space-y-0 text-sm text-muted-foreground [&>p]:m-0">
                     <p>
-                      {t('protectedArea')}: {fire.protected_area_name}
+                      {t('province')}: {fire.province || 'N/A'}
                     </p>
-                  )}
-                  {fire.in_protected_area &&
-                    fire.count_protected_areas !== null &&
-                    fire.count_protected_areas !== undefined && (
+                    <p>
+                      {t('popupProtectedAreaPercentage')}:{' '}
+                      {fire.in_protected_area &&
+                      fire.overlap_percentage !== null &&
+                      fire.overlap_percentage !== undefined
+                        ? `${fire.overlap_percentage.toFixed(1)}%`
+                        : 'N/A'}
+                    </p>
+                    <p>
+                      {t('popupProtectedAreas')}:{' '}
+                      {fire.in_protected_area && fire.protected_area_name ? fire.protected_area_name : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="min-w-[200px] p-2">
+                  <h3 className="mb-2 font-semibold">{fire.title}</h3>
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    <Badge
+                      variant={fire.severity === 'high' ? 'destructive' : 'secondary'}
+                      className="text-xs"
+                    >
+                      {fire.severity === 'high'
+                        ? t('highSeverity')
+                        : fire.severity === 'medium'
+                          ? t('mediumSeverity')
+                          : t('lowSeverity')}
+                    </Badge>
+                    {fire.in_protected_area && (
+                      <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-700">
+                        {t('protectedArea')}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="mb-3 space-y-1 text-sm text-muted-foreground">
+                    <p>
+                      {t('area')}:{' '}
+                      {fire.hectares !== null && fire.hectares !== undefined
+                        ? fire.hectares.toLocaleString()
+                        : 'N/A'}{' '}
+                      ha
+                    </p>
+                    <p>
+                      {t('province')}: {fire.province || 'N/A'}
+                    </p>
+                    {fire.overlap_percentage !== null &&
+                      fire.overlap_percentage !== undefined &&
+                      fire.in_protected_area && (
+                        <p>
+                          {t('protectedArea')}: {fire.overlap_percentage.toFixed(1)}%
+                        </p>
+                      )}
+                    {fire.in_protected_area && fire.protected_area_name && (
                       <p>
-                        {t('protectedArea')}: {fire.count_protected_areas}
+                        {t('protectedArea')}: {fire.protected_area_name}
                       </p>
                     )}
+                    {fire.in_protected_area &&
+                      fire.count_protected_areas !== null &&
+                      fire.count_protected_areas !== undefined && (
+                        <p>
+                          {t('protectedArea')}: {fire.count_protected_areas}
+                        </p>
+                      )}
+                  </div>
+                  <Button asChild size="sm" className="w-full">
+                    <Link to={`/fires/${detailId}`}>
+                      {t('viewDetails')}
+                    </Link>
+                  </Button>
                 </div>
-                <Button asChild size="sm" className="w-full">
-                  <Link to={`/fires/${fire.representative_event_id ?? fire.id}`}>
-                    {t('viewDetails')}
-                  </Link>
-                </Button>
-              </div>
-            )}
-          </Popup>
-        </Marker>
-      ))}
+              )}
+            </Popup>
+          </Marker>
+        )
+      })}
     </>
   )
 }

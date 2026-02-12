@@ -101,6 +101,21 @@ class Settings(BaseSettings):
         env_file=".env", case_sensitive=True, extra="ignore"
     )
 
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def default_allowed_origins(
+        cls, v: Optional[List[str]], info: ValidationInfo
+    ) -> Optional[List[str]]:
+        env = info.data.get("ENVIRONMENT") or "local"
+        if env != "production":
+            if v is None:
+                return ["http://localhost:5173", "http://localhost:3000"]
+            if isinstance(v, str) and v.strip() in ("", "[]"):
+                return ["http://localhost:5173", "http://localhost:3000"]
+            if isinstance(v, list) and len(v) == 0:
+                return ["http://localhost:5173", "http://localhost:3000"]
+        return v
+
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def assemble_db_connection(cls, v: Optional[str], info: ValidationInfo) -> Any:

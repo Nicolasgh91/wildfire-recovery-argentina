@@ -12,6 +12,17 @@ import type {
   FireStatsResponse,
 } from '@/types/fire'
 
+export type FireProvince = {
+  name: string
+  fire_count: number
+  latest_fire: string | null
+}
+
+export type FireProvincesResponse = {
+  provinces: FireProvince[]
+  total: number
+}
+
 export async function getFires(
   filters?: FireFilters,
   signal?: AbortSignal
@@ -70,4 +81,13 @@ export async function exportFires(
   }
 
   return response.data as Blob
+}
+
+export async function getFireProvinces(
+  signal?: AbortSignal,
+): Promise<FireProvincesResponse> {
+  const response = await apiClient.get<FireProvincesResponse>('/fires/provinces', {
+    signal,
+  })
+  return response.data
 }

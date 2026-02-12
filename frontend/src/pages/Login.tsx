@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Trees, AlertCircle, Mail } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,6 +17,7 @@ export default function LoginPage() {
   const location = useLocation()
   const { t } = useI18n()
   const { signIn, signInWithGoogle } = useAuth()
+  const idleToastShown = useRef(false)
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -24,6 +26,14 @@ export default function LoginPage() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
   const from = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname || '/'
+
+  useEffect(() => {
+    const reason = (location.state as { reason?: string } | undefined)?.reason
+    if (reason === 'idle' && !idleToastShown.current) {
+      idleToastShown.current = true
+      toast.info('Sesión cerrada por inactividad')
+    }
+  }, [location.state])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()

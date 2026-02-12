@@ -50,7 +50,7 @@ export function AuditMap({ onLocationSelect }: AuditMapProps) {
   }
 
   return (
-    <div className="h-full w-full overflow-hidden rounded-lg border border-border">
+    <div className="h-full w-full overflow-hidden rounded-lg border border-border isolate">
       <BaseMap className="h-full w-full">
         <LocationMarker position={position} onLocationSelect={handleSelect} />
       </BaseMap>

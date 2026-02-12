@@ -123,7 +123,6 @@ def list_fire_episodes(
     db: Session = Depends(deps.get_db),
 ) -> FireEpisodeListResponse:
     query = db.query(FireEpisode)
-
     mode_value = mode.strip().lower() if mode else "active"
     if mode_value not in VALID_MODES:
         raise HTTPException(status_code=400, detail="Invalid mode. Use active or recent.")
@@ -249,16 +248,16 @@ def list_active_episodes_for_home(
                        fe.slides_data,
                        rep.event_id AS representative_event_id
                   FROM fire_episodes fe
-                  LEFT JOIN LATERAL (
-                        SELECT ev.id AS event_id
-                          FROM fire_episode_events fee
-                          JOIN fire_events ev ON ev.id = fee.event_id
-                         WHERE fee.episode_id = fe.id
+                 LEFT JOIN LATERAL (
+                       SELECT ev.id AS event_id
+                         FROM fire_episode_events fee
+                         JOIN fire_events ev ON ev.id = fee.event_id
+                        WHERE fee.episode_id = fe.id
                          ORDER BY CASE WHEN ev.status IN ('active', 'monitoring') THEN 0 ELSE 1 END,
                                   ev.end_date DESC NULLS LAST,
                                   ev.start_date DESC NULLS LAST
                          LIMIT 1
-                  ) rep ON TRUE
+                 ) rep ON TRUE
                  WHERE fe.status IN ('active', 'monitoring')
                    AND fe.gee_candidate = true
                    AND fe.slides_data IS NOT NULL

@@ -92,14 +92,14 @@ export default function MapPage() {
       <Button
         variant="secondary"
         size="icon"
-        className="absolute left-4 top-4 z-[1000] md:hidden"
+        className="absolute left-4 top-4 z-[400] md:hidden"
         onClick={() => setShowSidebar(!showSidebar)}
       >
         {showSidebar ? <X className="h-4 w-4" /> : <List className="h-4 w-4" />}
       </Button>
 
       {showSidebar && (
-        <Card className="absolute right-4 top-4 z-[1000] hidden w-80 md:block">
+        <Card className="absolute right-4 top-4 z-[400] hidden w-80 md:block">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Map className="h-5 w-5 text-primary" />
@@ -147,7 +147,7 @@ export default function MapPage() {
       )}
 
       {showSidebar && (
-        <Card className="absolute bottom-4 left-4 right-4 z-[1000] md:hidden">
+        <Card className="absolute bottom-4 left-4 right-4 z-[400] md:hidden">
           <CardContent className="p-3">
             <ScrollArea className="h-32">
               <div className="flex gap-2 pb-2">

@@ -378,6 +378,8 @@ def get_fire_detail(
     if not result:
         result = service.get_fire_detail_by_episode(fire_id)
     if not result:
+        result = service.get_fire_detail_from_episode(fire_id)
+    if not result:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
     return result
 

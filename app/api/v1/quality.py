@@ -29,6 +29,8 @@ def get_quality(
 ) -> QualityResponse:
     result = service.get_quality(fire_event_id)
     if not result:
+        result = service.get_quality_by_episode(fire_event_id)
+    if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Evento no encontrado",

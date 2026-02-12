@@ -335,6 +335,25 @@ def geocode_location(
 
 
 @router.get(
+    "/reverse-geocode",
+    response_model=GeocodeResponse,
+    summary="Geocodificar coordenadas a una ubicacion (audit)",
+    dependencies=[Depends(check_rate_limit)],
+)
+def reverse_geocode_location(
+    lat: float = Query(..., ge=-90, le=90, description="Latitud"),
+    lon: float = Query(..., ge=-180, le=180, description="Longitud"),
+    service: GeocodingService = Depends(get_geocoding_service),
+) -> GeocodeResponse:
+    result = service.reverse_geocode(lat, lon)
+    if not result:
+        raise HTTPException(
+            status_code=404, detail="No se encontraron resultados"
+        )
+    return GeocodeResponse(query=f"{lat},{lon}", result=result)
+
+
+@router.get(
     "/search",
     response_model=AuditSearchResponse,
     summary="Buscar episodios histÃ³ricos por lugar",

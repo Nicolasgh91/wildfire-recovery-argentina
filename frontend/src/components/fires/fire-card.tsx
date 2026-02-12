@@ -63,6 +63,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
   const slidesToShow = slides.slice(0, Math.min(slides.length, slideStage))
   const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
+  const detailId = fire.representative_event_id ?? fire.id
 
   useEffect(() => {
     if (!carouselApi) return
@@ -179,7 +180,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
 
       <CardFooter className="border-t border-border bg-muted/30 p-4">
         <Button asChild className="w-full gap-2 bg-emerald-500 text-white hover:bg-emerald-600">
-          <Link to={`/fires/${fire.representative_event_id ?? fire.id}`}>
+          <Link to={`/fires/${detailId}`}>
             Ver detalles
             <ArrowRight className="h-4 w-4" />
           </Link>
