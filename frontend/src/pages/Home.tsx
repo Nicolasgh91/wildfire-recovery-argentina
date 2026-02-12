@@ -4,9 +4,8 @@ import { ArrowRight, Trees } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/context/LanguageContext'
+import { useActiveEpisodes } from '@/hooks/queries/useActiveEpisodes'
 import { useEpisodesByMode } from '@/hooks/queries/useEpisodesByMode'
-import { queryClient, queryKeys } from '@/lib/queryClient'
-import { getEpisodes } from '@/services/endpoints/episodes'
 import { FireCardSkeleton } from '@/components/fires/fire-card'
 
 const StoriesBar = lazy(() => import('@/components/stories-bar').then((m) => ({ default: m.StoriesBar })))
@@ -23,41 +22,37 @@ export default function HomePage() {
   const [slideStage, setSlideStage] = useState(1) // 1: primer thumbnail, 2: segundo, 3: tercero
   const [showRecents, setShowRecents] = useState(false)
 
-  const { data: activeData, isLoading: loadingActive } = useEpisodesByMode('active', DEFAULT_LIMIT)
+  const { data: activeData, isLoading: loadingActive } = useActiveEpisodes(DEFAULT_LIMIT)
   const { data: recentData, isLoading: loadingRecent } = useEpisodesByMode('recent', DEFAULT_LIMIT)
-  const activeEpisodes = activeData?.episodes ?? []
-  const recentEpisodes = recentData?.episodes ?? []
+  const activeEpisodes = (activeData?.episodes ?? []).filter(
+    (episode) => episode.status === 'active' || episode.status === 'monitoring',
+  )
+  const recentEpisodes = (recentData?.episodes ?? []).filter(
+    (episode) =>
+      episode.is_recent === true &&
+      (episode.status === 'extinct' || episode.status === 'closed'),
+  )
   const isLoading = loadingActive || loadingRecent
 
-  useEffect(() => {
-    // Prefetch same query so return navigation hits cache
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.episodes.mode('active', DEFAULT_LIMIT),
-      queryFn: ({ signal }) =>
-        getEpisodes({ mode: 'active', page: 1, page_size: DEFAULT_LIMIT }, signal),
-      staleTime: 5 * 60 * 1000,
-      cacheTime: 30 * 60 * 1000,
-    })
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.episodes.mode('recent', DEFAULT_LIMIT),
-      queryFn: ({ signal }) =>
-        getEpisodes({ mode: 'recent', page: 1, page_size: DEFAULT_LIMIT }, signal),
-      staleTime: 5 * 60 * 1000,
-      cacheTime: 30 * 60 * 1000,
-    })
-  }, [])
-
   const displayEpisodes = useMemo(() => {
-    if (activeEpisodes.length === 0) return recentEpisodes
-    if (!showRecents) return activeEpisodes
+    const withThumbnails = (episodes: typeof activeEpisodes) =>
+      episodes.filter((episode) =>
+        (episode.slides_data ?? []).some((slide) => Boolean(slide.thumbnail_url || slide.url)),
+      )
+
+    const activeWithThumbnails = withThumbnails(activeEpisodes)
+    const recentWithThumbnails = withThumbnails(recentEpisodes)
+
+    if (activeWithThumbnails.length === 0) return recentWithThumbnails
+    if (!showRecents) return activeWithThumbnails
 
     const seen = new Set<string>()
     const merged = []
-    for (const episode of activeEpisodes) {
+    for (const episode of activeWithThumbnails) {
       seen.add(episode.id)
       merged.push(episode)
     }
-    for (const episode of recentEpisodes) {
+    for (const episode of recentWithThumbnails) {
       if (!seen.has(episode.id)) {
         merged.push(episode)
       }

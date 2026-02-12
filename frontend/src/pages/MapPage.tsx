@@ -56,9 +56,12 @@ export default function MapPage() {
       .map((episode) => {
         const frp = episode.frp_max ?? 0
         const severity = frp >= 50 ? 'high' : frp >= 20 ? 'medium' : 'low'
+        const isRecent = episode.is_recent === true
         const status =
           episode.status === 'active' || episode.status === 'monitoring'
             ? (episode.status as 'active' | 'monitoring')
+            : isRecent
+              ? 'monitoring'
             : 'extinguished'
         const title =
           episode.provinces && episode.provinces.length > 0

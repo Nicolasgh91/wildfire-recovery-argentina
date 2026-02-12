@@ -26,6 +26,8 @@ export type EpisodeListItem = {
   gee_priority?: number | null
   slides_data?: EpisodeSlide[] | null
   representative_event_id?: string | null
+  is_recent?: boolean
+  recent_days?: number | null
 }
 
 export type EpisodeListResponse = {
