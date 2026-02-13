@@ -4,7 +4,6 @@ import { ArrowRight, Trees } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/context/LanguageContext'
-import { useActiveEpisodes } from '@/hooks/queries/useActiveEpisodes'
 import { useEpisodesByMode } from '@/hooks/queries/useEpisodesByMode'
 import { FireCardSkeleton } from '@/components/fires/fire-card'
 
@@ -22,43 +21,44 @@ export default function HomePage() {
   const [slideStage, setSlideStage] = useState(1) // 1: primer thumbnail, 2: segundo, 3: tercero
   const [showRecents, setShowRecents] = useState(false)
 
-  const { data: activeData, isLoading: loadingActive } = useActiveEpisodes(DEFAULT_LIMIT)
-  const { data: recentData, isLoading: loadingRecent } = useEpisodesByMode('recent', DEFAULT_LIMIT)
-  const activeEpisodes = (activeData?.episodes ?? []).filter(
-    (episode) => episode.status === 'active' || episode.status === 'monitoring',
+  // 1. Cargar episodios activos (siempre)
+  const { data: activeData, isLoading: loadingActive } = useEpisodesByMode('active', DEFAULT_LIMIT)
+  const activeEpisodes = activeData?.episodes ?? []
+
+  // 2. Cargar recientes SOLO si el usuario los pide O si no hay activos
+  //    (Lazy loading para evitar doble request inicial)
+  const enableRecent = showRecents || (activeEpisodes.length === 0 && !loadingActive)
+  const { data: recentData, isLoading: loadingRecent } = useEpisodesByMode(
+    'recent',
+    DEFAULT_LIMIT,
+    enableRecent
   )
-  const recentEpisodes = (recentData?.episodes ?? []).filter(
-    (episode) =>
-      episode.is_recent === true &&
-      (episode.status === 'extinct' || episode.status === 'closed'),
-  )
-  const isLoading = loadingActive || loadingRecent
+  const recentEpisodes = recentData?.episodes ?? []
+
+  // Loading es true si cargamos activos O (estamos cargando recientes explícitamente)
+  const isLoading = loadingActive || (enableRecent && loadingRecent)
 
   const displayEpisodes = useMemo(() => {
-    const withThumbnails = (episodes: typeof activeEpisodes) =>
-      episodes.filter((episode) =>
-        (episode.slides_data ?? []).some((slide) => Boolean(slide.thumbnail_url || slide.url)),
-      )
+    // Si no hay activos, mostrar recientes (fallback)
+    if (activeEpisodes.length === 0 && !loadingActive) return recentEpisodes
 
-    const activeWithThumbnails = withThumbnails(activeEpisodes)
-    const recentWithThumbnails = withThumbnails(recentEpisodes)
+    // Si el usuario no pidió recientes, solo activos
+    if (!showRecents) return activeEpisodes
 
-    if (activeWithThumbnails.length === 0) return recentWithThumbnails
-    if (!showRecents) return activeWithThumbnails
-
+    // Combinar ambos sin duplicados
     const seen = new Set<string>()
     const merged = []
-    for (const episode of activeWithThumbnails) {
+    for (const episode of activeEpisodes) {
       seen.add(episode.id)
       merged.push(episode)
     }
-    for (const episode of recentWithThumbnails) {
+    for (const episode of recentEpisodes) {
       if (!seen.has(episode.id)) {
         merged.push(episode)
       }
     }
     return merged
-  }, [activeEpisodes, recentEpisodes, showRecents])
+  }, [activeEpisodes, recentEpisodes, showRecents, loadingActive])
 
   const filteredEpisodes = useMemo(() => {
     return displayEpisodes.filter((episode) => {
@@ -119,7 +119,8 @@ export default function HomePage() {
                 onProvinceChange={setSelectedProvince}
               />
             </Suspense>
-            {activeEpisodes.length > 0 && recentEpisodes.length > 0 && (
+            {/* Mostrar toggle solo si hay posibilidad de tener ambos o ya se cargaron */}
+            {(activeEpisodes.length > 0 || showRecents) && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Switch
                   id="show-recents"

@@ -73,7 +73,20 @@ def _normalize_text(value: str) -> str:
     return normalized.lower().strip()
 
 
+import time
+
+# Cache global para lookup de provincias: (timestamp, dict)
+_PROVINCE_CACHE: tuple[float, Dict[str, str]] | None = None
+_PROVINCE_CACHE_TTL = 300  # 5 minutos
+
+
 def _load_province_lookup(db: Session) -> Dict[str, str]:
+    global _PROVINCE_CACHE
+    now = time.time()
+
+    if _PROVINCE_CACHE and (now - _PROVINCE_CACHE[0] < _PROVINCE_CACHE_TTL):
+        return _PROVINCE_CACHE[1]
+
     provinces = set()
     rows = db.execute(
         text(
@@ -93,7 +106,9 @@ def _load_province_lookup(db: Session) -> Dict[str, str]:
     ).fetchall()
     provinces.update({row[0] for row in episode_rows if row[0]})
 
-    return {_normalize_text(name): name for name in provinces}
+    result = {_normalize_text(name): name for name in provinces}
+    _PROVINCE_CACHE = (now, result)
+    return result
 
 
 def _fetch_episodes_by_province(
@@ -384,30 +399,57 @@ def audit_search(
             label=province, type="province"
         )
     else:
-        protected_area = (
-            db.execute(
-                text(
-                    """
-                    SELECT id,
-                           official_name,
-                           ST_Y(ST_Centroid(COALESCE(simplified_boundary, boundary))::geometry) AS lat,
-                           ST_X(ST_Centroid(COALESCE(simplified_boundary, boundary))::geometry) AS lon,
-                           ST_XMin(COALESCE(simplified_boundary, boundary)::geometry) AS minx,
-                           ST_YMin(COALESCE(simplified_boundary, boundary)::geometry) AS miny,
-                           ST_XMax(COALESCE(simplified_boundary, boundary)::geometry) AS maxx,
-                           ST_YMax(COALESCE(simplified_boundary, boundary)::geometry) AS maxy
-                      FROM protected_areas
-                     WHERE official_name ILIKE :term
-                        OR :query = ANY(alternative_names)
-                     ORDER BY official_name ASC
-                     LIMIT 1
-                    """
-                ),
-                {"term": f"%{query}%", "query": query},
+        try:
+            protected_area = (
+                db.execute(
+                    text(
+                        """
+                        SELECT id,
+                               official_name,
+                               ST_Y(ST_Centroid(COALESCE(simplified_boundary, boundary))::geometry) AS lat,
+                               ST_X(ST_Centroid(COALESCE(simplified_boundary, boundary))::geometry) AS lon,
+                               ST_XMin(COALESCE(simplified_boundary, boundary)::geometry) AS minx,
+                               ST_YMin(COALESCE(simplified_boundary, boundary)::geometry) AS miny,
+                               ST_XMax(COALESCE(simplified_boundary, boundary)::geometry) AS maxx,
+                               ST_YMax(COALESCE(simplified_boundary, boundary)::geometry) AS maxy
+                          FROM protected_areas
+                         WHERE unaccent(official_name) ILIKE unaccent(:term)
+                            OR unaccent(:query) IN (SELECT unaccent(x) FROM unnest(alternative_names) x)
+                         ORDER BY official_name ASC
+                         LIMIT 1
+                        """
+                    ),
+                    {"term": f"%{query}%", "query": query},
+                )
+                .mappings()
+                .first()
             )
-            .mappings()
-            .first()
-        )
+        except Exception:
+            # Fallback if unaccent extension is missing
+            protected_area = (
+                db.execute(
+                    text(
+                        """
+                        SELECT id,
+                               official_name,
+                               ST_Y(ST_Centroid(COALESCE(simplified_boundary, boundary))::geometry) AS lat,
+                               ST_X(ST_Centroid(COALESCE(simplified_boundary, boundary))::geometry) AS lon,
+                               ST_XMin(COALESCE(simplified_boundary, boundary)::geometry) AS minx,
+                               ST_YMin(COALESCE(simplified_boundary, boundary)::geometry) AS miny,
+                               ST_XMax(COALESCE(simplified_boundary, boundary)::geometry) AS maxx,
+                               ST_YMax(COALESCE(simplified_boundary, boundary)::geometry) AS maxy
+                          FROM protected_areas
+                         WHERE official_name ILIKE :term
+                            OR :query = ANY(alternative_names)
+                         ORDER BY official_name ASC
+                         LIMIT 1
+                        """
+                    ),
+                    {"term": f"%{query}%", "query": query},
+                )
+                .mappings()
+                .first()
+            )
 
         if protected_area:
             rows, stats = _fetch_episodes_by_protected_area(
@@ -442,7 +484,7 @@ def audit_search(
                 db,
                 geocode_result.lat,
                 geocode_result.lon,
-                radius_km,
+                max(radius_km, 25),
                 limit,
             )
 

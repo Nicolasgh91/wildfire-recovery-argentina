@@ -835,20 +835,17 @@ export default function ExplorationPage() {
         <Card className="border-border/60 bg-card/60">
           <CardContent className="grid gap-6 py-6 lg:grid-cols-[1.2fr_1fr]">
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div>
-                  <h1 className="text-3xl font-bold text-foreground">{t('reportsTitle')}</h1>
-                  <p className="text-sm text-muted-foreground">{t('reportsDescription')}</p>
+              <div>
+                <h1 className="text-3xl font-bold text-foreground mb-[20px]">{t('reportsTitle')}</h1>
+                <p className="text-sm text-muted-foreground">{t('explorationInstruction')}</p>
+                <div className="mt-4 space-y-2">
+                  <h2 className="text-sm font-semibold text-foreground">{t('explorationHowTitle')}</h2>
+                  <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                    <li>{t('explorationHowStep1')}</li>
+                    <li>{t('explorationHowStep2')}</li>
+                    <li>{t('explorationHowStep3')}</li>
+                  </ul>
                 </div>
-              </div>
-              <p className="text-xs text-muted-foreground">{t('explorationDisclaimer')}</p>
-              <div className="space-y-2">
-                <h2 className="text-sm font-semibold text-foreground">{t('explorationHowTitle')}</h2>
-                <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-                  <li>{t('explorationHowStep1')}</li>
-                  <li>{t('explorationHowStep2')}</li>
-                  <li>{t('explorationHowStep3')}</li>
-                </ul>
               </div>
             </div>
 

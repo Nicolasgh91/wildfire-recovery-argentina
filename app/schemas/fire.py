@@ -296,6 +296,8 @@ class FireDetailResponse(BaseModel):
     fire: FireEventDetail
     detections: List[DetectionBrief] = []
     related_fires_count: int = 0
+    event_count: Optional[int] = None
+    last_seen_at: Optional[datetime] = None
 
 
 # =============================================================================

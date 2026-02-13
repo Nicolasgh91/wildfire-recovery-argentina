@@ -214,6 +214,8 @@ export type FireDetailResponse = {
   fire: FireDetail
   detections: FireDetection[]
   related_fires_count: number
+  event_count?: number | null
+  last_seen_at?: string | null
 }
 
 type SeverityConfig = {

@@ -56,7 +56,7 @@ export const translations = {
     profileSaveError: 'No se pudo actualizar el perfil',
     profileCreditsTitle: 'Agregar créditos',
     profileCreditsDescription: 'Comprá créditos para acceder a reportes premium.',
-    
+
     // Common
     viewDetails: 'Ver detalles',
     download: 'Descargar',
@@ -72,7 +72,7 @@ export const translations = {
     extinguished: 'Extinguido',
     loading: 'Cargando...',
     authRequired: 'Inicia sesion para continuar.',
-    
+
     // Fire Feed
     fireFeed: 'Incendios forestales',
     activeFiresArgentina: 'Incendios activos en Argentina',
@@ -88,7 +88,7 @@ export const translations = {
     urgentFires: 'Incendios Urgentes',
     recentFiresToggle: 'Ver recientes',
     recentFiresEmpty: 'No hay incendios activos ni recientes en los últimos 60 días.',
-    
+
     // Fire Detail
     reliabilityScore: 'Puntuación de Confiabilidad',
     landUseStatus: 'Estado de Uso del Suelo',
@@ -115,7 +115,7 @@ export const translations = {
     qualityWarnings: 'Advertencias',
     qualityNoWarnings: 'Sin advertencias relevantes',
     qualityUpdatedAt: 'Actualizado',
-    
+
     // Map
     interactiveMap: 'Mapa Interactivo',
     clickForDetails: 'Haga clic para más detalles',
@@ -133,7 +133,7 @@ export const translations = {
     popupProtectedAreas: 'Áreas protegidas',
     mapLegendActive: 'Activos',
     mapLegendRecent: 'Recientes (60 días)',
-    
+
     // Audit / Verificar terreno
     landUseAudit: 'Verificar terreno',
     auditDescription: 'Investigá si una zona se incendió, cómo cambió la vegetación y qué señales quedan en el paisaje.',
@@ -146,6 +146,8 @@ export const translations = {
     pickOnMap: 'Seleccionar en Mapa',
     runAudit: 'Verificá',
     auditResult: 'Resultados de la verificación',
+    explorationInstruction:
+      'Elegí un área que haya sufrido un incendio. Conseguí una imagen satelital de antes para tener un punto de partida. Después, buscá un máximo de 12 imágenes satelitales en HD, con periodicidad mensual o anual, para ver cómo evolucionó el terreno afectado. Analizá si la vegetación se recuperó o si hubo otros cambios importantes en la zona.',
     constructionProhibited: 'Construcción Prohibida',
     prohibitedUntil: 'Prohibido hasta',
     noRestrictionsFound: 'No se encontraron restricciones',
@@ -326,7 +328,7 @@ export const translations = {
     eventsLabel: 'Eventos',
     invalidNumber: 'Número inválido',
     outOfRange: 'Valor fuera de rango',
-    
+
     // Certificates
     certificateCenter: 'Centro de Certificados',
     requestCertificate: 'Solicitar Certificado',
@@ -341,7 +343,7 @@ export const translations = {
     certificateIssued: 'Certificado Emitido',
     certificateValid: 'El certificado es válido',
     certificateInvalid: 'El certificado no es válido o no existe',
-    
+
     // Citizen Report
     citizenReport: 'Reporte Ciudadano',
     reportWizard: 'Asistente de Reporte',
@@ -352,7 +354,7 @@ export const translations = {
     reportSuccess: 'Paquete de Evidencia Generado',
     reportSuccessMessage: 'Su reporte ha sido enviado exitosamente y será revisado por las autoridades.',
     descriptionPlaceholder: 'Describa la actividad sospechosa que observó...',
-    
+
     // Shelters
     visitorLog: 'Registro de Visitantes',
     shelterName: 'Nombre del Refugio',
@@ -363,7 +365,7 @@ export const translations = {
     online: 'En Línea',
     offline: 'Sin Conexión (Guardado Localmente)',
     checkInSuccess: 'Registro exitoso',
-    
+
     // Login
     email: 'Correo Electrónico',
     password: 'Contraseña',
@@ -371,12 +373,12 @@ export const translations = {
     noAccount: '¿No tienes cuenta?',
     loginError: 'Por favor complete todos los campos',
     loginInvalid: 'Credenciales invalidas',
-    
+
     // Footer
     legal: 'Legal',
     contact: 'Contacto',
     apiDocs: 'Documentación API',
-    
+
     // Roles
     guest: 'Invitado',
     user: 'Usuario',
@@ -439,7 +441,7 @@ export const translations = {
     profileSaveError: 'Unable to update profile',
     profileCreditsTitle: 'Add credits',
     profileCreditsDescription: 'Buy credits to access premium reports.',
-    
+
     // Common
     viewDetails: 'View Details',
     download: 'Download',
@@ -455,7 +457,7 @@ export const translations = {
     extinguished: 'Extinguished',
     loading: 'Loading...',
     authRequired: 'Log in to continue.',
-    
+
     // Fire Feed
     fireFeed: 'Wildfire Feed',
     activeFiresArgentina: 'Active fires in Argentina',
@@ -471,7 +473,7 @@ export const translations = {
     urgentFires: 'Urgent Fires',
     recentFiresToggle: 'Show recent',
     recentFiresEmpty: 'No active or recent fires in the last 60 days.',
-    
+
     // Fire Detail
     reliabilityScore: 'Reliability Score',
     landUseStatus: 'Land Use Status',
@@ -498,7 +500,7 @@ export const translations = {
     qualityWarnings: 'Warnings',
     qualityNoWarnings: 'No relevant warnings',
     qualityUpdatedAt: 'Updated',
-    
+
     // Map
     interactiveMap: 'Interactive Map',
     clickForDetails: 'Click for details',
@@ -516,7 +518,7 @@ export const translations = {
     popupProtectedAreas: 'Protected areas',
     mapLegendActive: 'Active',
     mapLegendRecent: 'Recent (60 days)',
-    
+
     // Audit / Verify land
     landUseAudit: 'Verify land',
     auditDescription: 'Investigate if an area burned, how vegetation changed, and what traces remain.',
@@ -529,6 +531,8 @@ export const translations = {
     pickOnMap: 'Pick on Map',
     runAudit: 'Verify',
     auditResult: 'Verification Result',
+    explorationInstruction:
+      'Choose an area that has suffered a fire. Get a satellite image from before as a starting point. Then, look for up to 12 HD satellite images, with monthly or annual periodicity, to see how the affected terrain evolved. Analyze if the vegetation recovered or if there were other important changes in the zone.',
     constructionProhibited: 'Construction Prohibited',
     prohibitedUntil: 'Prohibited until',
     noRestrictionsFound: 'No restrictions found',
@@ -709,7 +713,7 @@ export const translations = {
     eventsLabel: 'Events',
     invalidNumber: 'Invalid number',
     outOfRange: 'Value out of range',
-    
+
     // Certificates
     certificateCenter: 'Certificate Center',
     requestCertificate: 'Request Certificate',
@@ -724,7 +728,7 @@ export const translations = {
     certificateIssued: 'Certificate Issued',
     certificateValid: 'The certificate is valid',
     certificateInvalid: 'The certificate is invalid or does not exist',
-    
+
     // Citizen Report
     citizenReport: 'Citizen Report',
     reportWizard: 'Report Wizard',
@@ -735,7 +739,7 @@ export const translations = {
     reportSuccess: 'Evidence Package Generated',
     reportSuccessMessage: 'Your report has been successfully submitted and will be reviewed by authorities.',
     descriptionPlaceholder: 'Describe the suspicious activity you observed...',
-    
+
     // Shelters
     visitorLog: 'Visitor Log',
     shelterName: 'Shelter Name',
@@ -746,7 +750,7 @@ export const translations = {
     online: 'Online',
     offline: 'Offline (Saved Locally)',
     checkInSuccess: 'Check-in successful',
-    
+
     // Login
     email: 'Email',
     password: 'Password',
@@ -754,12 +758,12 @@ export const translations = {
     noAccount: "Don't have an account?",
     loginError: 'Please fill in all fields',
     loginInvalid: 'Invalid log credentials',
-    
+
     // Footer
     legal: 'Legal',
     contact: 'Contact',
     apiDocs: 'API Docs',
-    
+
     // Roles
     guest: 'Guest',
     user: 'User',

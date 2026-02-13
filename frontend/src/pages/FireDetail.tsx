@@ -133,20 +133,20 @@ export default function FireDetailPage() {
   const mapFire: FireMapItem | null =
     fire && centroid && Number.isFinite(centroid.latitude) && Number.isFinite(centroid.longitude)
       ? {
-          id: fire.id,
-          title,
-          lat: centroid.latitude,
-          lon: centroid.longitude,
-          severity: severityLevel,
-          province: fire.province ?? undefined,
-          status: statusKey,
-          date: fire.start_date,
-          hectares: fire.estimated_area_hectares ?? null,
-          in_protected_area: fire.in_protected_area,
-          overlap_percentage: fire.overlap_percentage ?? null,
-          protected_area_name: protectedAreaNames,
-          count_protected_areas: fire.count_protected_areas ?? null,
-        }
+        id: fire.id,
+        title,
+        lat: centroid.latitude,
+        lon: centroid.longitude,
+        severity: severityLevel,
+        province: fire.province ?? undefined,
+        status: statusKey,
+        date: fire.start_date,
+        hectares: fire.estimated_area_hectares ?? null,
+        in_protected_area: fire.in_protected_area,
+        overlap_percentage: fire.overlap_percentage ?? null,
+        protected_area_name: protectedAreaNames,
+        count_protected_areas: fire.count_protected_areas ?? null,
+      }
       : null
 
   if (isLoading) {
@@ -209,28 +209,71 @@ export default function FireDetailPage() {
     return result
   })()
 
-  const infoCards = [
-    {
-      label: t('province'),
-      value: fire.province || 'N/A',
-      icon: MapPin,
-    },
-    {
-      label: 'Fecha detectado',
-      value: formatDate(fire.start_date),
-      icon: Calendar,
-    },
-    {
-      label: t('area'),
-      value: formatHectares(fire.estimated_area_hectares),
-      icon: Flame,
-    },
-    {
-      label: 'Cantidad de veces detectado',
-      value: fire.total_detections.toLocaleString('es-AR'),
-      icon: Activity,
-    },
-  ]
+  const infoCards = isEpisodeDetail
+    ? [
+      {
+        label: t('province'),
+        value: fire.province || 'N/A',
+        icon: MapPin,
+      },
+      {
+        label: 'Primer detección',
+        value: formatDate(fire.start_date),
+        icon: Calendar,
+      },
+      {
+        label: 'Última detección',
+        value: (
+          <div className="flex items-center gap-2">
+            <span>{formatDate(data.last_seen_at || fire.end_date)}</span>
+            {statusKey === 'active' && (
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500"></span>
+              </span>
+            )}
+          </div>
+        ),
+        icon: Activity,
+      },
+      {
+        label: t('area'),
+        value: formatHectares(fire.estimated_area_hectares),
+        icon: Flame,
+      },
+      {
+        label: 'Total detecciones',
+        value: fire.total_detections.toLocaleString('es-AR'),
+        icon: Activity,
+      },
+      {
+        label: 'Eventos asociados',
+        value: data.event_count?.toLocaleString('es-AR') ?? 'N/A',
+        icon: FileText,
+      },
+    ]
+    : [
+      {
+        label: t('province'),
+        value: fire.province || 'N/A',
+        icon: MapPin,
+      },
+      {
+        label: 'Fecha detectado',
+        value: formatDate(fire.start_date),
+        icon: Calendar,
+      },
+      {
+        label: t('area'),
+        value: formatHectares(fire.estimated_area_hectares),
+        icon: Flame,
+      },
+      {
+        label: 'Cantidad de veces detectado',
+        value: fire.total_detections.toLocaleString('es-AR'),
+        icon: Activity,
+      },
+    ]
 
   return (
     <div className="min-h-screen bg-background">
@@ -271,7 +314,10 @@ export default function FireDetailPage() {
           </div>
         )}
 
-        <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div
+          className={`mb-6 grid gap-4 sm:grid-cols-2 ${isEpisodeDetail ? 'lg:grid-cols-3' : 'lg:grid-cols-4'
+            }`}
+        >
           {infoCards.map((card) => {
             const Icon = card.icon
             return (
@@ -282,7 +328,7 @@ export default function FireDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">{card.label}</p>
-                    <p className="font-semibold text-foreground">{card.value}</p>
+                    <div className="font-semibold text-foreground">{card.value}</div>
                   </div>
                 </CardContent>
               </Card>

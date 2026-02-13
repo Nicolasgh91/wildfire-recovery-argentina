@@ -375,8 +375,7 @@ def get_fire_detail(
     service: FireService = Depends(get_fire_service),
 ) -> FireDetailResponse:
     result = service.get_fire_detail(fire_id)
-    if not result:
-        result = service.get_fire_detail_by_episode(fire_id)
+
     if not result:
         result = service.get_fire_detail_from_episode(fire_id)
     if not result:

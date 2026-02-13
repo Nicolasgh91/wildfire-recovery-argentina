@@ -946,7 +946,7 @@ class FireService:
                 "longitude": float(episode.centroid_lon),
             }
 
-        end_date = episode.end_date or episode.start_date
+        end_date = episode.end_date or episode.last_seen_at
         duration_hours = (
             (end_date - episode.start_date).total_seconds() / 3600
             if end_date and episode.start_date
@@ -1013,6 +1013,8 @@ class FireService:
             related_fires_count=0,
             source_type="episode",
             episode_id=episode.id,
+            event_count=episode.event_count,
+            last_seen_at=episode.last_seen_at,
         )
 
     def _summary_query(self, filters: List[Any]):

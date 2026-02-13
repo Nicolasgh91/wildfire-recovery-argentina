@@ -33,9 +33,21 @@ def upgrade() -> None:
     op.execute(
         "CREATE INDEX IF NOT EXISTS idx_fire_episodes_status_priority ON fire_episodes(status, gee_priority DESC NULLS LAST, start_date DESC NULLS LAST)"
     )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_fire_episodes_date_sort ON fire_episodes(end_date DESC NULLS LAST, start_date DESC NULLS LAST)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_fire_events_perimeter ON fire_events USING GIST(perimeter)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_fire_episodes_bbox ON fire_episodes USING GIST(ST_MakeEnvelope(bbox_minx, bbox_miny, bbox_maxx, bbox_maxy, 4326))"
+    )
 
 
 def downgrade() -> None:
+    op.execute("DROP INDEX IF EXISTS idx_fire_episodes_bbox")
+    op.execute("DROP INDEX IF EXISTS idx_fire_events_perimeter")
+    op.execute("DROP INDEX IF EXISTS idx_fire_episodes_date_sort")
     op.execute("DROP INDEX IF EXISTS idx_fire_episodes_status_priority")
     op.execute("DROP INDEX IF EXISTS idx_fire_events_province")
     op.execute("DROP INDEX IF EXISTS idx_fire_episodes_gee_active")

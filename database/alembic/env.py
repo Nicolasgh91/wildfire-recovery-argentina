@@ -9,7 +9,13 @@ import os
 import sys
 
 # Add the project root to the path so we can import from app
-sys.path.insert(0, os.getcwd())
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, project_root)
+
+# Load environment variables from the project root .env file
+from dotenv import load_dotenv
+env_path = os.path.join(project_root, '.env')
+load_dotenv(env_path)
 
 from app.core.config import settings
 from app.models.base import Base
@@ -21,7 +27,8 @@ config = context.config
 
 # Set sqlalchemy.url from settings
 if settings.DATABASE_URL:
-    config.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL))
+    # Use replace to avoid interpolation issues with % characters
+    config.set_main_option("sqlalchemy.url", str(settings.DATABASE_URL).replace('%', '%%'))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

@@ -43,6 +43,7 @@ import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import { useAuditMutation } from '@/hooks/mutations/useAudit'
 import { searchAuditEpisodes } from '@/services/endpoints/audit-search'
+import { reverseGeocode } from '@/services/endpoints/geocode'
 import type { AuditFire, EvidenceThumbnail } from '@/types/audit'
 import type { AuditSearchResponse } from '@/types/audit-search'
 
@@ -183,10 +184,21 @@ export default function AuditPage() {
     return type ?? '-'
   }
 
-  const handleMapSelect = (latitude: number, longitude: number) => {
+  const handleMapSelect = async (latitude: number, longitude: number) => {
     form.setValue('lat', latitude.toFixed(6), { shouldDirty: true, shouldValidate: true })
     form.setValue('lon', longitude.toFixed(6), { shouldDirty: true, shouldValidate: true })
     setLocalError(null)
+
+    try {
+      const result = await reverseGeocode(latitude, longitude)
+      if (result?.display_name) {
+        // Use first two parts of the address for a shorter label
+        const shortLabel = result.display_name.split(',').slice(0, 2).join(',').trim()
+        form.setValue('search', shortLabel, { shouldDirty: true, shouldValidate: true })
+      }
+    } catch {
+      // Silently continue on failure
+    }
   }
 
   const handleSubmit = async (values: AuditFormValues) => {
@@ -197,13 +209,9 @@ export default function AuditPage() {
       setLocalError(t('authRequired'))
       return
     }
-    if (!values.lat || !values.lon) {
-      const query = values.search?.trim()
-      if (!query) {
-        setLocalError(t('noPointError'))
-        return
-      }
-
+    // Prioritize text search if search text exists
+    const query = values.search?.trim()
+    if (query) {
       setSearchLoading(true)
       setSearchResult(null)
       try {
@@ -219,13 +227,20 @@ export default function AuditPage() {
       }
       return
     }
-    auditMutation.mutate({
-      lat: Number(values.lat),
-      lon: Number(values.lon),
-      radius_meters: values.radius_m,
-      cadastral_id: values.cadastral_id?.trim() || undefined,
-      metadata: { is_test: import.meta.env.MODE === 'test' },
-    })
+
+    // Fallback to point audit if only lat/lon exists
+    if (values.lat && values.lon) {
+      auditMutation.mutate({
+        lat: Number(values.lat),
+        lon: Number(values.lon),
+        radius_meters: values.radius_m,
+        cadastral_id: values.cadastral_id?.trim() || undefined,
+        metadata: { is_test: import.meta.env.MODE === 'test' },
+      })
+      return
+    }
+
+    setLocalError(t('noPointError'))
   }
 
   const result = auditMutation.data
@@ -453,15 +468,15 @@ export default function AuditPage() {
                   <Button
                     type="submit"
                     data-testid="audit-submit"
-                  disabled={auditMutation.isPending || searchLoading || !form.formState.isValid}
-                  className="w-full gap-2"
-                >
-                  {auditMutation.isPending || searchLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      {searchLoading ? t('geocodeLoading') : t('loading')}
-                    </>
-                  ) : (
+                    disabled={auditMutation.isPending || searchLoading || !form.formState.isValid}
+                    className="w-full gap-2"
+                  >
+                    {auditMutation.isPending || searchLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {searchLoading ? t('geocodeLoading') : t('loading')}
+                      </>
+                    ) : (
                       <>
                         <Search className="h-4 w-4" />
                         {t('verifyCTA')}
