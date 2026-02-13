@@ -63,8 +63,8 @@ def resolve_representative_event_id(events: List[FireEvent]) -> Optional[UUID]:
     def sort_key(event: FireEvent):
         status = (event.status or "").lower()
         priority = 0 if status in ("active", "monitoring") else 1
-        end_date = event.end_date or event.start_date
-        return (priority, end_date or event.start_date)
+        end_date = event.last_seen_at or event.end_date or event.start_date
+        return (priority, end_date)
 
     return sorted(events, key=sort_key, reverse=True)[0].id
 
@@ -87,7 +87,7 @@ def _load_representative_event_map(
                  WHERE fee.episode_id IN :episode_ids
                  ORDER BY fee.episode_id,
                           CASE WHEN ev.status IN ('active', 'monitoring') THEN 0 ELSE 1 END,
-                          ev.end_date DESC NULLS LAST,
+                          COALESCE(ev.last_seen_at, ev.end_date) DESC NULLS LAST,
                           ev.start_date DESC NULLS LAST
                 """
             ).bindparams(bindparam("episode_ids", expanding=True)),
@@ -103,6 +103,12 @@ def _load_representative_event_map(
     }
 
 
+@router.get(
+    "",
+    response_model=FireEpisodeListResponse,
+    summary="Listar episodios de incendios (UC-17)",
+    include_in_schema=False,
+)
 @router.get(
     "/",
     response_model=FireEpisodeListResponse,
@@ -131,10 +137,11 @@ def list_fire_episodes(
     if mode_value == "active":
         query = query.filter(FireEpisode.status.in_(["active", "monitoring"]))
     elif mode_value == "recent":
-        query = query.filter(FireEpisode.end_date.isnot(None))
         query = query.filter(
-            FireEpisode.end_date
-            >= text(f"NOW() AT TIME ZONE 'utc' - INTERVAL '{RECENT_DAYS} days'")
+            text(
+                "COALESCE(fire_episodes.end_date, fire_episodes.last_seen_at) "
+                f">= NOW() AT TIME ZONE 'utc' - INTERVAL '{RECENT_DAYS} days'"
+            )
         )
 
     if gee_candidate is not None:
@@ -146,7 +153,8 @@ def list_fire_episodes(
 
     if mode_value == "recent":
         query = query.order_by(
-            desc(FireEpisode.end_date), desc(FireEpisode.event_count)
+            desc(text("COALESCE(fire_episodes.end_date, fire_episodes.last_seen_at)")),
+            desc(FireEpisode.event_count),
         )
     else:
         sort_map = {
@@ -170,7 +178,7 @@ def list_fire_episodes(
 
     items: List[FireEpisodeListItem] = []
     for episode in episodes:
-        end = episode.end_date
+        end = episode.end_date or episode.last_seen_at
         is_recent_flag = end is not None and end >= recent_cutoff
         recent_days_val = (now - end).days if end is not None else None
         items.append(
@@ -255,14 +263,14 @@ def list_active_episodes_for_home(
                        fe.gee_priority,
                        fe.slides_data,
                        CASE
-                           WHEN fe.end_date IS NOT NULL
-                                AND fe.end_date >= NOW() AT TIME ZONE 'utc' - INTERVAL '{RECENT_DAYS} days'
+                           WHEN COALESCE(fe.end_date, fe.last_seen_at) IS NOT NULL
+                                AND COALESCE(fe.end_date, fe.last_seen_at) >= NOW() AT TIME ZONE 'utc' - INTERVAL '{RECENT_DAYS} days'
                            THEN true
                            ELSE false
                        END AS is_recent,
                        CASE
-                           WHEN fe.end_date IS NOT NULL
-                           THEN EXTRACT(DAY FROM NOW() AT TIME ZONE 'utc' - fe.end_date)::int
+                           WHEN COALESCE(fe.end_date, fe.last_seen_at) IS NOT NULL
+                           THEN EXTRACT(DAY FROM NOW() AT TIME ZONE 'utc' - COALESCE(fe.end_date, fe.last_seen_at))::int
                            ELSE NULL
                        END AS recent_days,
                        rep.event_id AS representative_event_id
@@ -271,10 +279,10 @@ def list_active_episodes_for_home(
                        SELECT ev.id AS event_id
                          FROM fire_episode_events fee
                          JOIN fire_events ev ON ev.id = fee.event_id
-                        WHERE fee.episode_id = fe.id
+                       WHERE fee.episode_id = fe.id
                          ORDER BY CASE WHEN ev.status IN ('active', 'monitoring') THEN 0 ELSE 1 END,
-                                  ev.end_date DESC NULLS LAST,
-                                  ev.start_date DESC NULLS LAST
+                                 COALESCE(ev.last_seen_at, ev.end_date) DESC NULLS LAST,
+                                 ev.start_date DESC NULLS LAST
                          LIMIT 1
                  ) rep ON TRUE
                  WHERE fe.slides_data IS NOT NULL
@@ -283,7 +291,7 @@ def list_active_episodes_for_home(
                         fe.status IN ('active', 'monitoring')
                         OR (
                             fe.status IN ('extinct', 'closed')
-                            AND fe.end_date >= NOW() AT TIME ZONE 'utc' - INTERVAL '{RECENT_DAYS} days'
+                            AND COALESCE(fe.end_date, fe.last_seen_at) >= NOW() AT TIME ZONE 'utc' - INTERVAL '{RECENT_DAYS} days'
                         )
                    )
                  ORDER BY CASE fe.status
@@ -294,7 +302,7 @@ def list_active_episodes_for_home(
                             ELSE 4
                           END,
                           fe.gee_priority DESC NULLS LAST,
-                          fe.end_date DESC NULLS LAST
+                          COALESCE(fe.end_date, fe.last_seen_at) DESC NULLS LAST
                 LIMIT :limit
                 """
             ),

@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
+import { IDLE_ACTIVITY_STORAGE_KEY } from '@/lib/idleActivity'
 
 const listeners = new Set<(event: string, session: any) => void>()
 let currentSession: any = null
@@ -68,6 +69,7 @@ describe('AuthProvider', () => {
   beforeEach(() => {
     currentSession = null
     listeners.clear()
+    localStorage.clear()
   })
 
   it('handles login and logout flow', async () => {
@@ -83,6 +85,10 @@ describe('AuthProvider', () => {
     })
     expect(screen.getByTestId('role')).toHaveTextContent('anonymous')
     expect(screen.getByTestId('email')).toHaveTextContent('none')
+    expect(localStorage.getItem(IDLE_ACTIVITY_STORAGE_KEY)).toBeNull()
+
+    const staleTimestamp = Date.now() - 31 * 60 * 1000
+    localStorage.setItem(IDLE_ACTIVITY_STORAGE_KEY, String(staleTimestamp))
 
     await user.click(screen.getByRole('button', { name: 'login-admin' }))
     await waitFor(() => {
@@ -90,12 +96,16 @@ describe('AuthProvider', () => {
     })
     expect(screen.getByTestId('role')).toHaveTextContent('admin')
     expect(screen.getByTestId('email')).toHaveTextContent('admin@forestguard.ar')
+    const refreshedTimestamp = Number(localStorage.getItem(IDLE_ACTIVITY_STORAGE_KEY))
+    expect(refreshedTimestamp).toBeGreaterThan(staleTimestamp)
+    expect(Date.now() - refreshedTimestamp).toBeLessThan(10_000)
 
     await user.click(screen.getByRole('button', { name: 'logout' }))
     await waitFor(() => {
       expect(screen.getByTestId('auth')).toHaveTextContent('no')
     })
     expect(screen.getByTestId('role')).toHaveTextContent('anonymous')
+    expect(localStorage.getItem(IDLE_ACTIVITY_STORAGE_KEY)).toBeNull()
   })
 
   it('assigns user role for non-admin emails', async () => {

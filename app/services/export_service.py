@@ -4,7 +4,7 @@ import csv
 import io
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
@@ -16,6 +16,9 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.fire import FireEvent
 from app.schemas.fire import ExportFormat, ExportRequestStatus, FireStatus
+from app.services.episode_flow_parameters import (
+    load_canonical_episode_flow_parameters,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,26 @@ class ExportService:
     """Service for exporting fire event datasets."""
     def __init__(self, db: Session):
         self.db = db
+        self._episode_flow_params_cache: Optional[dict[str, float | int]] = None
+
+    @staticmethod
+    def _event_reference_time(fire: FireEvent):
+        return fire.last_seen_at or fire.end_date or fire.start_date
+
+    def _episode_flow_params(self) -> dict[str, float | int]:
+        if self._episode_flow_params_cache is None:
+            self._episode_flow_params_cache = load_canonical_episode_flow_parameters(
+                self.db
+            )
+        return self._episode_flow_params_cache
+
+    def _event_monitoring_window_hours(self, default: int = 168) -> int:
+        params = self._episode_flow_params()
+        value = params.get("event_monitoring_window_hours", default)
+        try:
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return default
 
     def _resolve_fire_status(self, fire: FireEvent) -> FireStatus:
         if fire.status:
@@ -36,18 +59,19 @@ class ExportService:
                 pass
 
         now = datetime.now(timezone.utc)
-        if fire.end_date:
-            end_date = fire.end_date
-            if end_date.tzinfo is None:
-                end_date = end_date.replace(tzinfo=timezone.utc)
-            days_since_end = (now - end_date).days
-            if days_since_end < 0:
+        reference_time = self._event_reference_time(fire)
+        if reference_time:
+            if reference_time.tzinfo is None:
+                reference_time = reference_time.replace(tzinfo=timezone.utc)
+            age = now - reference_time
+            if age.total_seconds() < 0:
                 return FireStatus.ACTIVE
-            if days_since_end < 3:
-                return FireStatus.CONTROLLED
-            if days_since_end < 14:
+            monitoring_window = timedelta(
+                hours=self._event_monitoring_window_hours()
+            )
+            if age <= monitoring_window:
                 return FireStatus.MONITORING
-        return FireStatus.EXTINGUISHED
+        return FireStatus.EXTINCT
 
     def _count_records(self, query) -> int:
         return (

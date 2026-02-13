@@ -15,9 +15,8 @@ class FireStatus(str, Enum):
     """Estados de un evento de incendio."""
 
     ACTIVE = "active"
-    CONTROLLED = "controlled"
-    EXTINGUISHED = "extinguished"
     MONITORING = "monitoring"
+    EXTINCT = "extinct"
 
 
 class StatusScope(str, Enum):
@@ -137,7 +136,7 @@ class FireEventListItem(BaseModel):
             return self
 
         if not self.end_date:
-            self.status = FireStatus.EXTINGUISHED
+            self.status = FireStatus.ACTIVE
             return self
 
         now = datetime.now()
@@ -147,12 +146,10 @@ class FireEventListItem(BaseModel):
 
         if days_since_end < 0:
             self.status = FireStatus.ACTIVE
-        elif days_since_end < 3:
-            self.status = FireStatus.CONTROLLED
         elif days_since_end < 14:
             self.status = FireStatus.MONITORING
         else:
-            self.status = FireStatus.EXTINGUISHED
+            self.status = FireStatus.EXTINCT
 
         return self
 
@@ -238,7 +235,7 @@ class ExplorationPreviewResponse(BaseModel):
     department: Optional[str] = None
     start_date: datetime
     end_date: datetime
-    extinguished_at: Optional[datetime] = None
+    extinct_at: Optional[datetime] = None
     centroid: Optional[Dict[str, float]] = None
     bbox: Optional[Dict[str, float]] = None
     perimeter_geojson: Optional[Dict[str, Any]] = None

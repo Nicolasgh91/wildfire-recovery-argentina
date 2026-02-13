@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import { I18nProvider } from '@/context/LanguageContext'
 import ExplorationPage from '@/pages/Exploration'
@@ -44,6 +45,9 @@ vi.mock('@/components/fire-map', () => ({
 describe('ExplorationPage auth gating', () => {
   it('opens auth dialog before proceeding when unauthenticated', async () => {
     const user = userEvent.setup()
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
 
     searchFireEventsMock.mockResolvedValue({
       fires: [
@@ -89,11 +93,13 @@ describe('ExplorationPage auth gating', () => {
     })
 
     render(
-      <MemoryRouter>
-        <I18nProvider>
-          <ExplorationPage />
-        </I18nProvider>
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <I18nProvider>
+            <ExplorationPage />
+          </I18nProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     await user.click(screen.getByTestId('exploration-btn-search'))

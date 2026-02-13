@@ -66,7 +66,7 @@ class ClosureFireRow:
     lat: float
     lon: float
     start_date: datetime
-    extinguished_at: datetime
+    extinct_at: datetime
     estimated_area_hectares: float
 
 
@@ -168,12 +168,12 @@ class ClosureReportService:
                    ST_X(fe.centroid::geometry) AS lon,
                    ST_Y(fe.centroid::geometry) AS lat,
                    fe.start_date,
-                   fe.extinguished_at,
+                   fe.extinct_at,
                    fe.estimated_area_hectares
               FROM fire_events fe
-             WHERE fe.status IN ('extinguished', 'contained')
-               AND fe.extinguished_at IS NOT NULL
-               AND fe.extinguished_at >= NOW() - (:retry_days || ' days')::interval
+             WHERE fe.status = 'extinct'
+               AND fe.extinct_at IS NOT NULL
+               AND fe.extinct_at >= NOW() - (:retry_days || ' days')::interval
                AND fe.has_historic_report = false
                AND fe.estimated_area_hectares IS NOT NULL
                AND fe.estimated_area_hectares >= :min_area
@@ -182,7 +182,7 @@ class ClosureReportService:
                        FROM fire_protected_area_intersections fpa
                       WHERE fpa.fire_event_id = fe.id
                )
-             ORDER BY fe.extinguished_at DESC
+             ORDER BY fe.extinct_at DESC
              LIMIT :limit
             """
         )
@@ -204,7 +204,7 @@ class ClosureReportService:
                     lat=float(row["lat"]),
                     lon=float(row["lon"]),
                     start_date=row["start_date"],
-                    extinguished_at=row["extinguished_at"],
+                    extinct_at=row["extinct_at"],
                     estimated_area_hectares=float(row["estimated_area_hectares"] or 0),
                 )
             )
@@ -246,11 +246,11 @@ class ClosureReportService:
             )
 
     def _select_post_image(
-        self, bbox: Dict[str, float], extinguished_at: date, cloud_max: int
+        self, bbox: Dict[str, float], extinct_at: date, cloud_max: int
     ):
-        post_start = extinguished_at
-        post_end = extinguished_at + timedelta(days=14)
-        post_target = extinguished_at + timedelta(days=7)
+        post_start = extinct_at
+        post_end = extinct_at + timedelta(days=14)
+        post_target = extinct_at + timedelta(days=7)
         collection = self._gee.get_sentinel_collection(
             bbox=bbox,
             start_date=post_start,
@@ -392,7 +392,7 @@ class ClosureReportService:
             try:
                 bbox = self._bbox_from_point(fire.lat, fire.lon)
                 start_date = fire.start_date.date()
-                extinguished_date = fire.extinguished_at.date()
+                extinct_date = fire.extinct_at.date()
 
                 try:
                     pre_image = self._select_pre_image(bbox, start_date, cloud_max)
@@ -401,13 +401,13 @@ class ClosureReportService:
 
                 try:
                     post_image = self._select_post_image(
-                        bbox, extinguished_date, cloud_max
+                        bbox, extinct_date, cloud_max
                     )
                 except GEEImageNotFoundError:
                     post_image = None
 
                 if not pre_image or not post_image:
-                    age_days = (date.today() - extinguished_date).days
+                    age_days = (date.today() - extinct_date).days
                     if age_days >= max_retry_days:
                         self._update_fire(
                             fire.id,

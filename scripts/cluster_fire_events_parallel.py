@@ -24,7 +24,7 @@ import logging
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import List, Tuple, Optional
 import multiprocessing as mp
@@ -213,10 +213,19 @@ def calculate_event_stats(detections: List[FireDetection], ref_date: date) -> di
     avg_lat = sum(lats) / len(lats)
     avg_lon = sum(lons) / len(lons)
     
-    # Fechas
-    valid_dates = [d.acquisition_date for d in detections if d.acquisition_date]
-    start_date = min(valid_dates) if valid_dates else ref_date
-    end_date = max(valid_dates) if valid_dates else ref_date
+    # Fechas: priorizar detected_at (timestamp canónico), fallback a acquisition_date.
+    valid_datetimes = [d.detected_at for d in detections if d.detected_at]
+    if valid_datetimes:
+        start_date = min(valid_datetimes)
+        end_date = max(valid_datetimes)
+    else:
+        valid_dates = [d.acquisition_date for d in detections if d.acquisition_date]
+        if valid_dates:
+            start_date = datetime.combine(min(valid_dates), time.min, tzinfo=timezone.utc)
+            end_date = datetime.combine(max(valid_dates), time.min, tzinfo=timezone.utc)
+        else:
+            start_date = datetime.combine(ref_date, time.min, tzinfo=timezone.utc)
+            end_date = start_date
     
     # FRP (Fire Radiative Power)
     frp_values = [
@@ -240,6 +249,7 @@ def calculate_event_stats(detections: List[FireDetection], ref_date: date) -> di
         "centroid_wkt": f"POINT({avg_lon} {avg_lat})",
         "start_date": start_date,
         "end_date": end_date,
+        "last_seen_at": end_date,
         "total_detections": len(detections),
         "avg_frp": round(avg_frp, 2),
         "max_frp": round(max_frp, 2),
@@ -263,14 +273,14 @@ def bulk_insert_events(session: Session, events_data: List[dict]) -> List[str]:
     # Usar INSERT con RETURNING para obtener IDs
     query = text("""
         INSERT INTO fire_events (
-            id, centroid, start_date, end_date,
+            id, centroid, start_date, end_date, last_seen_at,
             total_detections, avg_frp, max_frp, sum_frp,
             avg_confidence, is_significant, has_legal_analysis,
             created_at, updated_at
         ) VALUES (
             gen_random_uuid(),
             ST_GeomFromText(:centroid_wkt, 4326)::geography,
-            :start_date, :end_date,
+            :start_date, :end_date, :last_seen_at,
             :total_detections, :avg_frp, :max_frp, :sum_frp,
             :avg_confidence, :is_significant, FALSE,
             NOW(), NOW()

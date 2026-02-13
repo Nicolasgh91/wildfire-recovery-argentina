@@ -169,7 +169,7 @@ def fix_episode_status(engine, dry_run: bool = True) -> int:
             fe.status as current_status,
             COUNT(ev.id) as event_count,
             MAX(CASE WHEN ev.status = 'active' THEN 1 ELSE 0 END) as has_active_events,
-            MAX(COALESCE(ev.extinguished_at, ev.end_date)) as last_extinguished
+            MAX(COALESCE(ev.extinct_at, ev.end_date)) as last_extinguished
         FROM fire_episodes fe
         LEFT JOIN fire_episode_events fee ON fee.episode_id = fe.id
         LEFT JOIN fire_events ev ON ev.id = fee.event_id
@@ -190,7 +190,7 @@ def fix_episode_status(engine, dry_run: bool = True) -> int:
                     WHERE fee.episode_id = fe.id AND ev.status = 'active'
                 ) THEN 'active'
                 WHEN (
-                    SELECT MAX(COALESCE(ev.extinguished_at, ev.end_date))
+                    SELECT MAX(COALESCE(ev.extinct_at, ev.end_date))
                     FROM fire_episode_events fee
                     JOIN fire_events ev ON ev.id = fee.event_id
                     WHERE fee.episode_id = fe.id

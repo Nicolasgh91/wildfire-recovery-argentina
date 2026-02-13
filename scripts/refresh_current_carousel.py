@@ -25,6 +25,11 @@ sys.path.append(str(PROJECT_ROOT))
 # Load .env
 load_dotenv(PROJECT_ROOT / ".env")
 
+# Patch ALLOWED_ORIGINS to avoid Pydantic error in Docker
+os.environ["ALLOWED_ORIGINS"] = '["*"]'
+if not os.environ.get("SECRET_KEY"):
+    os.environ["SECRET_KEY"] = "dummy_secret_key_for_script_execution"
+
 from app.db.session import SessionLocal
 from app.services.imagery_service import ImageryService
 

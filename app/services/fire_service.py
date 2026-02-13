@@ -55,6 +55,9 @@ from app.models.evidence import SatelliteImage
 from app.models.episode import FireEpisode, FireEpisodeEvent
 from app.models.fire import FireDetection, FireEvent
 from app.models.region import FireProtectedAreaIntersection, ProtectedArea
+from app.services.episode_flow_parameters import (
+    load_canonical_episode_flow_parameters,
+)
 from app.schemas.fire import (
     DetectionBrief,
     ExplorationPreviewResponse,
@@ -112,6 +115,26 @@ class FireService:
     """Service for fire event queries and aggregations."""
     def __init__(self, db: Session):
         self.db = db
+        self._episode_flow_params_cache: Optional[dict[str, float | int]] = None
+
+    @staticmethod
+    def _event_reference_time(fire: FireEvent) -> Optional[datetime]:
+        return fire.last_seen_at or fire.end_date or fire.start_date
+
+    def _episode_flow_params(self) -> dict[str, float | int]:
+        if self._episode_flow_params_cache is None:
+            self._episode_flow_params_cache = load_canonical_episode_flow_parameters(
+                self.db
+            )
+        return self._episode_flow_params_cache
+
+    def _event_monitoring_window_hours(self, default: int = 168) -> int:
+        params = self._episode_flow_params()
+        value = params.get("event_monitoring_window_hours", default)
+        try:
+            return max(1, int(value))
+        except (TypeError, ValueError):
+            return default
 
     def resolve_fire_status(self, fire: FireEvent) -> FireStatus:
         if fire.status:
@@ -121,18 +144,19 @@ class FireService:
                 pass
 
         now = datetime.now(timezone.utc)
-        if fire.end_date:
-            end_date = fire.end_date
-            if end_date.tzinfo is None:
-                end_date = end_date.replace(tzinfo=timezone.utc)
-            days_since_end = (now - end_date).days
-            if days_since_end < 0:
+        reference_time = self._event_reference_time(fire)
+        if reference_time:
+            if reference_time.tzinfo is None:
+                reference_time = reference_time.replace(tzinfo=timezone.utc)
+            age = now - reference_time
+            if age.total_seconds() < 0:
                 return FireStatus.ACTIVE
-            if days_since_end < 3:
-                return FireStatus.CONTROLLED
-            if days_since_end < 14:
+            monitoring_window = timedelta(
+                hours=self._event_monitoring_window_hours()
+            )
+            if age <= monitoring_window:
                 return FireStatus.MONITORING
-        return FireStatus.EXTINGUISHED
+        return FireStatus.EXTINCT
 
     def _system_param_value(self, key: str, fallback: Any) -> Any:
         try:
@@ -236,9 +260,14 @@ class FireService:
 
         active_statuses = [
             FireStatus.ACTIVE.value,
-            FireStatus.CONTROLLED.value,
             FireStatus.MONITORING.value,
         ]
+
+        status_reference_expr = func.coalesce(
+            FireEvent.last_seen_at,
+            FireEvent.end_date,
+            FireEvent.start_date,
+        )
 
         if params.status_scope and params.status_scope != StatusScope.ALL:
             now = datetime.now(timezone.utc)
@@ -246,14 +275,14 @@ class FireService:
                 filters.append(
                     or_(
                         FireEvent.status.in_(active_statuses),
-                        and_(FireEvent.status.is_(None), FireEvent.end_date >= now),
+                        and_(FireEvent.status.is_(None), status_reference_expr >= now),
                     )
                 )
             elif params.status_scope == StatusScope.HISTORICAL:
                 filters.append(
                     or_(
-                        FireEvent.status == FireStatus.EXTINGUISHED.value,
-                        and_(FireEvent.status.is_(None), FireEvent.end_date < now),
+                        FireEvent.status == FireStatus.EXTINCT.value,
+                        and_(FireEvent.status.is_(None), status_reference_expr < now),
                     )
                 )
         elif params.active_only:
@@ -261,7 +290,7 @@ class FireService:
             filters.append(
                 or_(
                     FireEvent.status.in_(active_statuses),
-                    and_(FireEvent.status.is_(None), FireEvent.end_date >= now),
+                    and_(FireEvent.status.is_(None), status_reference_expr >= now),
                 )
             )
 
@@ -717,7 +746,7 @@ class FireService:
             department=fire.department,
             start_date=fire.start_date,
             end_date=fire.end_date,
-            extinguished_at=fire.extinguished_at,
+            extinct_at=fire.extinct_at,
             centroid=centroid,
             bbox=bbox,
             perimeter_geojson=perimeter,
@@ -732,25 +761,33 @@ class FireService:
     def list_active_with_thumbnails(self, limit: int) -> FireListResponse:
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(days=30)
+        status_reference_expr = func.coalesce(
+            FireEvent.last_seen_at,
+            FireEvent.end_date,
+            FireEvent.start_date,
+        )
         active_statuses = [
             FireStatus.ACTIVE.value,
-            FireStatus.CONTROLLED.value,
             FireStatus.MONITORING.value,
         ]
 
         active_filter = or_(
             FireEvent.status.in_(active_statuses),
-            and_(FireEvent.status.is_(None), FireEvent.end_date >= now),
+            and_(FireEvent.status.is_(None), status_reference_expr >= now),
         )
-        extinguished_filter = and_(
+        extinct_filter = and_(
             or_(
-                FireEvent.status == FireStatus.EXTINGUISHED.value,
-                and_(FireEvent.status.is_(None), FireEvent.end_date < now),
+                FireEvent.status == FireStatus.EXTINCT.value,
+                and_(FireEvent.status.is_(None), status_reference_expr < now),
             ),
-            func.coalesce(FireEvent.extinguished_at, FireEvent.end_date) >= cutoff,
+            func.coalesce(
+                FireEvent.extinct_at,
+                FireEvent.last_seen_at,
+                FireEvent.end_date,
+            ) >= cutoff,
         )
 
-        query = self.build_list_query().filter(or_(active_filter, extinguished_filter))
+        query = self.build_list_query().filter(or_(active_filter, extinct_filter))
         query = query.filter(
             FireEvent.slides_data.isnot(None),
             func.jsonb_array_length(FireEvent.slides_data) > 0,
@@ -764,8 +801,8 @@ class FireService:
             fires=results,
             pagination=PaginationMeta.create(total, 1, limit),
             filters_applied={
-                "status_scope": "active+recent_extinguished",
-                "extinguished_days": 30,
+                "status_scope": "active+recent_extinct",
+                "extinct_days": 30,
                 "has_thumbnails": True,
             },
         )
@@ -959,11 +996,11 @@ class FireService:
         elif status_value == "monitoring":
             status = FireStatus.MONITORING
         elif status_value == "controlled":
-            status = FireStatus.CONTROLLED
+            status = FireStatus.MONITORING
         elif status_value in ("extinguished", "extinct", "closed"):
-            status = FireStatus.EXTINGUISHED
+            status = FireStatus.EXTINCT
         else:
-            status = FireStatus.EXTINGUISHED
+            status = FireStatus.EXTINCT
             if end_date:
                 now = datetime.now(timezone.utc)
                 try:
@@ -1019,9 +1056,13 @@ class FireService:
 
     def _summary_query(self, filters: List[Any]):
         now = datetime.now(timezone.utc)
+        status_reference_expr = func.coalesce(
+            FireEvent.last_seen_at,
+            FireEvent.end_date,
+            FireEvent.start_date,
+        )
         active_statuses = [
             FireStatus.ACTIVE.value,
-            FireStatus.CONTROLLED.value,
             FireStatus.MONITORING.value,
         ]
 
@@ -1052,7 +1093,7 @@ class FireService:
                                     FireEvent.status.in_(active_statuses),
                                     and_(
                                         FireEvent.status.is_(None),
-                                        FireEvent.end_date >= now,
+                                        status_reference_expr >= now,
                                     ),
                                 ),
                                 1,

@@ -103,8 +103,8 @@ def test_closure_report_updates_episode_and_fire(db_session, monkeypatch):
         total_detections=1,
         is_significant=True,
         province="Test",
-        status="extinguished",
-        extinguished_at=end_date,
+        status="extinct",
+        extinct_at=end_date,
         estimated_area_hectares=15,
         centroid=WKTElement("POINT(0 0)", srid=4326),
     )
@@ -136,7 +136,7 @@ def test_closure_report_updates_episode_and_fire(db_session, monkeypatch):
                 lat=0.0,
                 lon=0.0,
                 start_date=start_date,
-                extinguished_at=end_date,
+                extinct_at=end_date,
                 estimated_area_hectares=15.0,
             )
         ],

@@ -118,7 +118,7 @@ class FireEventRow:
     start_date: datetime
     end_date: datetime
     status: Optional[str]
-    extinguished_at: Optional[datetime]
+    extinct_at: Optional[datetime]
     lat: float
     lon: float
     bbox_minx: float
@@ -320,7 +320,7 @@ def fetch_fire_events(engine, config: EpisodeConfig) -> List[FireEventRow]:
     if config.input_status == "active":
         status_filter = "AND status = 'active'"
     elif config.input_status == "active+closed":
-        status_filter = "AND (status IN ('active', 'controlled', 'monitoring', 'extinguished') OR status IS NULL)"
+        status_filter = "AND (status IN ('active', 'monitoring', 'extinct') OR status IS NULL)"
 
     if not config.input_start_date and config.default_lookback_days:
         lookback_days = max(config.default_lookback_days, 0)
@@ -349,7 +349,7 @@ def fetch_fire_events(engine, config: EpisodeConfig) -> List[FireEventRow]:
             start_date,
             end_date,
             status,
-            extinguished_at,
+            extinct_at,
             COALESCE(total_detections, 0) AS total_detections,
             COALESCE(sum_frp, 0) AS frp_sum,
             COALESCE(max_frp, 0) AS frp_max,
@@ -388,7 +388,7 @@ def fetch_fire_events(engine, config: EpisodeConfig) -> List[FireEventRow]:
                 start_date=row["start_date"],
                 end_date=row["end_date"],
                 status=row["status"],
-                extinguished_at=row["extinguished_at"],
+                extinct_at=row["extinct_at"],
                 lat=lat,
                 lon=lon,
                 bbox_minx=float(bbox_minx),
@@ -468,14 +468,14 @@ def assign_episode_statuses(
             episode.status = "active"
             continue
 
-        last_extinguished = None
+        last_extinct = None
         for ev in episode_events:
-            ext_at = ev.get("extinguished_at") or ev.get("end_date")
+            ext_at = ev.get("extinct_at") or ev.get("end_date")
             ext_at = normalize_datetime(ext_at)
-            if ext_at and (last_extinguished is None or ext_at > last_extinguished):
-                last_extinguished = ext_at
+            if ext_at and (last_extinct is None or ext_at > last_extinct):
+                last_extinct = ext_at
 
-        if last_extinguished and now - last_extinguished < monitoring_window:
+        if last_extinct and now - last_extinct < monitoring_window:
             episode.status = "monitoring"
         else:
             episode.status = "extinct"
@@ -768,7 +768,7 @@ def main():
     event_meta_map = {
         event.id: {
             "status": event.status,
-            "extinguished_at": event.extinguished_at,
+            "extinct_at": event.extinct_at,
             "end_date": event.end_date,
         }
         for event in events

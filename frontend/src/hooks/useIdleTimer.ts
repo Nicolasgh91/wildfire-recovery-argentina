@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
+import { IDLE_ACTIVITY_STORAGE_KEY, touchIdleActivity } from '@/lib/idleActivity'
 
 type IdleTimerOptions = {
   enabled?: boolean
@@ -7,7 +8,6 @@ type IdleTimerOptions = {
 }
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000
-const STORAGE_KEY = 'forestguard_lastActivityAt'
 const WRITE_THROTTLE_MS = 60 * 1000
 
 export function useIdleTimer({
@@ -48,11 +48,7 @@ export function useIdleTimer({
   const writeLastActivity = useCallback((timestamp: number) => {
     if (timestamp - lastWriteRef.current < WRITE_THROTTLE_MS) return
     lastWriteRef.current = timestamp
-    try {
-      localStorage.setItem(STORAGE_KEY, String(timestamp))
-    } catch {
-      // ignore storage errors
-    }
+    touchIdleActivity(timestamp)
   }, [])
 
   const recordActivity = useCallback(() => {
@@ -76,7 +72,7 @@ export function useIdleTimer({
     idleTriggeredRef.current = false
 
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const stored = localStorage.getItem(IDLE_ACTIVITY_STORAGE_KEY)
       if (stored) {
         const parsed = Number(stored)
         if (Number.isFinite(parsed)) {
@@ -99,7 +95,7 @@ export function useIdleTimer({
     })
 
     const storageListener = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY || !event.newValue) return
+      if (event.key !== IDLE_ACTIVITY_STORAGE_KEY || !event.newValue) return
       const parsed = Number(event.newValue)
       if (!Number.isFinite(parsed)) return
       lastActivityRef.current = parsed

@@ -5,6 +5,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '@/services/api'
+import { useAuth } from '@/context/AuthContext'
 
 interface CreditBalanceResponse {
   balance: number
@@ -12,6 +13,8 @@ interface CreditBalanceResponse {
 }
 
 export function useCreditBalance() {
+  const { isAuthenticated } = useAuth()
+
   return useQuery<CreditBalanceResponse>({
     queryKey: ['credits', 'balance'],
     queryFn: async () => {
@@ -20,5 +23,6 @@ export function useCreditBalance() {
       )
       return response.data
     },
+    enabled: isAuthenticated,
   })
 }

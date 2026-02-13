@@ -363,8 +363,12 @@ class GEEService:
                 return True
 
             # Opción 4: Autenticación por defecto (para desarrollo)
-            ee.Initialize()
-            logger.warning("GEE autenticado con credenciales por defecto (solo dev)")
+            if self._project_id:
+                ee.Initialize(project=self._project_id)
+                logger.warning(f"GEE autenticado con credenciales por defecto y project_id={self._project_id}")
+            else:
+                ee.Initialize()
+                logger.warning("GEE autenticado con credenciales por defecto (solo dev)")
             self._initialized = True
             return True
 

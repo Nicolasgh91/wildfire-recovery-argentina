@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { setAuthToken } from '@/services/api'
+import { clearIdleActivity, touchIdleActivity } from '@/lib/idleActivity'
 
 export type UserRole = 'admin' | 'user' | 'anonymous'
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
@@ -55,6 +56,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
 
   const updateState = useCallback((session: Session | null) => {
+    if (session) {
+      touchIdleActivity()
+    } else {
+      clearIdleActivity()
+    }
     setState(buildState(session))
     setAuthToken(session?.access_token ?? null)
   }, [])

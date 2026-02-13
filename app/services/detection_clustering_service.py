@@ -5,13 +5,17 @@ import math
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Iterable, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 import numpy as np
 from sklearn.cluster import DBSCAN
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
+
+from app.services.episode_flow_parameters import (
+    load_canonical_episode_flow_parameters,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +284,7 @@ class DetectionClusteringService:
             "centroid",
             "start_date",
             "end_date",
+            "last_seen_at",
             "total_detections",
             "avg_frp",
             "max_frp",
@@ -295,6 +300,7 @@ class DetectionClusteringService:
             "ST_GeomFromText(:centroid_wkt, 4326)::geography",
             ":start_date",
             ":end_date",
+            ":last_seen_at",
             ":total_detections",
             ":avg_frp",
             ":max_frp",
@@ -310,6 +316,7 @@ class DetectionClusteringService:
             "centroid_wkt": f"POINT({centroid_lon} {centroid_lat})",
             "start_date": start_date,
             "end_date": end_date,
+            "last_seen_at": end_date,
             "total_detections": len(cluster),
             "avg_frp": round(avg_frp, 2),
             "max_frp": round(max_frp, 2),
@@ -362,11 +369,27 @@ class DetectionClusteringService:
         if not detections:
             return {"events_created": 0, "detections_processed": 0, "noise": 0}
 
-        eps_meters = version.epsilon_km * 1000.0
+        episode_flow_params = load_canonical_episode_flow_parameters(self.db)
+        eps_meters = float(episode_flow_params["event_spatial_epsilon_meters"])
+        temporal_window_hours = int(
+            episode_flow_params["event_temporal_window_hours"]
+        )
+
+        if (
+            abs((version.epsilon_km * 1000.0) - eps_meters) > 0.001
+            or int(version.temporal_window_hours) != temporal_window_hours
+        ):
+            logger.info(
+                "Overriding clustering window from system_parameters "
+                "(eps_m=%s, temporal_h=%s)",
+                eps_meters,
+                temporal_window_hours,
+            )
+
         labels = self._cluster_labels(
             detections,
             eps_meters=eps_meters,
-            temporal_window_hours=version.temporal_window_hours,
+            temporal_window_hours=temporal_window_hours,
             min_points=version.min_points,
         )
 
@@ -405,6 +428,20 @@ class DetectionClusteringService:
                     """
                 ).bindparams(bindparam("ids", expanding=True)),
                 {"event_id": str(event_id), "ids": [str(det.id) for det in cluster]},
+            )
+            max_detected = max(det.detected_at for det in cluster)
+            self.db.execute(
+                text(
+                    """
+                    UPDATE fire_events
+                       SET last_seen_at = CASE
+                           WHEN last_seen_at IS NULL THEN :detected_at
+                           ELSE GREATEST(last_seen_at, :detected_at)
+                       END
+                     WHERE id = :event_id
+                    """
+                ),
+                {"event_id": str(event_id), "detected_at": max_detected},
             )
 
             events_created += 1

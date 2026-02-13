@@ -46,6 +46,10 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.services.episode_flow_parameters import (
+    load_canonical_episode_flow_parameters,
+)
+
 
 class EventPayload(Protocol):
     """Protocol describing the minimal fire event payload."""
@@ -68,12 +72,20 @@ class EpisodeService:
     """Service for managing fire episodes."""
     def __init__(self, db: Session):
         self.db = db
+        self._episode_flow_params_cache: Optional[dict[str, float | int]] = None
 
     @staticmethod
     def _ensure_tz(value: datetime) -> datetime:
         if value.tzinfo is None:
             return value.replace(tzinfo=timezone.utc)
         return value
+
+    def _episode_flow_params(self) -> dict[str, float | int]:
+        if self._episode_flow_params_cache is None:
+            self._episode_flow_params_cache = load_canonical_episode_flow_parameters(
+                self.db
+            )
+        return self._episode_flow_params_cache
 
     def _system_param_value(self, key: str, fallback: Any) -> Any:
         try:
@@ -100,7 +112,7 @@ class EpisodeService:
         return value if value is not None else fallback
 
     def _resolve_inactive_grace_hours(self, default: int = 72) -> int:
-        value = self._system_param_value("episode_inactive_grace_hours", default)
+        value = self._episode_flow_params().get("episode_temporal_window_hours", default)
         try:
             hours = int(value)
         except (TypeError, ValueError):
@@ -217,24 +229,20 @@ class EpisodeService:
 
         old_episode_ids = [row[0] for row in old_episode_rows]
 
-        if old_episode_ids:
-            self.db.execute(
-                text(
-                    """
-                    DELETE FROM fire_episode_events
-                     WHERE event_id = :event_id
-                       AND episode_id != :episode_id
-                    """
-                ),
-                {"event_id": str(event_id), "episode_id": str(episode_id)},
-            )
-
         self.db.execute(
             text(
                 """
-                INSERT INTO fire_episode_events (episode_id, event_id)
-                VALUES (:episode_id, :event_id)
-                ON CONFLICT DO NOTHING
+                DELETE FROM fire_episode_events
+                 WHERE event_id = :event_id
+                """
+            ),
+            {"event_id": str(event_id)},
+        )
+        self.db.execute(
+            text(
+                """
+                INSERT INTO fire_episode_events (episode_id, event_id, added_at)
+                VALUES (:episode_id, :event_id, NOW())
                 """
             ),
             {"episode_id": str(episode_id), "event_id": str(event_id)},

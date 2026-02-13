@@ -34,6 +34,7 @@ class FireEvent(Base):
     # Tiempo
     start_date = Column(DateTime(timezone=True), nullable=False)
     end_date = Column(DateTime(timezone=True), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True))
 
     # Estadísticas
     total_detections = Column(Integer, default=1)
@@ -52,7 +53,7 @@ class FireEvent(Base):
 
     # Estado operativo
     status = Column(String(20), server_default=text("'active'"))
-    extinguished_at = Column(DateTime(timezone=True))
+    extinct_at = Column(DateTime(timezone=True))
     has_historic_report = Column(Boolean, default=False)
 
     # Satelital / carrusel
