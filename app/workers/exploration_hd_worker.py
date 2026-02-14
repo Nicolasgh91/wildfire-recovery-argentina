@@ -101,6 +101,7 @@ def generate_hd_image_for_item(
     start_time = time.monotonic()
     db = SessionLocal()
     try:
+        logger.info("exploration_item_generation_started item_id=%s", item_id)
         row = _fetch_item_context(db, item_id)
         if not row:
             logger.error("exploration_item_not_found item_id=%s", item_id)
@@ -276,6 +277,7 @@ def generate_hd_image_for_item(
             sensor=item.sensor or "sentinel-2",
             target_date=target_date.isoformat(),
         )
+        logger.info("exploration_item_generation_finished item_id=%s", item_id)
         return True
     finally:
         db.close()
@@ -299,6 +301,7 @@ def _update_job_progress(job_id: UUID, progress_done: int) -> None:
 
 
 def run_generation_job(job_id: UUID) -> None:
+    logger.info("exploration_job_started job_id=%s", job_id)
     db = SessionLocal()
     try:
         with db.begin():
@@ -397,5 +400,11 @@ def run_generation_job(job_id: UUID) -> None:
                 _log_metric(
                     "gee_requests_failed_total", failed_items, job_id=str(job_id)
                 )
+            logger.info(
+                "exploration_job_finished job_id=%s status=%s failed_items=%s",
+                job_id,
+                job.status,
+                failed_items,
+            )
     finally:
         db.close()

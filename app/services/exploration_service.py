@@ -67,6 +67,8 @@ from app.schemas.exploration import (
 )
 from app.services.storage_service import BUCKETS, StorageService
 
+logger = logging.getLogger(__name__)
+
 
 class ExplorationService:
     """Service for satellite exploration workflows and pricing."""
@@ -75,9 +77,7 @@ class ExplorationService:
 
     def _log_metric(self, name: str, value: float, **labels: object) -> None:
         payload = {"metric": name, "value": value, "labels": labels}
-        logging.getLogger(__name__).info(
-            "metric=%s", json.dumps(payload, ensure_ascii=True)
-        )
+        logger.info("metric=%s", json.dumps(payload, ensure_ascii=True))
 
     @staticmethod
     def _normalize_datetime(value: datetime) -> datetime:
@@ -317,6 +317,12 @@ class ExplorationService:
         investigation_id: UUID,
         idempotency_key: str,
     ) -> Tuple[HdGenerationJob, int, int]:
+        logger.info(
+            "exploration_generate_images_started user_id=%s investigation_id=%s idempotency_key=%s",
+            user_id,
+            investigation_id,
+            idempotency_key,
+        )
         if not idempotency_key:
             raise ValueError("idempotency_required")
 
@@ -433,7 +439,64 @@ class ExplorationService:
 
             credits_remaining = credits.balance
 
+        logger.info(
+            "exploration_generate_images_committed user_id=%s investigation_id=%s job_id=%s items_count=%s credits_required=%s credits_remaining=%s",
+            user_id,
+            investigation_id,
+            job.id,
+            items_count,
+            credits_required,
+            credits_remaining,
+        )
         return job, credits_required, credits_remaining
+
+    def get_generation_status(
+        self,
+        user_id: UUID,
+        investigation_id: UUID,
+        job_id: UUID,
+    ) -> tuple[HdGenerationJob, int, int]:
+        investigation = (
+            self.db.query(UserInvestigation.id)
+            .filter(
+                UserInvestigation.id == investigation_id,
+                UserInvestigation.user_id == user_id,
+            )
+            .first()
+        )
+        if not investigation:
+            raise ValueError("investigation_not_found")
+
+        job = (
+            self.db.query(HdGenerationJob)
+            .filter(
+                HdGenerationJob.id == job_id,
+                HdGenerationJob.investigation_id == investigation_id,
+            )
+            .first()
+        )
+        if not job:
+            raise ValueError("job_not_found")
+
+        failed_items = (
+            self.db.query(func.count(InvestigationItem.id))
+            .filter(
+                InvestigationItem.investigation_id == investigation_id,
+                InvestigationItem.status == "failed",
+            )
+            .scalar()
+            or 0
+        )
+
+        progress_total = job.progress_total or 0
+        progress_done = min(job.progress_done or 0, progress_total)
+        progress_pct = (
+            int((progress_done * 100) / progress_total)
+            if progress_total > 0
+            else 0
+        )
+
+        return job, progress_pct, failed_items
 
     def list_assets(
         self,

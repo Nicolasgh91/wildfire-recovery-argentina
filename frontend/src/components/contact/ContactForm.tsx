@@ -17,35 +17,20 @@ import {
 } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
 import { useAuth } from '@/context/AuthContext'
+import { useI18n } from '@/context/LanguageContext'
 import { sendContactForm } from '@/services/endpoints/contact'
 
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'application/pdf']
 
-const subjectOptions = [
-  { value: 'support', label: 'Soporte Técnico' },
-  { value: 'sales', label: 'Ventas / Consultas Comerciales' },
-  { value: 'other', label: 'Otro' },
-]
-
-const contactSchema = z.object({
-  name: z.string().min(2, 'Nombre requerido').max(100, 'Nombre demasiado largo'),
-  surname: z.string().max(100, 'Apellido demasiado largo').optional().or(z.literal('')),
-  email: z.string().email('Correo inválido'),
-  subject: z.string().min(3, 'Asunto requerido').max(150, 'Asunto demasiado largo'),
-  description: z.string().min(10, 'Mensaje demasiado corto').max(5000, 'Mensaje demasiado largo'),
-  attachment: z
-    .instanceof(File)
-    .optional()
-    .refine((file) => !file || file.size <= MAX_ATTACHMENT_BYTES, {
-      message: 'El adjunto supera 5MB',
-    })
-    .refine((file) => !file || ALLOWED_TYPES.includes(file.type), {
-      message: 'Tipo de archivo no permitido',
-    }),
-})
-
-type ContactFormValues = z.infer<typeof contactSchema>
+type ContactFormValues = {
+  name: string
+  surname?: string
+  email: string
+  subject: string
+  description: string
+  attachment?: File
+}
 
 const buildInitialValues = (): ContactFormValues => ({
   name: '',
@@ -59,9 +44,33 @@ const buildInitialValues = (): ContactFormValues => ({
 export function ContactForm() {
   const { user, isAuthenticated } = useAuth()
   const { toast } = useToast()
+  const { t } = useI18n()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const subjectOptions = [
+    { value: 'support', label: t('contactSubjectSupport') },
+    { value: 'sales', label: t('contactSubjectSales') },
+    { value: 'other', label: t('contactSubjectOther') },
+  ]
+
+  const contactSchema = z.object({
+    name: z.string().min(2, t('contactValidationNameRequired')).max(100, t('contactValidationNameTooLong')),
+    surname: z.string().max(100, t('contactValidationSurnameTooLong')).optional().or(z.literal('')),
+    email: z.string().email(t('contactValidationEmailInvalid')),
+    subject: z.string().min(3, t('contactValidationSubjectRequired')).max(150, t('contactValidationSubjectTooLong')),
+    description: z.string().min(10, t('contactValidationDescriptionShort')).max(5000, t('contactValidationDescriptionTooLong')),
+    attachment: z
+      .instanceof(File)
+      .optional()
+      .refine((file) => !file || file.size <= MAX_ATTACHMENT_BYTES, {
+        message: t('contactValidationAttachmentTooLarge'),
+      })
+      .refine((file) => !file || ALLOWED_TYPES.includes(file.type), {
+        message: t('contactValidationAttachmentType'),
+      }),
+  })
 
   const form = useForm<ContactFormValues>({
     resolver: zodResolver(contactSchema),
@@ -131,8 +140,8 @@ export function ContactForm() {
       })
 
       toast({
-        title: 'Consulta enviada con éxito',
-        description: 'Nos pondremos en contacto contigo pronto.',
+        title: t('contactToastSuccessTitle'),
+        description: t('contactToastSuccessDescription'),
       })
 
       form.reset({
@@ -144,8 +153,8 @@ export function ContactForm() {
       resetAttachment()
     } catch {
       toast({
-        title: 'Error al enviar consulta',
-        description: 'Por favor intente nuevamente más tarde.',
+        title: t('contactToastErrorTitle'),
+        description: t('contactToastErrorDescription'),
         variant: 'destructive',
       })
     } finally {
@@ -156,20 +165,20 @@ export function ContactForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Envíanos un mensaje</CardTitle>
+        <CardTitle>{t('contactFormTitle')}</CardTitle>
         <CardDescription>
-          Complete el formulario y nos pondremos en contacto lo antes posible.
+          {t('contactFormDescription')}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="name">Nombre *</Label>
+              <Label htmlFor="name">{t('contactName')} *</Label>
               <Input
                 id="name"
                 {...form.register('name')}
-                placeholder="Tu nombre"
+                placeholder={t('contactNamePlaceholder')}
                 readOnly={lockNameFields}
                 className={lockNameFields ? 'bg-muted' : ''}
               />
@@ -178,11 +187,11 @@ export function ContactForm() {
               )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="surname">Apellido</Label>
+              <Label htmlFor="surname">{t('contactSurname')}</Label>
               <Input
                 id="surname"
                 {...form.register('surname')}
-                placeholder="Tu apellido"
+                placeholder={t('contactSurnamePlaceholder')}
                 readOnly={lockNameFields}
                 className={lockNameFields ? 'bg-muted' : ''}
               />
@@ -195,12 +204,12 @@ export function ContactForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="email">Correo Electrónico *</Label>
+            <Label htmlFor="email">{t('contactEmail')} *</Label>
             <Input
               id="email"
               type="email"
               {...form.register('email')}
-              placeholder="tu@email.com"
+              placeholder={t('contactEmailPlaceholder')}
               readOnly={isAuthenticated}
               className={isAuthenticated ? 'bg-muted' : ''}
             />
@@ -210,13 +219,13 @@ export function ContactForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="subject">Asunto *</Label>
+            <Label htmlFor="subject">{t('contactSubject')} *</Label>
             <Select
               value={form.watch('subject')}
               onValueChange={(value) => form.setValue('subject', value, { shouldValidate: true })}
             >
               <SelectTrigger id="subject">
-                <SelectValue placeholder="Selecciona un asunto" />
+                <SelectValue placeholder={t('contactSubjectPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
                 {subjectOptions.map((option) => (
@@ -232,11 +241,11 @@ export function ContactForm() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Descripción *</Label>
+            <Label htmlFor="description">{t('contactMessage')} *</Label>
             <Textarea
               id="description"
               {...form.register('description')}
-              placeholder="Describe tu consulta con el mayor detalle posible..."
+              placeholder={t('contactDescriptionPlaceholder')}
               rows={5}
               className="resize-none"
             />
@@ -248,7 +257,7 @@ export function ContactForm() {
           </div>
 
           <div className="space-y-2">
-            <Label>Adjunto (Opcional)</Label>
+            <Label>{t('contactAttachment')}</Label>
             <div className="flex flex-wrap items-center gap-3">
               <input
                 ref={fileInputRef}
@@ -264,7 +273,7 @@ export function ContactForm() {
                 className="gap-2"
               >
                 <Paperclip className="h-4 w-4" />
-                Seleccionar archivo
+                {t('contactSelectFile')}
               </Button>
               {attachment && (
                 <div className="flex items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm">
@@ -283,7 +292,7 @@ export function ContactForm() {
               <div className="mt-3">
                 <img
                   src={previewUrl}
-                  alt="Vista previa del adjunto"
+                  alt={t('contactAttachmentAlt')}
                   className="h-32 rounded-md border border-border object-cover"
                   loading="lazy"
                   decoding="async"
@@ -296,7 +305,7 @@ export function ContactForm() {
               </p>
             )}
             <p className="text-xs text-muted-foreground">
-              Formatos permitidos: PDF, JPG, PNG (máx. 5MB)
+              {t('contactAllowedFormats')}
             </p>
           </div>
 
@@ -304,12 +313,12 @@ export function ContactForm() {
             {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Enviando...
+                {t('contactSending')}
               </>
             ) : (
               <>
                 <Send className="h-4 w-4" />
-                Enviar Mensaje
+                {t('contactSend')}
               </>
             )}
           </Button>

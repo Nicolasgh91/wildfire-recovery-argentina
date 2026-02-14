@@ -254,6 +254,27 @@ source venv/bin/activate
 gunicorn app.main:app --bind 0.0.0.0:8000
 ```
 
+### Contact form degraded (Redis/Celery unavailable)
+```bash
+# 1) Confirm broker status seen by API
+curl -s https://forestguard.freedynamicdns.org/api/v1/health/celery
+
+# 2) If degraded, inspect worker + redis health
+sudo systemctl status redis-server
+# (if worker is supervised separately)
+sudo journalctl -u forestguard -n 200 --no-pager | grep -E "contact|celery|redis"
+
+# 3) API fallback behavior
+# - If enqueue fails but SMTP works: /api/v1/contact still returns 202
+# - If enqueue and SMTP fail: /api/v1/contact returns 503
+```
+
+Métricas mínimas a revisar en degradación:
+- Tasa de `503` en `POST /api/v1/contact`.
+- Cantidad de logs `contact_enqueue_failed`.
+- Cantidad de logs `contact_delivery_failed`.
+- Latencia p95 del endpoint de contacto (sube cuando entra fallback SMTP).
+
 ### SSL certificate issues
 ```bash
 # Renew manually

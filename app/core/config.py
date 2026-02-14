@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     STORAGE_LOCAL_PATH: str = "storage"
     STORAGE_PUBLIC_URL: str = "http://127.0.0.1:9000"
     REDIS_URL: str = "redis://localhost:6379/0"
+    CELERY_BROKER_URL: Optional[str] = None
+    CELERY_RESULT_BACKEND: Optional[str] = None
 
     # --- CORS ---
     ALLOWED_ORIGINS: List[str] = Field(
@@ -92,7 +94,7 @@ class Settings(BaseSettings):
     ALLOWED_HEADERS: List[str] = Field(
         default_factory=lambda: [
             "Authorization", "Content-Type", "X-API-Key",
-            "X-Request-ID", "X-Idempotency-Key", "X-Skip-Auth-Redirect",
+            "X-Request-ID", "X-Idempotency-Key", "Idempotency-Key", "X-Skip-Auth-Redirect",
             "Accept", "Accept-Language",
         ],
         description="Allowed HTTP headers for CORS (BL-004).",

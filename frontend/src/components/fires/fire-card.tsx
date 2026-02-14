@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Calendar, Ruler, ArrowRight, Camera, Flame } from 'lucide-react'
+import { ArrowRight, Camera, Flame } from 'lucide-react'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -25,13 +25,9 @@ import {
 import type { EpisodeListItem, EpisodeStatus } from '@/types/episode'
 import { cn } from '@/lib/utils'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
+import { useI18n } from '@/context/LanguageContext'
 
-const STATUS_LABELS: Record<EpisodeStatus, string> = {
-  active: 'Activo',
-  monitoring: 'Monitoreo',
-  extinct: 'Extinto',
-  closed: 'Cerrado',
-}
+const VALID_STATUSES: EpisodeStatus[] = ['active', 'monitoring', 'extinct', 'closed']
 
 const STATUS_STYLES: Record<EpisodeStatus, string> = {
   active: 'border-red-200 bg-red-100 text-red-700',
@@ -42,15 +38,15 @@ const STATUS_STYLES: Record<EpisodeStatus, string> = {
 
 function resolveStatus(episode: EpisodeListItem): EpisodeStatus {
   const status = episode.status
-  if (status && status in STATUS_LABELS) {
+  if (status && VALID_STATUSES.includes(status as EpisodeStatus)) {
     return status as EpisodeStatus
   }
 
   return 'extinct'
 }
 
-function formatProvincesLabel(provinces?: string[] | null): string {
-  if (!provinces || provinces.length === 0) return 'Sin provincia'
+function formatProvincesLabel(provinces: string[] | null | undefined, noProvinceLabel: string): string {
+  if (!provinces || provinces.length === 0) return noProvinceLabel
   if (provinces.length === 1) return provinces[0]
   return `${provinces[0]} (+${provinces.length - 1})`
 }
@@ -61,8 +57,15 @@ interface FireCardProps {
 }
 
 export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
+  const { t } = useI18n()
+  const statusLabels: Record<EpisodeStatus, string> = {
+    active: t('statusActive'),
+    monitoring: t('statusMonitoring'),
+    extinct: t('statusExtinct'),
+    closed: t('statusClosed'),
+  }
   const severity = getSeverityConfig(fire.frp_max)
-  const title = formatProvincesLabel(fire.provinces)
+  const title = formatProvincesLabel(fire.provinces, t('noProvince'))
   const statusKey = resolveStatus(fire)
   const slides =
     fire.slides_data?.filter((slide) => slide.thumbnail_url || slide.url) ?? []
@@ -139,7 +142,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
                       key={`${slide.type}-${index}-dot`}
                       type="button"
                       onClick={() => carouselApi?.scrollTo(index)}
-                      aria-label={`Ir a la diapositiva ${index + 1}`}
+                      aria-label={t('goToSlide').replace('{index}', String(index + 1))}
                       aria-current={index === activeIndex}
                       className={cn(
                         'h-2 w-2 rounded-full transition',
@@ -156,13 +159,13 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
             <div className="flex flex-col items-center gap-2 rounded-2xl bg-white/60 px-6 py-4 shadow-sm backdrop-blur-sm">
               <Flame className={cn('h-12 w-12', severity.iconColor)} />
               <span className="max-w-[180px] truncate text-sm font-medium text-slate-700">
-                {fire.provinces?.[0] ?? 'Sin provincia'}
+                {fire.provinces?.[0] ?? t('noProvince')}
               </span>
             </div>
           </div>
         )}
         {/* Primary badge: status overlay */}
-        {STATUS_LABELS[statusKey] && (
+        {statusLabels[statusKey] && (
           <Badge
             variant="outline"
             className={cn(
@@ -170,7 +173,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
               STATUS_STYLES[statusKey] ?? 'bg-black/20 text-white border-white/30',
             )}
           >
-            {STATUS_LABELS[statusKey]}
+            {statusLabels[statusKey]}
           </Badge>
         )}
       </div>
@@ -191,7 +194,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
               variant="outline"
               className="border-amber-200 bg-amber-50 text-amber-700 text-xs"
             >
-              Reciente
+              {t('recentLabel')}
             </Badge>
           )}
           {isImagePending && (
@@ -204,7 +207,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
                   <Camera className="h-3.5 w-3.5" />
                 </span>
               </TooltipTrigger>
-              <TooltipContent>Imagen pendiente</TooltipContent>
+              <TooltipContent>{t('imagePending')}</TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -212,7 +215,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
 
       <CardFooter className="border-t border-border bg-muted/30 p-4">
         <Button className="w-full gap-2 bg-emerald-500 text-white hover:bg-emerald-600" onClick={handleViewDetails}>
-          Ver detalles
+          {t('viewDetails')}
           <ArrowRight className="h-4 w-4" />
         </Button>
       </CardFooter>

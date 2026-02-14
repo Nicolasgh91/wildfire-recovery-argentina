@@ -63,6 +63,7 @@ from app.schemas.exploration import (
     ExplorationAssetsResponse,
     ExplorationCreateRequest,
     ExplorationGenerateResponse,
+    ExplorationGenerationStatusResponse,
     ExplorationItemCreateRequest,
     ExplorationItemResponse,
     ExplorationListResponse,
@@ -301,75 +302,148 @@ def generate_exploration(
 ) -> ExplorationGenerateResponse:
     """Queue HD image generation for an exploration using idempotent requests."""
     request_id = getattr(request.state, "request_id", None)
+    logger.info(
+        "exploration_generate_started request_id=%s investigation_id=%s user_id=%s idempotency_key=%s",
+        request_id,
+        investigation_id,
+        current_user.id,
+        idempotency_key,
+    )
     try:
-        job, credits_spent, credits_remaining = service.generate_images(
-            user_id=current_user.id,
-            investigation_id=investigation_id,
-            idempotency_key=idempotency_key,
+        try:
+            job, credits_spent, credits_remaining = service.generate_images(
+                user_id=current_user.id,
+                investigation_id=investigation_id,
+                idempotency_key=idempotency_key,
+            )
+        except ValueError as exc:
+            code = str(exc)
+            logger.warning(
+                "exploration_generate_error code=%s request_id=%s investigation_id=%s user_id=%s",
+                code,
+                request_id,
+                investigation_id,
+                current_user.id,
+            )
+            if code == "investigation_not_found":
+                raise HTTPException(
+                    status_code=404, detail="Investigacion no encontrada"
+                ) from exc
+            if code == "no_items":
+                raise HTTPException(
+                    status_code=400, detail="La investigacion no tiene items"
+                ) from exc
+            if code == "max_items_exceeded":
+                raise HTTPException(
+                    status_code=400, detail="Maximo 12 items por investigacion"
+                ) from exc
+            if code == "insufficient_credits":
+                items_count = len(service.list_items(investigation_id))
+                credits_balance = (
+                    service.db.query(UserCredits.balance)
+                    .filter(UserCredits.user_id == current_user.id)
+                    .scalar()
+                    or 0
+                )
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "message": "Creditos insuficientes",
+                        "credits_required": items_count,
+                        "credits_balance": credits_balance,
+                        "request_id": request_id,
+                    },
+                ) from exc
+            raise
+
+        items_count = job.progress_total
+        if credits_spent > 0 and job.status == "queued":
+            try:
+                generate_exploration_hd.delay(str(job.id))
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.exception(
+                    "exploration_generate_enqueue_failed request_id=%s job_id=%s",
+                    request_id,
+                    job.id,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail={
+                        "message": "No se pudo iniciar la generacion",
+                        "request_id": request_id,
+                    },
+                ) from exc
+
+        response = ExplorationGenerateResponse(
+            job_id=job.id,
+            status=job.status,
+            items_count=items_count,
+            credits_spent=credits_spent,
+            credits_remaining=credits_remaining,
         )
-    except ValueError as exc:
-        code = str(exc)
-        logger.warning(
-            "exploration_generate_error code=%s request_id=%s investigation_id=%s user_id=%s",
-            code,
+        logger.info(
+            "exploration_generate_completed request_id=%s investigation_id=%s user_id=%s job_id=%s status=%s credits_spent=%s credits_remaining=%s",
+            request_id,
+            investigation_id,
+            current_user.id,
+            job.id,
+            job.status,
+            credits_spent,
+            credits_remaining,
+        )
+        return response
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception(
+            "exploration_generate_unhandled request_id=%s investigation_id=%s user_id=%s",
             request_id,
             investigation_id,
             current_user.id,
         )
-        if code == "investigation_not_found":
-            raise HTTPException(
-                status_code=404, detail="Investigacion no encontrada"
-            ) from exc
-        if code == "no_items":
-            raise HTTPException(
-                status_code=400, detail="La investigacion no tiene items"
-            ) from exc
-        if code == "max_items_exceeded":
-            raise HTTPException(
-                status_code=400, detail="Maximo 12 items por investigacion"
-            ) from exc
-        if code == "insufficient_credits":
-            items_count = len(service.list_items(investigation_id))
-            credits_balance = (
-                service.db.query(UserCredits.balance)
-                .filter(UserCredits.user_id == current_user.id)
-                .scalar()
-                or 0
-            )
-            raise HTTPException(
-                status_code=402,
-                detail={
-                    "message": "Creditos insuficientes",
-                    "credits_required": items_count,
-                    "credits_balance": credits_balance,
-                    "request_id": request_id,
-                },
-            ) from exc
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": "No se pudo iniciar la generacion",
+                "request_id": request_id,
+            },
+        ) from exc
+
+
+@router.get(
+    "/{investigation_id}/generate/{job_id}",
+    response_model=ExplorationGenerationStatusResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
+def get_generation_status(
+    investigation_id: UUID,
+    job_id: UUID,
+    service: ExplorationService = Depends(get_exploration_service),
+    current_user=Depends(get_current_user),
+) -> ExplorationGenerationStatusResponse:
+    """Return current status/progress for one HD generation job."""
+    try:
+        job, progress_pct, failed_items = service.get_generation_status(
+            user_id=current_user.id,
+            investigation_id=investigation_id,
+            job_id=job_id,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        if code in ("investigation_not_found", "job_not_found"):
+            raise HTTPException(status_code=404, detail="Generacion no encontrada") from exc
         raise
 
-    items_count = job.progress_total
-    if credits_spent > 0 and job.status == "queued":
-        try:
-            generate_exploration_hd.delay(str(job.id))
-        except Exception as exc:  # pragma: no cover - defensive
-            logger.exception(
-                "exploration_generate_enqueue_failed request_id=%s job_id=%s",
-                request_id,
-                job.id,
-            )
-            raise HTTPException(
-                status_code=503,
-                detail={
-                    "message": "No se pudo iniciar la generacion",
-                    "request_id": request_id,
-                },
-            ) from exc
-    return ExplorationGenerateResponse(
+    updated_at = job.finished_at or job.started_at or job.created_at
+    return ExplorationGenerationStatusResponse(
         job_id=job.id,
+        investigation_id=job.investigation_id,
         status=job.status,
-        items_count=items_count,
-        credits_spent=credits_spent,
-        credits_remaining=credits_remaining,
+        progress_done=job.progress_done,
+        progress_total=job.progress_total,
+        progress_pct=progress_pct,
+        failed_items=failed_items,
+        updated_at=updated_at,
     )
 
 

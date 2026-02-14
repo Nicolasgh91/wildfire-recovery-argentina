@@ -1,5 +1,4 @@
 import base64
-import logging
 from typing import Optional, Dict, Any
 
 from celery import shared_task
@@ -17,7 +16,8 @@ logger = get_task_logger(__name__)
     max_retries=3,
     default_retry_delay=60,
     autoretry_for=(Exception,),
-    retry_backoff=True
+    retry_backoff=True,
+    ignore_result=True,
 )
 def send_contact_email_task(
     self, 

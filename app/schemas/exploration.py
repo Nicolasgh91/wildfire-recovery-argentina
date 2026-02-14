@@ -130,6 +130,17 @@ class ExplorationGenerateResponse(BaseModel):
     credits_remaining: int
 
 
+class ExplorationGenerationStatusResponse(BaseModel):
+    job_id: UUID
+    investigation_id: UUID
+    status: str
+    progress_done: int
+    progress_total: int
+    progress_pct: int
+    failed_items: int = 0
+    updated_at: Optional[datetime] = None
+
+
 class ExplorationAssetResponse(BaseModel):
     id: UUID
     item_id: UUID

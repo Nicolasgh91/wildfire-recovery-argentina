@@ -250,6 +250,8 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
 # === Redis ===
 REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
 
 # === Google Earth Engine ===
 GEE_SERVICE_ACCOUNT=your-sa@project.iam.gserviceaccount.com
@@ -387,7 +389,14 @@ curl -X POST \
 ## 🎯 Casos de uso
 
 ### UC-F01: Contacto y soporte
-Formulario de contacto con adjuntos (máx 5MB) y rate limiting.
+Formulario de contacto con adjuntos (máx 5MB), rate limiting y fallback SMTP
+sincrónico cuando Redis/Celery no está disponible.
+
+**Troubleshooting rápido (UC-F01):**
+- `GET /api/v1/health/celery` debe devolver `healthy` para el camino asíncrono.
+- Si Redis/Celery está degradado, el endpoint usa fallback SMTP en línea.
+- Si el endpoint devuelve `503`, revisar logs de API para `contact_delivery_failed`
+  y validar `SMTP_HOST`/credenciales.
 
 ### UC-F02: Estadísticas públicas
 Datos agregados anónimos vía Edge Function con cache HTTP.

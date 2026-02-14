@@ -3,6 +3,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { FireCard } from '@/components/fires/fire-card'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { I18nProvider } from '@/context/LanguageContext'
 import type { EpisodeListItem } from '@/types/episode'
 
 const mockNavigate = vi.fn()
@@ -46,9 +47,11 @@ function makeEpisode(overrides: Partial<EpisodeListItem> = {}): EpisodeListItem 
 function renderCard(episode: EpisodeListItem) {
     return render(
         <MemoryRouter>
-            <TooltipProvider>
-                <FireCard fire={episode} />
-            </TooltipProvider>
+            <I18nProvider>
+                <TooltipProvider>
+                    <FireCard fire={episode} />
+                </TooltipProvider>
+            </I18nProvider>
         </MemoryRouter>,
     )
 }
@@ -57,6 +60,7 @@ describe('FireCard', () => {
     beforeEach(() => {
         mockNavigate.mockClear()
         sessionStorage.clear()
+        localStorage.setItem('fg:language', 'es')
     })
 
     // ─── Title ───────────────────────────────────────────────────

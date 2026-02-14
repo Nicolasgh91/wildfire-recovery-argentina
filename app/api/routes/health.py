@@ -9,7 +9,6 @@ Provides:
 - /celery - Celery broker check
 - /gee - GEE credentials check
 """
-import os
 import time
 from datetime import datetime
 from typing import Any, Dict, Literal, Optional
@@ -22,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api import deps
+from app.core.celery_runtime import resolve_celery_broker_url
 
 router = APIRouter(tags=["health"])
 
@@ -74,16 +74,11 @@ async def check_database(db: Session) -> ServiceHealth:
 
 async def check_redis() -> ServiceHealth:
     """Check Redis connectivity."""
-    import time
-
     try:
-        import redis
-
-        from app.core.config import settings
-
         start = time.perf_counter()
-        r = redis.from_url(settings.REDIS_URL, socket_timeout=2)
-        r.ping()
+        broker_url = resolve_celery_broker_url()
+        client = redis.from_url(broker_url, socket_timeout=2)
+        client.ping()
         latency = (time.perf_counter() - start) * 1000
         return ServiceHealth(status="healthy", latency_ms=round(latency, 2))
     except Exception as e:
@@ -220,7 +215,7 @@ async def db_health_check(
 async def celery_health_check() -> Dict[str, Any]:
     """Individual Celery/Redis health check endpoint."""
     result = await check_redis()
-    status_code = 200 if result.status != "unhealthy" else 503
+    status_code = 200 if result.status == "healthy" else 503
     return JSONResponse(content=result.model_dump(), status_code=status_code)
 
 

@@ -62,11 +62,19 @@ import {
   createExploration,
   deleteExplorationItem,
   generateExploration,
+  getExplorationAssets,
+  getExplorationGenerationStatus,
   getExplorationQuote,
   updateExploration,
 } from '@/services/endpoints/explorations'
+import { requestJudicialReport } from '@/services/endpoints/reports'
 import type { FireSearchItem, ExplorationPreviewResponse } from '@/types/fire'
-import type { ExplorationQuoteResponse } from '@/types/exploration'
+import type {
+  ExplorationAsset,
+  ExplorationGenerationStatusResponse,
+  ExplorationQuoteResponse,
+} from '@/types/exploration'
+import type { JudicialReportResponse } from '@/types/report'
 import { getFireTitle } from '@/types/fire'
 import type { FireMapItem } from '@/types/map'
 
@@ -258,7 +266,7 @@ function formatDisplayDate(value: string, locale: string) {
   return new Intl.DateTimeFormat(locale).format(parsed)
 }
 
-function getStatusLabel(status: FireSearchItem['status'] | undefined, t: (key: string) => string) {
+function getStatusLabel(status: FireSearchItem['status'] | undefined, t: (key: any) => string) {
   if (!status) return t('monitoring')
   if (status === 'active') return t('active')
   if (status === 'controlled') return t('monitoring')
@@ -330,6 +338,14 @@ export default function ExplorationPage() {
   const [pauseAutoSync, setPauseAutoSync] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [trackingId, setTrackingId] = useState<string | null>(null)
+  const [generationStatus, setGenerationStatus] =
+    useState<ExplorationGenerationStatusResponse | null>(null)
+  const [generationError, setGenerationError] = useState<string | null>(null)
+  const [generatedAssets, setGeneratedAssets] = useState<ExplorationAsset[]>([])
+  const [assetsLoading, setAssetsLoading] = useState(false)
+  const [pdfGenerating, setPdfGenerating] = useState(false)
+  const [pdfResult, setPdfResult] = useState<JudicialReportResponse | null>(null)
+  const [pdfError, setPdfError] = useState<string | null>(null)
   const [titleError, setTitleError] = useState(false)
 
   const [newItemKind, setNewItemKind] = useState<'pre' | 'post'>('post')
@@ -433,7 +449,24 @@ export default function ExplorationPage() {
     setQuote(null)
     setSyncedSignature('')
     setTrackingId(null)
+    setGenerationStatus(null)
+    setGenerationError(null)
+    setGeneratedAssets([])
+    setPdfResult(null)
+    setPdfError(null)
     setPauseAutoSync(false)
+  }
+
+  const loadExplorationAssets = async (explorationId: string) => {
+    setAssetsLoading(true)
+    try {
+      const response = await getExplorationAssets(explorationId)
+      setGeneratedAssets(response.assets ?? [])
+    } catch {
+      setGenerationError('No se pudieron cargar las imagenes generadas.')
+    } finally {
+      setAssetsLoading(false)
+    }
   }
 
   const handleSearch = async (page: number = 1, append: boolean = false) => {
@@ -783,10 +816,22 @@ export default function ExplorationPage() {
       return
     }
     setGenerating(true)
+    setGenerationError(null)
+    setGeneratedAssets([])
     try {
       const idempotencyKey = crypto.randomUUID()
       const response = await generateExploration(draftId, idempotencyKey)
       setTrackingId(response.job_id)
+      setGenerationStatus({
+        job_id: response.job_id,
+        investigation_id: draftId,
+        status: response.status as 'queued' | 'processing' | 'ready' | 'failed',
+        progress_done: 0,
+        progress_total: response.items_count,
+        progress_pct: 0,
+        failed_items: 0,
+        updated_at: null,
+      })
       toast.success(`${t('explorationGenerationStarted')} ${response.job_id}`)
     } catch (error) {
       const response = (error as { response?: { status?: number; data?: any; headers?: any } })
@@ -812,6 +857,89 @@ export default function ExplorationPage() {
       setShowConfirmDialog(false)
     }
   }
+
+  const handleGenerateJudicialReport = async () => {
+    if (status === 'loading') return
+    if (!isAuthenticated) {
+      setShowAuthDialog(true)
+      return
+    }
+    if (!selectedFire?.id) {
+      toast.error(t('technicalError'))
+      return
+    }
+
+    setPdfGenerating(true)
+    setPdfError(null)
+    setPdfResult(null)
+    try {
+      const idempotencyKey = crypto.randomUUID()
+      const response = await requestJudicialReport(
+        {
+          fire_event_id: selectedFire.id,
+          include_climate: true,
+          include_imagery: true,
+          language: 'es',
+        },
+        idempotencyKey,
+      )
+      setPdfResult(response)
+      toast.success('Reporte judicial generado correctamente.')
+    } catch (error) {
+      const response = (error as { response?: { data?: any; headers?: any } })?.response
+      const detail = response?.data?.detail
+      const requestId = response?.headers?.['x-request-id']
+      let message = 'No se pudo generar el reporte judicial.'
+      if (typeof detail === 'string') {
+        message = detail
+      } else if (detail?.message) {
+        message = detail.message
+      }
+      if (requestId) {
+        message = `${message} (ID: ${requestId})`
+      }
+      setPdfError(message)
+      toast.error(message)
+    } finally {
+      setPdfGenerating(false)
+    }
+  }
+
+  useEffect(() => {
+    if (step !== 3 || !draftId || !trackingId || !isAuthenticated) return
+    let active = true
+    let timer: ReturnType<typeof setInterval> | undefined
+
+    const pollStatus = async () => {
+      try {
+        const statusResponse = await getExplorationGenerationStatus(draftId, trackingId)
+        if (!active) return
+        setGenerationStatus(statusResponse)
+        if (statusResponse.status === 'ready') {
+          if (timer) clearInterval(timer)
+          await loadExplorationAssets(draftId)
+          return
+        }
+        if (statusResponse.status === 'failed') {
+          if (timer) clearInterval(timer)
+          setGenerationError('La generacion finalizo con errores. Revisa el estado de los items.')
+        }
+      } catch {
+        if (!active) return
+        setGenerationError('No se pudo consultar el estado de generacion HD.')
+      }
+    }
+
+    void pollStatus()
+    timer = setInterval(() => {
+      void pollStatus()
+    }, 4000)
+
+    return () => {
+      active = false
+      if (timer) clearInterval(timer)
+    }
+  }, [step, draftId, trackingId, isAuthenticated])
 
   const costUnit = quote?.unit_price_ars ?? 500
   const fallbackTotal = costUnit * draftItems.length
@@ -939,8 +1067,8 @@ export default function ExplorationPage() {
           <CardHeader>
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-1">
-                <CardTitle>{t(`explorationStep${step}Title`)}</CardTitle>
-                <CardDescription>{t(`explorationStep${step}Subtitle`)}</CardDescription>
+                <CardTitle>{t(`explorationStep${step}Title` as any)}</CardTitle>
+                <CardDescription>{t(`explorationStep${step}Subtitle` as any)}</CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" data-testid="exploration-stepper">
                 {[1, 2, 3].map((id) => (
@@ -954,7 +1082,7 @@ export default function ExplorationPage() {
                       {id}
                     </span>
                     <span className={step === id ? 'text-foreground' : ''}>
-                      {t(`explorationStep${id}Title`)}
+                      {t(`explorationStep${id}Title` as any)}
                     </span>
                   </div>
                 ))}
@@ -1613,43 +1741,138 @@ export default function ExplorationPage() {
                         </div>
                       </div>
                     )}
+                    {generationStatus && (
+                      <div className="w-full rounded-lg border border-border bg-muted/20 p-4">
+                        <div className="mb-2 flex items-center justify-between gap-2 text-xs">
+                          <span className="font-semibold text-foreground">
+                            Estado HD: {generationStatus.status}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {generationStatus.progress_done}/{generationStatus.progress_total} ({generationStatus.progress_pct}%)
+                          </span>
+                        </div>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full bg-primary transition-all"
+                            style={{ width: `${generationStatus.progress_pct}%` }}
+                          />
+                        </div>
+                        {generationStatus.failed_items > 0 && (
+                          <p className="mt-2 text-xs text-destructive">
+                            Items con error: {generationStatus.failed_items}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {generationError && (
+                      <p className="w-full rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                        {generationError}
+                      </p>
+                    )}
 
-                    <div className="flex w-full flex-wrap items-center gap-2">
-                      <Button
-                        variant="outline"
-                        className="gap-2"
-                        disabled={syncing || needsSync || generating || !draftTitle.trim()}
-                        onClick={handleSaveDraft}
-                      >
-                        <FileText className="h-4 w-4" />
-                        {t('explorationSave')}
-                      </Button>
-                      <Button
-                        className="gap-2"
-                        disabled={syncing || needsSync || generating}
-                        onClick={handleGenerate}
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        {t('explorationGenerate')}
-                      </Button>
-                      {needsSync && (
+                    <div className="w-full rounded-lg border border-border bg-muted/20 p-4">
+                      <div className="mb-3 flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground">Activos generados</p>
+                        {assetsLoading && <span className="text-xs text-muted-foreground">Cargando...</span>}
+                      </div>
+                      {generatedAssets.length > 0 ? (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {generatedAssets.map((asset) => (
+                            <a
+                              key={asset.id}
+                              href={asset.signed_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-md border border-border bg-background p-3 text-xs hover:bg-muted/30"
+                            >
+                              <p className="font-semibold text-foreground">
+                                {asset.kind === 'pre' ? 'Pre-incendio' : 'Post-incendio'}
+                              </p>
+                              <p className="text-muted-foreground">Fecha: {formatDisplayDate(asset.target_date, locale)}</p>
+                              <p className="text-muted-foreground">Estado: {asset.status}</p>
+                              <p className="mt-1 text-primary underline">Abrir imagen HD</p>
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          Todavia no hay imagenes HD listas para visualizar.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="w-full rounded-lg border border-border bg-muted/20 p-4">
+                      <p className="mb-2 text-sm font-semibold text-foreground">{t('explorationDownloadTitle')}</p>
+                      <div className="flex flex-wrap items-center gap-2">
                         <Button
                           variant="outline"
-                          onClick={syncDraftAndQuote}
                           className="gap-2"
+                          onClick={handleGenerateJudicialReport}
+                          disabled={pdfGenerating || generating || syncing || !selectedFire?.id}
                         >
-                          {syncing ? (
-                            <>
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                              {t('explorationLoadingQuote')}
-                            </>
-                          ) : (
-                            <>
-                              <ArrowRight className="h-4 w-4" />
-                              {t('explorationUpdateCost')}
-                            </>
-                          )}
+                          <FileText className="h-4 w-4" />
+                          {pdfGenerating ? 'Generando reporte...' : 'Descarga PDF'}
                         </Button>
+                        <Button
+                          variant="outline"
+                          className="gap-2"
+                          disabled={syncing || needsSync || generating || !draftTitle.trim()}
+                          onClick={handleSaveDraft}
+                        >
+                          <FileText className="h-4 w-4" />
+                          {t('explorationSave')}
+                        </Button>
+                        <Button
+                          className="gap-2"
+                          disabled={syncing || needsSync || generating}
+                          onClick={handleGenerate}
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          {t('explorationGenerate')}
+                        </Button>
+                        {needsSync && (
+                          <Button
+                            variant="outline"
+                            onClick={syncDraftAndQuote}
+                            className="gap-2"
+                          >
+                            {syncing ? (
+                              <>
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                {t('explorationLoadingQuote')}
+                              </>
+                            ) : (
+                              <>
+                                <ArrowRight className="h-4 w-4" />
+                                {t('explorationUpdateCost')}
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                      {pdfError && <p className="mt-2 text-xs text-destructive">{pdfError}</p>}
+                      {pdfResult && (
+                        <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+                          <p className="font-semibold">Reporte generado: {pdfResult.report.report_id}</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <a
+                              href={pdfResult.report.download_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline"
+                            >
+                              Descargar PDF
+                            </a>
+                            <a
+                              href={pdfResult.report.pdf_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline"
+                            >
+                              Abrir visor
+                            </a>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </CardFooter>

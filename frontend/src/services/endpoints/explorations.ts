@@ -5,8 +5,10 @@
 
 import { apiClient } from '../api'
 import type {
+  ExplorationAssetsResponse,
   ExplorationCreateRequest,
   ExplorationGenerateResponse,
+  ExplorationGenerationStatusResponse,
   ExplorationItemCreateRequest,
   ExplorationItemResponse,
   ExplorationQuoteResponse,
@@ -31,6 +33,27 @@ export async function updateExploration(
   const response = await apiClient.patch<ExplorationResponse>(
     `/explorations/${explorationId}`,
     payload,
+    { headers: { 'X-Skip-Auth-Redirect': 'true' }, skipAuthRedirect: true } as any,
+  )
+  return response.data
+}
+
+export async function getExplorationGenerationStatus(
+  explorationId: string,
+  jobId: string,
+): Promise<ExplorationGenerationStatusResponse> {
+  const response = await apiClient.get<ExplorationGenerationStatusResponse>(
+    `/explorations/${explorationId}/generate/${jobId}`,
+    { headers: { 'X-Skip-Auth-Redirect': 'true' }, skipAuthRedirect: true } as any,
+  )
+  return response.data
+}
+
+export async function getExplorationAssets(
+  explorationId: string,
+): Promise<ExplorationAssetsResponse> {
+  const response = await apiClient.get<ExplorationAssetsResponse>(
+    `/explorations/${explorationId}/assets`,
     { headers: { 'X-Skip-Auth-Redirect': 'true' }, skipAuthRedirect: true } as any,
   )
   return response.data

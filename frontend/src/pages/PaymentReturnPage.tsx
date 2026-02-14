@@ -4,6 +4,7 @@ import { CheckCircle, Clock, Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { usePaymentStatus } from '@/hooks/queries/usePaymentStatus'
 import { useAuth } from '@/context/AuthContext'
+import { useI18n } from '@/context/LanguageContext'
 
 const POLLING_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -12,6 +13,7 @@ export default function PaymentReturnPage() {
   const navigate = useNavigate()
   const [timedOut, setTimedOut] = useState(false)
   const { status } = useAuth()
+  const { t } = useI18n()
 
   const paymentRequestId = useMemo(() => {
     const fromQuery = searchParams.get('payment_request_id')
@@ -42,8 +44,8 @@ export default function PaymentReturnPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-4 text-center">
         <Loader2 className="mb-4 h-16 w-16 animate-spin text-primary" />
-        <h1 className="mb-2 text-2xl font-bold">Cargando sesion...</h1>
-        <p className="text-gray-600">Estamos restaurando tu sesion antes de verificar el pago.</p>
+        <h1 className="mb-2 text-2xl font-bold">{t('paymentLoadingSession')}</h1>
+        <p className="text-gray-600">{t('paymentRestoringSession')}</p>
       </div>
     )
   }
@@ -52,9 +54,9 @@ export default function PaymentReturnPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-4 text-center">
         <XCircle className="mb-4 h-16 w-16 text-red-500" />
-        <h1 className="mb-2 text-2xl font-bold">Sesion requerida</h1>
+        <h1 className="mb-2 text-2xl font-bold">{t('paymentSessionRequired')}</h1>
         <p className="mb-6 text-gray-600">
-          Inicia sesion para verificar el estado del pago.
+          {t('paymentLoginToVerify')}
         </p>
         <Button
           onClick={() => {
@@ -62,7 +64,7 @@ export default function PaymentReturnPage() {
             navigate('/login')
           }}
         >
-          Ir a login
+          {t('paymentGoToLogin')}
         </Button>
       </div>
     )
@@ -72,11 +74,11 @@ export default function PaymentReturnPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-4 text-center">
         <XCircle className="mb-4 h-16 w-16 text-red-500" />
-        <h1 className="mb-2 text-2xl font-bold">Pago no encontrado</h1>
+        <h1 className="mb-2 text-2xl font-bold">{t('paymentNotFound')}</h1>
         <p className="mb-6 text-gray-600">
-          No pudimos identificar el pago. Volve a intentar desde Creditos.
+          {t('paymentIdentifyError')}
         </p>
-        <Button onClick={() => navigate('/credits')}>Ir a Creditos</Button>
+        <Button onClick={() => navigate('/credits')}>{t('paymentGoToCredits')}</Button>
       </div>
     )
   }
@@ -85,11 +87,11 @@ export default function PaymentReturnPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-4 text-center">
         <Clock className="mb-4 h-16 w-16 text-yellow-500" />
-        <h1 className="mb-2 text-2xl font-bold">Verificación en proceso</h1>
+        <h1 className="mb-2 text-2xl font-bold">{t('paymentVerificationInProgress')}</h1>
         <p className="mb-6 text-gray-600">
-          Tu pago está siendo procesado. Recibirás un email de confirmación cuando se acredite.
+          {t('paymentProcessingMessage')}
         </p>
-        <Button onClick={() => navigate('/')}>Volver al inicio</Button>
+        <Button onClick={() => navigate('/')}>{t('paymentGoToHome')}</Button>
       </div>
     )
   }
@@ -98,8 +100,8 @@ export default function PaymentReturnPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-4 text-center">
         <Loader2 className="mb-4 h-16 w-16 animate-spin text-primary" />
-        <h1 className="mb-2 text-2xl font-bold">Verificando pago...</h1>
-        <p className="text-gray-600">Por favor espera mientras confirmamos tu pago.</p>
+        <h1 className="mb-2 text-2xl font-bold">{t('paymentVerifying')}</h1>
+        <p className="text-gray-600">{t('paymentPleaseWait')}</p>
       </div>
     )
   }
@@ -108,9 +110,9 @@ export default function PaymentReturnPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-4 text-center">
         <CheckCircle className="mb-4 h-16 w-16 text-green-500" />
-        <h1 className="mb-2 text-2xl font-bold">¡Pago exitoso!</h1>
-        <p className="mb-6 text-gray-600">Tus créditos han sido acreditados a tu cuenta.</p>
-        <Button onClick={() => navigate('/credits')}>Continuar</Button>
+        <h1 className="mb-2 text-2xl font-bold">{t('paymentSuccessful')}</h1>
+        <p className="mb-6 text-gray-600">{t('paymentCreditedMessage')}</p>
+        <Button onClick={() => navigate('/credits')}>{t('paymentContinue')}</Button>
       </div>
     )
   }
@@ -119,11 +121,11 @@ export default function PaymentReturnPage() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center p-4 text-center">
         <XCircle className="mb-4 h-16 w-16 text-red-500" />
-        <h1 className="mb-2 text-2xl font-bold">Pago rechazado</h1>
+        <h1 className="mb-2 text-2xl font-bold">{t('paymentRejected')}</h1>
         <p className="mb-6 text-gray-600">
-          No pudimos procesar tu pago. Por favor intenta nuevamente.
+          {t('paymentRejectedMessage')}
         </p>
-        <Button onClick={() => navigate('/credits')}>Intentar de nuevo</Button>
+        <Button onClick={() => navigate('/credits')}>{t('paymentTryAgain')}</Button>
       </div>
     )
   }

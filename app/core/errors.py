@@ -28,6 +28,20 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _cors_error_headers(request: Request) -> dict[str, str]:
+    """Return CORS headers for error responses when Origin is whitelisted."""
+    origin = request.headers.get("origin")
+    if not origin:
+        return {}
+    if origin not in settings.ALLOWED_ORIGINS:
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+        "Vary": "Origin",
+    }
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers on the FastAPI app."""
 
@@ -57,6 +71,7 @@ def register_exception_handlers(app: FastAPI) -> None:
                     "message": str(exc),
                     "path": request.url.path,
                 },
+                headers=_cors_error_headers(request),
             )
         else:
             # Production: minimal information
@@ -66,4 +81,5 @@ def register_exception_handlers(app: FastAPI) -> None:
                     "detail": "Internal Server Error",
                     "message": "An unexpected error occurred. Please try again later.",
                 },
+                headers=_cors_error_headers(request),
             )

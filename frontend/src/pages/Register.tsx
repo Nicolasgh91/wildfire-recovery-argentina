@@ -13,17 +13,21 @@ import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import bosqueLanding from '@/assets/bosque_landing.jpeg'
 
-const registerSchema = z.object({
-  firstName: z.string().min(2, 'Campo requerido').max(50, 'Max 50 caracteres'),
-  lastName: z.string().min(2, 'Campo requerido').max(50, 'Max 50 caracteres'),
-  email: z.string().email('Email inválido'),
-})
-
-type RegisterValues = z.infer<typeof registerSchema>
+type RegisterValues = {
+  firstName: string
+  lastName: string
+  email: string
+}
 
 export default function RegisterPage() {
   const { t } = useI18n()
   const { signUpWithEmail } = useAuth()
+
+  const registerSchema = z.object({
+    firstName: z.string().min(2, t('validationRequired')).max(50, t('validationMax50')),
+    lastName: z.string().min(2, t('validationRequired')).max(50, t('validationMax50')),
+    email: z.string().email(t('validationInvalidEmail')),
+  })
 
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -114,7 +118,7 @@ export default function RegisterPage() {
               <div className="pt-2">
                 <Button type="submit" className="w-full gap-2" disabled={isLoading}>
                   {isLoading ? (
-                    'Loading...'
+                    t('loading')
                   ) : (
                     <>
                       <Mail className="h-4 w-4" />

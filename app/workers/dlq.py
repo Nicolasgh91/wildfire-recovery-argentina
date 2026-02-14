@@ -8,15 +8,12 @@ from typing import Any, Dict
 import redis
 
 from app.core.alerts import send_alert
+from app.core.celery_runtime import resolve_celery_broker_url
 logger = logging.getLogger(__name__)
 
 
 def _redis_url() -> str:
-    return (
-        os.getenv("CELERY_BROKER_URL")
-        or os.getenv("REDIS_URL")
-        or "redis://redis:6379/0"
-    )
+    return resolve_celery_broker_url()
 
 
 def _dlq_key() -> str:

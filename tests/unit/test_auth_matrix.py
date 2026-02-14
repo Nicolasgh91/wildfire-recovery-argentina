@@ -33,6 +33,12 @@ AUTH_MATRIX = [
     ("POST", "/api/v1/explorations/", "jwt",
      {"json": {"fire_event_id": "00000000-0000-0000-0000-000000000000"}}),
     ("GET", "/api/v1/explorations/", "jwt", {}),
+    (
+        "GET",
+        "/api/v1/explorations/00000000-0000-0000-0000-000000000000/generate/00000000-0000-0000-0000-000000000000",
+        "jwt",
+        {},
+    ),
     # --- Audit (JWT) ---
     ("POST", "/api/v1/audit/land-use", "jwt",
      {"json": {"lat": -34.6, "lon": -58.4}}),

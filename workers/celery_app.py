@@ -4,13 +4,16 @@ Broker: Redis
 Workers: Ingestion, Clustering, Recovery/Destruction Analysis
 """
 
-import os
 from datetime import datetime, timezone
 
 from celery import Celery, Task
 from celery.exceptions import Ignore, Retry
 from celery.schedules import crontab
 
+from app.core.celery_runtime import (
+    resolve_celery_broker_url,
+    resolve_celery_result_backend,
+)
 from app.workers.dlq import enqueue_failure
 
 class DlqTask(Task):
@@ -50,8 +53,8 @@ class DlqTask(Task):
 # Inicializar app Celery
 celery_app = Celery(
     'forestguard',
-    broker=os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0'),
-    backend=os.getenv('CELERY_RESULT_BACKEND', 'redis://redis:6379/1'),
+    broker=resolve_celery_broker_url(),
+    backend=resolve_celery_result_backend(),
     include=[
         'workers.tasks.ingestion',
         'workers.tasks.clustering',

@@ -31,9 +31,9 @@ export default function LoginPage() {
     const reason = (location.state as { reason?: string } | undefined)?.reason
     if (reason === 'idle' && !idleToastShown.current) {
       idleToastShown.current = true
-      toast.info('Sesión cerrada por inactividad')
+      toast.info(t('loginIdleSession'))
     }
-  }, [location.state])
+  }, [location.state, t])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -87,7 +87,7 @@ export default function LoginPage() {
               {/* H1 - componente animado */}
               <AnimatedGradientText
                 as="h1"
-                text="La huella del fuego, vista desde el espacio."
+                text={t('loginHeroTitle')}
                 className="text-4xl lg:text-5xl font-bold tracking-tight leading-tight"
                 duration={1.2}
                 delay={0.2}
@@ -96,13 +96,12 @@ export default function LoginPage() {
 
               {/* H2 */}
               <h2 className="text-xl lg:text-2xl text-muted-foreground font-medium">
-                Genera líneas de tiempo satelitales de incendios en Argentina.
+                {t('loginHeroSubtitle')}
               </h2>
 
               {/* Leyenda */}
               <p className="text-base text-muted-foreground/80 leading-relaxed">
-                Compara el antes y el después: detecta revegetación natural o
-                construcciones no autorizadas en zonas afectadas.
+                {t('loginHeroDescription')}
               </p>
             </section>
 
@@ -167,7 +166,7 @@ export default function LoginPage() {
                       d="M12 4.62c2.31 0 3.87 1 4.75 1.84l3.46-3.38C17.95.94 15.24 0 12 0 7.32 0 3.32 2.31 1.19 6.59l3.8 2.88C6.13 6.64 8.82 4.62 12 4.62Z"
                     />
                   </svg>
-                  {isGoogleLoading ? 'Loading...' : t('loginGoogle')}
+                  {isGoogleLoading ? t('loading') : t('loginGoogle')}
                 </Button>
 
                 <Button
@@ -178,7 +177,7 @@ export default function LoginPage() {
                   disabled={isLoading}
                 >
                   {isLoading ? (
-                    'Loading...'
+                    t('loading')
                   ) : (
                     <>
                       <Mail className="h-4 w-4" />

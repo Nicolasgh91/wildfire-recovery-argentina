@@ -425,3 +425,143 @@ def make_rate_limiter(limit_ip_daily: int):
         await check_rate_limit(request, user=user, limit_ip_daily=limit_ip_daily)
 
     return _limit
+
+
+# =============================================================================
+# ENDPOINT-SPECIFIC RATE LIMITERS (SEC-008)
+# =============================================================================
+
+
+def make_audit_rate_limiter():
+    """
+    Rate limiter for audit endpoints (UC-F04).
+    
+    Limits:
+    - Admin: Unlimited
+    - Authenticated User: 50/day
+    - Anonymous IP: 5/day
+    
+    Uses fixed window (resets 24h after first request).
+    """
+    async def _limit(
+        request: Request,
+        user: Optional[UserPrincipal] = Depends(get_current_user_optional),
+    ) -> None:
+        # Admin: Unlimited (no DB lookup needed - already resolved)
+        if user and user.role == UserRole.ADMIN:
+            return
+        
+        # Authenticated User: 50/day
+        if user and user.role == UserRole.USER:
+            key = f"rl:audit:key:{user.key}"
+            count = _backend.increment(key, _DAY_SECONDS)
+            if count > 50:
+                logger.warning("Audit rate limit exceeded for key %s", user.key[:8])
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Daily audit query limit exceeded (50/day).",
+                )
+            return
+        
+        # Anonymous IP: 5/day
+        client_ip = get_client_ip(request)
+        key = f"rl:audit:ip:{client_ip}"
+        count = _backend.increment(key, _DAY_SECONDS)
+        if count > 5:
+            logger.warning("Audit rate limit exceeded for IP %s", client_ip)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Daily audit query limit exceeded (5/day). Please authenticate.",
+            )
+    
+    return _limit
+
+
+def make_reports_rate_limiter():
+    """
+    Rate limiter for report generation endpoints (UC-F03).
+    
+    Limits:
+    - Admin: Unlimited
+    - Authenticated User: 20/day
+    - Anonymous IP: 2/day
+    
+    Uses fixed window (resets 24h after first request).
+    """
+    async def _limit(
+        request: Request,
+        user: Optional[UserPrincipal] = Depends(get_current_user_optional),
+    ) -> None:
+        # Admin: Unlimited
+        if user and user.role == UserRole.ADMIN:
+            return
+        
+        # Authenticated User: 20/day
+        if user and user.role == UserRole.USER:
+            key = f"rl:reports:key:{user.key}"
+            count = _backend.increment(key, _DAY_SECONDS)
+            if count > 20:
+                logger.warning("Reports rate limit exceeded for key %s", user.key[:8])
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Daily report generation limit exceeded (20/day).",
+                )
+            return
+        
+        # Anonymous IP: 2/day
+        client_ip = get_client_ip(request)
+        key = f"rl:reports:ip:{client_ip}"
+        count = _backend.increment(key, _DAY_SECONDS)
+        if count > 2:
+            logger.warning("Reports rate limit exceeded for IP %s", client_ip)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Daily report generation limit exceeded (2/day). Please authenticate.",
+            )
+    
+    return _limit
+
+
+def make_payments_rate_limiter():
+    """
+    Rate limiter for payment endpoints (UC-F02).
+    
+    Limits:
+    - Admin: Unlimited
+    - Authenticated User: 10/day
+    - Anonymous IP: 3/day
+    
+    Uses fixed window (resets 24h after first request).
+    """
+    async def _limit(
+        request: Request,
+        user: Optional[UserPrincipal] = Depends(get_current_user_optional),
+    ) -> None:
+        # Admin: Unlimited
+        if user and user.role == UserRole.ADMIN:
+            return
+        
+        # Authenticated User: 10/day
+        if user and user.role == UserRole.USER:
+            key = f"rl:payments:key:{user.key}"
+            count = _backend.increment(key, _DAY_SECONDS)
+            if count > 10:
+                logger.warning("Payments rate limit exceeded for key %s", user.key[:8])
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Daily payment limit exceeded (10/day).",
+                )
+            return
+        
+        # Anonymous IP: 3/day
+        client_ip = get_client_ip(request)
+        key = f"rl:payments:ip:{client_ip}"
+        count = _backend.increment(key, _DAY_SECONDS)
+        if count > 3:
+            logger.warning("Payments rate limit exceeded for IP %s", client_ip)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Daily payment limit exceeded (3/day). Please authenticate.",
+            )
+    
+    return _limit

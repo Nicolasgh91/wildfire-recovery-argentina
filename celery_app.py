@@ -6,8 +6,8 @@ This module initializes the Celery application and defines its configuration.
 It serves as the entry point for all background task processing in the ForestGuard system.
 
 Key Components:
-1.  **Broker**: Redis (default: redis://redis:6379/0). Used for message transport.
-2.  **Backend**: Redis (default: redis://redis:6379/1). Used for storing task results.
+1.  **Broker**: Redis (CELERY_BROKER_URL > REDIS_URL > local fallback).
+2.  **Backend**: Redis (CELERY_RESULT_BACKEND > broker URL).
 3.  **Workers**:
     -   `ingestion`: Handles data fetching (e.g., FIRMS API).
     -   `clustering`: Runs DBSCAN and other clustering algorithms.
@@ -27,11 +27,15 @@ Schedule (Beat):
 Author: ForestGuard Team
 """
 
-import os
 from pathlib import Path
 from celery import Celery
 from celery.schedules import crontab
 from dotenv import load_dotenv
+
+from app.core.celery_runtime import (
+    resolve_celery_broker_url,
+    resolve_celery_result_backend,
+)
 
 # Load .env for local development (Pydantic only loads it for FastAPI)
 # This ensures that when running celery locally, environment variables are available.
@@ -40,8 +44,8 @@ load_dotenv(Path(__file__).parent / ".env")
 # Initialize Celery app
 celery_app = Celery(
     'forestguard',
-    broker=os.getenv('CELERY_BROKER_URL', 'redis://redis:6379/0'),
-    backend=os.getenv('CELERY_RESULT_BACKEND', 'redis://redis:6379/1'),
+    broker=resolve_celery_broker_url(),
+    backend=resolve_celery_result_backend(),
     include=[
         'workers.tasks.ingestion',
         'workers.tasks.clustering',

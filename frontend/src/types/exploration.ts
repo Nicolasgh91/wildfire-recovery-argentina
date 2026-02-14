@@ -61,3 +61,32 @@ export type ExplorationGenerateResponse = {
   credits_spent: number
   credits_remaining: number
 }
+
+export type ExplorationGenerationStatusResponse = {
+  job_id: string
+  investigation_id: string
+  status: 'queued' | 'processing' | 'ready' | 'failed'
+  progress_done: number
+  progress_total: number
+  progress_pct: number
+  failed_items: number
+  updated_at?: string | null
+}
+
+export type ExplorationAsset = {
+  id: string
+  item_id: string
+  signed_url: string
+  mime?: string | null
+  width?: number | null
+  height?: number | null
+  sha256?: string | null
+  generated_at?: string | null
+  target_date: string
+  kind: ExplorationItemKind
+  status: ExplorationItemStatus
+}
+
+export type ExplorationAssetsResponse = {
+  assets: ExplorationAsset[]
+}

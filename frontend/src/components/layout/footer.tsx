@@ -17,40 +17,42 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { useI18n } from '@/context/LanguageContext'
 
 export function Footer() {
+  const { t } = useI18n()
   const [pendingHref, setPendingHref] = React.useState<string | null>(null)
 
   const productLinks = [
-    { href: '/fires/history', label: 'Históricos', icon: HistoryIcon },
-    { href: '/map', label: 'Mapa de Incendios', icon: Map },
-    { href: '/audit', label: 'Verificar terreno', icon: ClipboardCheck },
-    { href: '/exploracion', label: 'Exploración satelital', icon: FileText },
+    { href: '/fires/history', label: t('footerLinkHistory'), icon: HistoryIcon },
+    { href: '/map', label: t('footerLinkMap'), icon: Map },
+    { href: '/audit', label: t('footerLinkAudit'), icon: ClipboardCheck },
+    { href: '/exploracion', label: t('footerLinkExploration'), icon: FileText },
   ]
 
   const supportLinks = [
-    { href: '/faq', label: 'Preguntas Frecuentes', icon: HelpCircle },
-    { href: '/manual', label: 'Manual de Usuario', icon: BookOpen },
-    { href: '/glossary', label: 'Glosario', icon: GraduationCap },
+    { href: '/faq', label: t('footerLinkFaq'), icon: HelpCircle },
+    { href: '/manual', label: t('footerLinkManual'), icon: BookOpen },
+    { href: '/glossary', label: t('footerLinkGlossary'), icon: GraduationCap },
   ]
 
   const companyLinks = [
-    { href: '/contact', label: 'Contacto', icon: Mail },
-    { href: 'https://forestguard.freedynamicdns.org/docs', label: 'API Docs', icon: ExternalLink, external: true },
-    { href: 'https://www.argentina.gob.ar/parquesnacionales', label: 'Parques Nacionales', icon: ExternalLink, external: true, tooltip: "Información sobre áreas protegidas nacionales." },
-    { href: 'https://www.argentina.gob.ar/reporte-diario-de-incendios', label: 'Reporte diario de incendios', icon: ExternalLink, external: true, tooltip: "Informes diarios de estado de situación de incendios." },
+    { href: '/contact', label: t('footerLinkContact'), icon: Mail },
+    { href: 'https://forestguard.freedynamicdns.org/docs', label: t('footerLinkApiDocs'), icon: ExternalLink, external: true },
+    { href: 'https://www.argentina.gob.ar/parquesnacionales', label: t('footerExternalProtectedAreasLabel'), icon: ExternalLink, external: true, tooltip: t('footerExternalProtectedAreasTooltip') },
+    { href: 'https://www.argentina.gob.ar/reporte-diario-de-incendios', label: t('footerExternalDailyReportLabel'), icon: ExternalLink, external: true, tooltip: t('footerExternalDailyReportTooltip') },
   ]
 
   const PUBLIC_SOURCES_AR = [
-    { label: "Servicio Nacional de Manejo del Fuego", href: "https://www.argentina.gob.ar/servicio-nacional-de-manejo-del-fuego", tooltip: "Sitio oficial del SNMF con información sobre incendios en Argentina." },
+    { label: t('footerExternalSnmfLabel'), href: 'https://www.argentina.gob.ar/servicio-nacional-de-manejo-del-fuego', tooltip: t('footerExternalSnmfTooltip') },
     [
-      { label: "Boletín Oficial", href: "https://www.boletinoficial.gob.ar/", tooltip: "Normativas y publicaciones oficiales de la República Argentina." },
-      { label: "CONAE", href: "https://catalogos5.conae.gov.ar/catalogofocos/", tooltip: "Catálogo de focos de calor y áreas quemadas por satélite." },
+      { label: t('footerExternalBoletinLabel'), href: 'https://www.boletinoficial.gob.ar/', tooltip: t('footerExternalBoletinTooltip') },
+      { label: t('footerExternalConaeLabel'), href: 'https://catalogos5.conae.gov.ar/catalogofocos/', tooltip: t('footerExternalConaeTooltip') },
     ],
-    { label: "Servicio Meteorológico Nacional", href: "https://ws2.smn.gob.ar/", tooltip: "Pronósticos y alertas meteorológicas oficiales." },
+    { label: t('footerExternalSmnLabel'), href: 'https://ws2.smn.gob.ar/', tooltip: t('footerExternalSmnTooltip') },
     [
-      { label: "SPMF Chubut", href: "https://bosques.chubut.gov.ar/manejo-del-fuego/", tooltip: "Servicio de Prevención y Lucha contra Incendios Forestales de Chubut." },
-      { label: "SPLIF Río Negro", href: "https://splif.rionegro.gov.ar/", tooltip: "Servicio de Prevención y Lucha contra Incendios Forestales de Río Negro." },
+      { label: t('footerExternalSpmfLabel'), href: 'https://bosques.chubut.gov.ar/manejo-del-fuego/', tooltip: t('footerExternalSpmfTooltip') },
+      { label: t('footerExternalSplifLabel'), href: 'https://splif.rionegro.gov.ar/', tooltip: t('footerExternalSplifTooltip') },
     ],
   ]
 
@@ -80,15 +82,16 @@ export function Footer() {
               <span className="text-xl font-bold text-foreground">ForestGuard</span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Plataforma de monitoreo y recuperación de incendios forestales de Argentina.
-              Protegemos nuestros bosques entre todos.
+              {t('footerBrandLine1')}
+              {' '}
+              {t('footerBrandLine2')}
             </p>
           </div>
 
           {/* Product */}
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
-              Producto
+              {t('footerProduct')}
             </h3>
             <ul className="flex flex-col gap-3">
               {productLinks.map((link) => (
@@ -109,7 +112,7 @@ export function Footer() {
           {/* Support */}
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
-              Soporte
+              {t('footerSupport')}
             </h3>
             <ul className="flex flex-col gap-3">
               {supportLinks.map((link) => (
@@ -130,7 +133,7 @@ export function Footer() {
           {/* Company */}
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
-              INFORMATIVOS
+              {t('footerInformative')}
             </h3>
             <ul className="flex flex-col gap-3">
               {companyLinks.map((link) => (
@@ -180,7 +183,7 @@ export function Footer() {
           {/* Public Sources (Argentina) */}
           <div>
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-foreground">
-              FUENTES PÚBLICAS
+              {t('footerPublicSources')}
             </h3>
             <TooltipProvider>
               <ul className="flex flex-col gap-3">
@@ -241,12 +244,12 @@ export function Footer() {
         <div className="mt-12 border-t border-border pt-8">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} ForestGuard Argentina. Todos los derechos reservados.
+              &copy; {new Date().getFullYear()} ForestGuard Argentina. {t('footerCopyright')}
             </p>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <span>Hecho con</span>
+              <span>{t('footerMadeWith')}</span>
               <span className="text-destructive">❤</span>
-              <span>para proteger nuestros bosques</span>
+              <span>{t('footerProtectForests')}</span>
             </div>
           </div>
         </div>
@@ -257,16 +260,15 @@ export function Footer() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-yellow-500" />
-              Estás saliendo de ForestGuard
+              {t('footerLeavingTitle')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Vas a ser redirigido a un sitio externo oficial.
-              El contenido de este sitio no depende de nosotros.
+              {t('footerLeavingDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelNavigation}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmNavigation}>Continuar</AlertDialogAction>
+            <AlertDialogCancel onClick={cancelNavigation}>{t('footerCancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmNavigation}>{t('footerContinue')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

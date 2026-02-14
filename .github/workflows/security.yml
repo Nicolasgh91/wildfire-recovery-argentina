@@ -89,3 +89,51 @@ jobs:
         run: npm ci
       - name: Build and check budget
         run: npm run build:budget
+
+  dependabot-auto-merge:
+    name: Auto-merge Safe Patches
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    needs: [secret-scan, pip-audit, npm-audit, auth-contracts, bundle-budget]
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v1
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      
+      - name: Check if safe to auto-merge
+        id: safe
+        run: |
+          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
+          DEPENDENCY="${{ steps.metadata.outputs.dependency-names }}"
+          LABELS="${{ join(github.event.pull_request.labels.*.name, ',') }}"
+          
+          # Lista blanca de dependencias seguras para auto-merge
+          SAFE_DEPS="pytest|black|flake8|mypy|eslint|prettier|@types"
+          
+          if [[ "$UPDATE_TYPE" == "version-update:semver-patch" ]] && \
+             echo "$DEPENDENCY" | grep -qE "$SAFE_DEPS" && \
+             echo "$LABELS" | grep -q "automerge-approved"; then
+            echo "safe=true" >> $GITHUB_OUTPUT
+          else
+            echo "safe=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Auto-merge if safe
+        if: steps.safe.outputs.safe == 'true'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      
+      - name: Comment on security updates
+        if: contains(steps.metadata.outputs.dependency-names, 'security')
+        run: |
+          gh pr comment "$PR_URL" --body "⚠️ Security update detected. Please review and merge manually."
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}

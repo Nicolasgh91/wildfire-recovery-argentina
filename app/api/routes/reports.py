@@ -29,12 +29,13 @@ Last Updated: 2026-01-29
 
 import hashlib
 import io
+import logging
 import time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
@@ -63,6 +64,27 @@ from app.services.ers_service import (
 # =============================================================================
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+logger = logging.getLogger(__name__)
+
+
+def _classify_judicial_failure(error_message: Optional[str]) -> tuple[int, str]:
+    raw = (error_message or "Unknown error").strip()
+    lower = raw.lower()
+
+    if "fire event not found" in lower:
+        return 404, "Evento de incendio no encontrado"
+
+    validation_markers = (
+        "required",
+        "invalid",
+        "must be",
+        "validation",
+        "date",
+    )
+    if any(marker in lower for marker in validation_markers):
+        return 400, raw
+
+    return 503, raw
 
 
 # =============================================================================
@@ -197,7 +219,8 @@ class VerifyReportResponse(BaseModel):
     dependencies=[Depends(check_rate_limit)],
 )
 async def generate_judicial_report(
-    request: JudicialReportRequest,
+    payload: JudicialReportRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
     idempotency_key: Optional[str] = Depends(get_idempotency_key),
     current_user=Depends(get_current_user),
@@ -209,10 +232,11 @@ async def generate_judicial_report(
     """
     endpoint = "/api/v1/reports/judicial"
     idempotency = IdempotencyManager(db)
+    request_id = getattr(http_request.state, "request_id", None)
 
     # Check for cached response (idempotency)
     cached = await idempotency.get_cached_response(
-        idempotency_key, endpoint, request.model_dump(mode="json")
+        idempotency_key, endpoint, payload.model_dump(mode="json")
     )
     if cached:
         return JSONResponse(
@@ -233,14 +257,14 @@ async def generate_judicial_report(
     # Create ERS ReportRequest
     ers_request = ReportRequest(
         report_type=ReportType.JUDICIAL,
-        fire_event_id=str(request.fire_event_id),
-        requester_name=request.requester_name,
+        fire_event_id=str(payload.fire_event_id),
+        requester_name=payload.requester_name,
         requester_email=current_user.email,
         requester_id=requester_id,
-        case_reference=request.case_reference,
-        include_climate=request.include_climate,
-        include_imagery=request.include_imagery,
-        language=request.language,
+        case_reference=payload.case_reference,
+        include_climate=payload.include_climate,
+        include_imagery=payload.include_imagery,
+        language=payload.language,
         output_format="pdf",
     )
 
@@ -249,9 +273,31 @@ async def generate_judicial_report(
         # This handles data fetching, analysis, and PDF generation
         result = ers.generate_report(ers_request)
         if result.status == ReportStatus.FAILED:
+            status_code, message = _classify_judicial_failure(result.error_message)
+            log_payload = {
+                "request_id": request_id,
+                "user_id": str(current_user.id),
+                "fire_event_id": str(payload.fire_event_id),
+                "endpoint": endpoint,
+                "idempotency_key_present": bool(idempotency_key),
+                "error_type": "ers_failed",
+                "error_message": result.error_message or "Unknown error",
+                "status_code": status_code,
+            }
+            if status_code >= 500:
+                logger.error("judicial_report_failed", extra=log_payload)
+                raise HTTPException(
+                    status_code=status_code,
+                    detail={
+                        "message": f"Report generation failed: {message}",
+                        "request_id": request_id,
+                    },
+                )
+
+            logger.warning("judicial_report_failed", extra=log_payload)
             raise HTTPException(
-                status_code=503,
-                detail=f"Report generation failed: {result.error_message or 'Unknown error'}",
+                status_code=status_code,
+                detail=f"Report generation failed: {message}",
             )
 
         # Store report metadata in DB (if table exists)
@@ -275,17 +321,22 @@ async def generate_judicial_report(
                 insert_query,
                 {
                     "report_id": result.report_id,
-                    "fire_id": str(request.fire_event_id),
+                    "fire_id": str(payload.fire_event_id),
                     "hash": result.verification_hash,
-                    "requester": request.requester_name,
-                    "case_ref": request.case_reference,
+                    "requester": payload.requester_name,
+                    "case_ref": payload.case_reference,
                     "size": 0,  # We don't have size here easily without head request or from upload result
                 },
             )
             db.commit()
-        except Exception:
+        except Exception as write_exc:
             # Table might not exist yet or constraints - continue without storing for now
-            pass
+            logger.warning(
+                "judicial_report_metadata_persist_failed request_id=%s report_id=%s error=%s",
+                request_id,
+                result.report_id,
+                write_exc,
+            )
 
         query_duration_ms = int((time.time() - start_time) * 1000)
         now = datetime.now()
@@ -295,7 +346,7 @@ async def generate_judicial_report(
             report=ReportMetadataResponse(
                 report_id=result.report_id,
                 report_type="judicial",
-                fire_event_id=str(request.fire_event_id),
+                fire_event_id=str(payload.fire_event_id),
                 generated_at=now,
                 valid_until=datetime(now.year + 1, now.month, now.day),
                 verification_hash=result.verification_hash,
@@ -310,16 +361,32 @@ async def generate_judicial_report(
         await idempotency.cache_response(
             idempotency_key,
             endpoint,
-            request.model_dump(mode="json"),
+            payload.model_dump(mode="json"),
             200,
             response.model_dump(mode="json"),
         )
 
         return response
 
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception(
+            "judicial_report_unhandled_error request_id=%s user_id=%s fire_event_id=%s endpoint=%s idempotency_key_present=%s error_type=%s error_message=%s",
+            request_id,
+            current_user.id,
+            payload.fire_event_id,
+            endpoint,
+            bool(idempotency_key),
+            type(e).__name__,
+            str(e),
+        )
         raise HTTPException(
-            status_code=503, detail=f"Error generating report: {str(e)}"
+            status_code=503,
+            detail={
+                "message": "Error generating report",
+                "request_id": request_id,
+            },
         )
 
 
