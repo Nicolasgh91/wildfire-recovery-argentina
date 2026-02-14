@@ -65,7 +65,19 @@ export default defineConfig(async () => {
     },
 
     build: {
-      sourcemap: true
+      sourcemap: true,
+      chunkSizeWarningLimit: 500,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-map': ['leaflet', 'react-leaflet'],
+            'vendor-charts': ['recharts'],
+            'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-popover', '@radix-ui/react-select', '@radix-ui/react-tabs', '@radix-ui/react-tooltip'],
+            'vendor-query': ['@tanstack/react-query'],
+          },
+        },
+      },
     }
   }
 })

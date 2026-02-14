@@ -43,6 +43,7 @@ from app.core.middleware import (
 from app.core.metrics import MetricsMiddleware
 from app.core.rate_limiter import check_ip_rate_limit
 from app.core.security import verify_api_key
+from app.api.auth_deps import get_current_user
 
 # Setup logging
 logger = setup_logging()
@@ -164,14 +165,19 @@ REST API for **legal oversight of wildfires** in protected areas of Argentina, i
     },
 )
 
-# CORS middleware
+# CORS middleware (BL-004: explicit methods/headers instead of wildcards)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=settings.ALLOWED_METHODS,
+    allow_headers=settings.ALLOWED_HEADERS,
+    expose_headers=["X-Request-ID", "X-Process-Time", "X-Idempotency-Replayed"],
 )
+
+# Security Headers (SEC-011: X-Content-Type-Options, X-Frame-Options, etc.)
+from app.core.security_headers import SecurityHeadersMiddleware
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Deprecation Headers (RFC 8594)
 app.add_middleware(DeprecationMiddleware)
@@ -232,10 +238,13 @@ app.include_router(
 )
 
 # UC-02, UC-11: Reports (Judicial, Historical)
+# Defense-in-depth: router already has dependencies=[Depends(get_current_user)]
+# at router level; this duplicates at registration for safety (BL-001).
 app.include_router(
     reports.router,
     prefix=f"{settings.API_V1_PREFIX}/reports",
     tags=["reports"],
+    dependencies=[Depends(get_current_user)],
 )
 
 # UC-13: Payments (MercadoPago)

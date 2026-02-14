@@ -40,4 +40,18 @@ def redact_pii(message: str) -> str:
         flags=re.IGNORECASE,
     )
 
+    # Argentine phone numbers: +54 11 1234-5678 or similar variants (BL-008)
+    message = re.sub(
+        r"\+?54[\s-]?\d{1,4}[\s-]?\d{4,8}",
+        "[PHONE_REDACTED]",
+        message,
+    )
+
+    # CUIT/CUIL: 20-12345678-9 format (BL-008)
+    message = re.sub(
+        r"\b\d{2}-\d{7,8}-\d\b",
+        "[CUIT_REDACTED]",
+        message,
+    )
+
     return message

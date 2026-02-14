@@ -9,7 +9,6 @@ from typing import List, Optional
 from uuid import UUID
 
 import numpy as np
-from sklearn.cluster import DBSCAN
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
@@ -221,6 +220,8 @@ class DetectionClusteringService:
         temporal_window_hours: int,
         min_points: int,
     ) -> np.ndarray:
+        from sklearn.cluster import DBSCAN
+
         if not detections:
             return np.array([], dtype=int)
 

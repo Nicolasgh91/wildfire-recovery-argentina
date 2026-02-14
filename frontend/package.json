@@ -12,7 +12,9 @@
     "test:run": "vitest run",
     "backend:health": "node scripts/check-backend.mjs",
     "test:ui": "npx playwright test",
-    "test:ui:headed": "npx playwright test --headed"
+    "test:ui:headed": "npx playwright test --headed",
+    "build:analyze": "tsc -b && vite build --mode production",
+    "build:budget": "tsc -b && vite build --mode production && node scripts/check-bundle-budget.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -180,10 +180,15 @@ export async function responseErrorInterceptor(error: AxiosError) {
     }
   }
 
-  if (config && (config._retryCount || 0) < MAX_RETRIES) {
+  // PERF-007: Only retry idempotent methods to avoid duplicate mutations
+  const IDEMPOTENT_METHODS = ['get', 'head', 'options']
+  const method = (config?.method || '').toLowerCase()
+  if (config && (config._retryCount || 0) < MAX_RETRIES && IDEMPOTENT_METHODS.includes(method)) {
     if (!error.response || RETRYABLE_STATUS_CODES.includes(error.response.status)) {
       config._retryCount = (config._retryCount || 0) + 1
-      await new Promise((resolve) => setTimeout(resolve, 1000 * config._retryCount!))
+      const baseDelay = 1000 * config._retryCount!
+      const jitter = Math.random() * 500
+      await new Promise((resolve) => setTimeout(resolve, baseDelay + jitter))
       return apiClient.request(config)
     }
   }

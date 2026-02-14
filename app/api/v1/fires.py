@@ -166,7 +166,7 @@ def list_fires(
     has_imagery: Optional[bool] = Query(None, description="Con imagenes"),
     search: Optional[str] = Query(None, max_length=100, description="Buscar"),
     page: int = Query(1, description="Pagina"),
-    page_size: Optional[int] = Query(None, description="Items por pagina"),
+    page_size: Optional[int] = Query(None, ge=1, le=200, description="Items por pagina (max 200)"),
     sort_by: SortField = Query(
         SortField.START_DATE, description="Ordenar por"
     ),

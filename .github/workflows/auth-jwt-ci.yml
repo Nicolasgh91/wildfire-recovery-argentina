@@ -49,4 +49,7 @@ jobs:
           psql "$TEST_DATABASE_URL" -f database/migrations/create_users.sql
 
       - name: Run auth JWT tests
-        run: pytest tests/integration/test_auth_supabase_jwt.py
+        run: pytest tests/integration/test_auth_supabase_jwt.py -v
+
+      - name: Run auth matrix contract tests (BL-007)
+        run: pytest tests/unit/test_auth_matrix.py tests/unit/test_reports_auth.py -v

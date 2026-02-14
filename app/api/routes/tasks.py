@@ -1,7 +1,6 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from workers.celery_app import celery_app
 from workers.tasks.ingestion import download_firms_daily
-from workers.tasks.clustering import cluster_detections
 
 router = APIRouter()
 
@@ -24,6 +23,18 @@ async def task_cluster():
     """
     Enqueue clustering task (last 24h).
     """
+    try:
+        # Lazy import to avoid importing sklearn at API startup time.
+        from workers.tasks.clustering import cluster_detections
+    except ImportError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Clustering runtime unavailable in this environment "
+                "(blocked or missing native dependencies)."
+            ),
+        ) from exc
+
     task = cluster_detections.delay(days_back=1)
     return {
         "task_id": task.id,

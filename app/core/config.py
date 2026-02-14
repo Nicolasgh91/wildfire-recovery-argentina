@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     FEATURE_CERTIFICATES: bool = False
     FEATURE_REFUGES: bool = False
 
+    # --- Rate Limiting / Proxy ---
+    TRUSTED_PROXIES: List[str] = Field(
+        default_factory=lambda: ["127.0.0.1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+        description="CIDR ranges of trusted reverse proxies for X-Forwarded-For",
+    )
+
     # --- Storage ---
     STORAGE_BACKEND: str = "local"
     STORAGE_LOCAL_PATH: str = "storage"
@@ -78,6 +84,18 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = Field(
         default_factory=list,
         description="List of allowed CORS origins. Configure in .env",
+    )
+    ALLOWED_METHODS: List[str] = Field(
+        default_factory=lambda: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        description="Allowed HTTP methods for CORS (BL-004).",
+    )
+    ALLOWED_HEADERS: List[str] = Field(
+        default_factory=lambda: [
+            "Authorization", "Content-Type", "X-API-Key",
+            "X-Request-ID", "X-Idempotency-Key", "X-Skip-Auth-Redirect",
+            "Accept", "Accept-Language",
+        ],
+        description="Allowed HTTP headers for CORS (BL-004).",
     )
     ALLOWED_FILE_TYPES: List[str] = ["image/jpeg", "image/png", "application/pdf"]
 
@@ -146,6 +164,18 @@ class Settings(BaseSettings):
         if env != "local" and not v:
             raise ValueError(
                 "SECRET_KEY must be set in environment for non-local deployments"
+            )
+        return v
+
+    @field_validator("STORAGE_BACKEND", mode="after")
+    @classmethod
+    def validate_storage_backend(cls, v: str, info: ValidationInfo) -> str:
+        """Block local storage in production (BL-003 / SEC-012)."""
+        env = info.data.get("ENVIRONMENT") or "local"
+        if env == "production" and v == "local":
+            raise ValueError(
+                "STORAGE_BACKEND='local' is not allowed in production. "
+                "Use 'gcs' or 'r2'."
             )
         return v
 

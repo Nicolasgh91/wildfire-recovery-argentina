@@ -285,6 +285,8 @@ export function ContactForm() {
                   src={previewUrl}
                   alt="Vista previa del adjunto"
                   className="h-32 rounded-md border border-border object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
             )}

@@ -377,28 +377,58 @@ async def get_credit_transactions(
     page_size: int = Query(
         default=20, ge=1, le=100, description="Items por página (máximo 100)"
     ),
+    cursor: Optional[str] = Query(
+        default=None,
+        description="Cursor (created_at ISO timestamp) for keyset pagination. "
+        "When provided, page param is ignored.",
+    ),
+    include_total: bool = Query(
+        default=True,
+        description="Include total count. Set false to skip COUNT(*) for performance.",
+    ),
     db: Session = Depends(deps.get_db),
     current_user=Depends(get_current_user),
 ):
-    offset = (page - 1) * page_size
+    # BL-006: optional COUNT for performance
+    total = None
+    if include_total:
+        count_result = db.execute(
+            select(func.count())
+            .select_from(CreditTransaction)
+            .where(CreditTransaction.user_id == current_user.id)
+        )
+        total = count_result.scalar() or 0
 
-    count_result = db.execute(
-        select(func.count())
-        .select_from(CreditTransaction)
-        .where(CreditTransaction.user_id == current_user.id)
-    )
-    total = count_result.scalar() or 0
-
-    result = db.execute(
+    base_q = (
         select(CreditTransaction)
         .where(CreditTransaction.user_id == current_user.id)
         .order_by(CreditTransaction.created_at.desc())
-        .offset(offset)
-        .limit(page_size)
     )
+
+    # BL-006: keyset (cursor) pagination when cursor is provided
+    if cursor:
+        from datetime import datetime as _dt, timezone as _tz
+
+        try:
+            cursor_ts = _dt.fromisoformat(cursor)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=422, detail="Invalid cursor format (ISO timestamp expected)")
+        base_q = base_q.where(CreditTransaction.created_at < cursor_ts)
+    else:
+        offset = (page - 1) * page_size
+        base_q = base_q.offset(offset)
+
+    result = db.execute(base_q.limit(page_size))
     transactions = result.scalars().all()
 
-    return {
+    # Build next_cursor from last item
+    next_cursor = None
+    if transactions and len(transactions) == page_size:
+        last_ts = transactions[-1].created_at
+        if last_ts:
+            next_cursor = last_ts.isoformat()
+
+    response = {
         "transactions": [
             {
                 "id": str(t.id),
@@ -409,7 +439,10 @@ async def get_credit_transactions(
             }
             for t in transactions
         ],
-        "total": total,
         "page": page,
         "page_size": page_size,
+        "next_cursor": next_cursor,
     }
+    if total is not None:
+        response["total"] = total
+    return response

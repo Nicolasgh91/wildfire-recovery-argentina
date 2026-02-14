@@ -63,6 +63,7 @@ celery_app = Celery(
         'workers.tasks.destruction',
         'workers.tasks.notification',
         'workers.tasks.exploration_hd_task',
+        'workers.tasks.export_task',
     ]
 )
 
@@ -88,6 +89,7 @@ celery_app.conf.update(
         'workers.tasks.recovery.analyze_recovery': {'queue': 'analysis'},
         'workers.tasks.destruction.detect_destruction': {'queue': 'analysis'},
         'workers.tasks.notification.send_contact_email': {'queue': 'notification'},
+        'workers.tasks.export_task.export_fires_async': {'queue': 'analysis'},
     },
     
     # Retry policy

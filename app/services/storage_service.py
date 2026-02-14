@@ -149,6 +149,13 @@ class StorageService:
             return
 
         self._backend = os.environ.get("STORAGE_BACKEND", "gcs").lower()
+        # BL-003: Defensive guardrail — block local storage in production
+        _env = os.environ.get("ENVIRONMENT", "local")
+        if _env == "production" and self._backend == "local":
+            raise StorageError(
+                "STORAGE_BACKEND='local' is not allowed in production. "
+                "Use 'gcs' or 'r2'."
+            )
         self._access_key = access_key
         self._secret_key = secret_key
         self._endpoint_url = endpoint_url

@@ -341,6 +341,7 @@ async def generate_historical_report(
     request: HistoricalReportRequestBase,
     db: Session = Depends(get_db),
     idempotency_key: Optional[str] = Depends(get_idempotency_key),
+    current_user=Depends(get_current_user),
 ) -> HistoricalResponse:
     """
     Generate historical fire report for a protected area.
