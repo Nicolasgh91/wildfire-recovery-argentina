@@ -118,7 +118,7 @@ export const translations = {
     qualityUpdatedAt: 'Actualizado',
 
     // Map
-    interactiveMap: 'Mapa Interactivo',
+    interactiveMap: 'Incendios activos',
     clickForDetails: 'Haga clic para más detalles',
     area: 'Área',
     firePopupTitleActive: 'Incendio activo',
@@ -504,7 +504,7 @@ export const translations = {
     qualityUpdatedAt: 'Updated',
 
     // Map
-    interactiveMap: 'Interactive Map',
+    interactiveMap: 'Active fires',
     clickForDetails: 'Click for details',
     area: 'Area',
     firePopupTitleActive: 'Active fire',

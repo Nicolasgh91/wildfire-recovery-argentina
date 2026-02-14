@@ -146,8 +146,8 @@ export default function MapPage() {
       </Button>
 
       {showSidebar && (
-        <Card className="absolute right-4 top-4 z-[400] hidden w-80 md:block">
-          <CardHeader className="pb-2">
+        <Card className="absolute right-4 top-4 z-[400] hidden w-80 md:flex flex-col h-[calc(100%-2rem)] gap-0 py-0">
+          <CardHeader className="p-6 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Map className="h-5 w-5 text-primary" />
               {t('interactiveMap')}
@@ -157,9 +157,9 @@ export default function MapPage() {
               <Badge variant="secondary">{t('mapLegendRecent')}</Badge>
             </div>
           </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[400px] pr-4">
-              <div className="space-y-2">
+          <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
+            <ScrollArea className="h-full">
+              <div className="space-y-2 p-6">
                 {isLoading && (
                   <div className="text-sm text-muted-foreground">{t('loading')}</div>
                 )}
@@ -174,14 +174,14 @@ export default function MapPage() {
                     className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-muted ${selectedFire?.id === fire.id ? 'border-primary bg-primary/10' : 'border-border'
                       }`}
                   >
-                    <p className="mb-1 line-clamp-1 font-medium text-foreground">{fire.title}</p>
+
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">{fire.province}</span>
                       <Badge
                         variant={fire.severity === 'high' ? 'destructive' : 'secondary'}
                         className="text-xs"
                       >
-                        {fire.hectares.toLocaleString()} ha
+                        {fire.hectares?.toLocaleString() ?? 0} ha
                       </Badge>
                     </div>
                   </button>
@@ -193,26 +193,26 @@ export default function MapPage() {
       )}
 
       {showSidebar && (
-        <Card className="absolute bottom-4 left-4 right-4 z-[400] md:hidden">
-          <CardContent className="p-3">
-            <ScrollArea className="h-32">
-              <div className="flex gap-2 pb-2">
+        <Card className="absolute bottom-4 left-4 right-4 z-[400] md:hidden !py-0">
+          <CardContent className="px-3 py-2">
+            <ScrollArea className="w-full whitespace-nowrap">
+              <div className="flex w-max space-x-2 pb-3">
                 {mapItems.map((fire) => (
                   <button
                     key={fire.id}
                     type="button"
                     onClick={() => setSelectedFire(fire)}
-                    className={`shrink-0 rounded-lg border p-2 text-left transition-colors ${selectedFire?.id === fire.id ? 'border-primary bg-primary/10' : 'border-border'
+                    className={`shrink-0 rounded-lg border p-2 text-left transition-colors w-32 ${selectedFire?.id === fire.id ? 'border-primary bg-primary/10' : 'border-border'
                       }`}
                   >
-                    <p className="w-24 truncate text-xs font-medium text-foreground">
+                    <p className="truncate text-xs font-medium text-foreground">
                       {fire.province}
                     </p>
                     <Badge
                       variant={fire.severity === 'high' ? 'destructive' : 'secondary'}
                       className="mt-1 text-xs"
                     >
-                      {fire.hectares.toLocaleString()} ha
+                      {fire.hectares?.toLocaleString() ?? 0} ha
                     </Badge>
                   </button>
                 ))}
