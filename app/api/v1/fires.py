@@ -73,16 +73,19 @@ security = HTTPBearer(auto_error=False)
 
 
 def get_fire_service(db: Session = Depends(deps.get_db)) -> FireService:
+    """Return fire service bound to request DB session."""
     return FireService(db)
 
 
 def get_export_service(db: Session = Depends(deps.get_db)) -> ExportService:
+    """Return export service used by fire export endpoints."""
     return ExportService(db)
 
 
 async def _resolve_jwt_user(
     credentials: HTTPAuthorizationCredentials, db: Session
 ) -> User:
+    """Decode Supabase JWT and resolve/create application user."""
     token = credentials.credentials
     try:
         payload = decode_supabase_token(token)
@@ -98,6 +101,7 @@ async def require_fire_access(
     api_key: Optional[str] = Security(api_key_header),
     db: Session = Depends(deps.get_db),
 ):
+    """Authorize stats/export endpoints using either JWT or API key."""
     if credentials:
         try:
             return await _resolve_jwt_user(credentials, db)
@@ -116,6 +120,7 @@ async def require_jwt_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(deps.get_db),
 ) -> User:
+    """Require and resolve authenticated JWT user for saved-filter operations."""
     if not credentials:
         raise HTTPException(status_code=401, detail="Token requerido")
     return await _resolve_jwt_user(credentials, db)

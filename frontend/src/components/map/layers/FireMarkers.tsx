@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Marker, Popup } from 'react-leaflet'
 import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
@@ -11,6 +12,7 @@ export type FireMarkersPopupVariant = 'default' | 'fire_detail'
 
 interface FireMarkersProps {
   fires: FireMapItem[]
+  selectedFireId?: string | null
   onFireSelect?: (fire: FireMapItem) => void
   popupVariant?: FireMarkersPopupVariant
 }
@@ -50,9 +52,23 @@ function createFireIcon(severity?: FireMapItem['severity']) {
   })
 }
 
-export function FireMarkers({ fires, onFireSelect, popupVariant = 'default' }: FireMarkersProps) {
+export function FireMarkers({
+  fires,
+  selectedFireId = null,
+  onFireSelect,
+  popupVariant = 'default',
+}: FireMarkersProps) {
   const { t } = useI18n()
   const navigate = useNavigate()
+  const markerRefs = useRef<Record<string, L.Marker>>({})
+
+  useEffect(() => {
+    if (!selectedFireId) return
+    const marker = markerRefs.current[selectedFireId]
+    if (marker?.openPopup) {
+      marker.openPopup()
+    }
+  }, [selectedFireId])
 
   if (!fires.length) return null
 
@@ -63,6 +79,11 @@ export function FireMarkers({ fires, onFireSelect, popupVariant = 'default' }: F
         return (
           <Marker
             key={fire.id}
+            ref={(el) => {
+              if (el) {
+                markerRefs.current[fire.id] = el as unknown as L.Marker
+              }
+            }}
             position={[fire.lat, fire.lon]}
             icon={createFireIcon(fire.severity)}
             eventHandlers={{

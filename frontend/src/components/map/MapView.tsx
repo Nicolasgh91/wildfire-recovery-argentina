@@ -11,6 +11,7 @@ import type { FireMarkersPopupVariant } from './layers/FireMarkers'
 
 interface MapViewProps {
   fires?: FireMapItem[]
+  selectedFireId?: string | null
   episodes?: Episode[]
   heatmapCells?: H3HeatmapCell[]
   protectedAreas?: FeatureCollection | null
@@ -40,6 +41,7 @@ function MapCenterUpdater({ center }: { center?: [number, number] }) {
 
 export function MapView({
   fires = [],
+  selectedFireId = null,
   episodes = [],
   heatmapCells = [],
   protectedAreas = null,
@@ -58,7 +60,12 @@ export function MapView({
   return (
     <BaseMap className={className} tileLayer={tileLayer} center={center} zoom={zoom} interactive={interactive}>
       <MapCenterUpdater center={center} />
-      <FireMarkers fires={fires} onFireSelect={onFireSelect} popupVariant={popupVariant} />
+      <FireMarkers
+        fires={fires}
+        selectedFireId={selectedFireId}
+        onFireSelect={onFireSelect}
+        popupVariant={popupVariant}
+      />
       <EpisodeLayer episodes={episodes} onEpisodeClick={onEpisodeSelect} />
       {showHeatmap && <H3HeatmapLayer cells={heatmapCells} visible={showHeatmap} />}
       {showProtectedAreas && (

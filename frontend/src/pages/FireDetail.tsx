@@ -327,7 +327,7 @@ export default function FireDetailPage() {
         <Button
           variant="secondary"
           size="sm"
-          className="absolute left-4 top-4 z-[1000] gap-2"
+          className="absolute left-4 top-4 z-40 gap-2"
           onClick={handleBack}
         >
           <ArrowLeft className="h-4 w-4" />

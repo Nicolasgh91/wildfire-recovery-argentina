@@ -14,9 +14,10 @@ def _smtp_settings(monkeypatch):
     reset_rate_limiter_state()
 
 
-def test_contact_valid_no_attachment(client, monkeypatch):
+def test_contact_valid_no_attachment(client, monkeypatch, caplog):
     mock_task = MagicMock()
     monkeypatch.setattr("app.api.v1.contact.send_contact_email_task.delay", mock_task)
+    caplog.set_level("INFO", logger="app.api.v1.contact")
 
     response = client.post(
         "/api/v1/contact",
@@ -32,6 +33,7 @@ def test_contact_valid_no_attachment(client, monkeypatch):
     payload = response.json()
     assert payload["status"] == "accepted"
     assert payload["request_id"]
+    assert "juan@example.com" not in caplog.text
     
     # Verify task was called
     mock_task.assert_called_once()

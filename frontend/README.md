@@ -15,14 +15,15 @@ React + Vite + Tailwind UI for ForestGuard.
 Key routes:
 - `/` -> Home
 - `/map` -> Map
-- `/audit` -> Land use audit
-- `/reports` -> Specialized reports (judicial + historical)
+- `/audit` -> Verificar terreno (requiere login)
+- `/exploracion` -> Exploración satelital (wizard)
+- `/reports` -> Redirección a `/exploracion` (compatibilidad legacy)
 - `/credits` -> Credits purchase and balance
-- `/certificates` -> Certificates
+- `/certificates` -> Certificates (feature flag `certificates`)
 - `/citizen-report` -> Citizen reports
-- `/fires/history` -> Fire history (server-side pagination)
+- `/fires/history` -> Fire history (server-side pagination, requiere login)
 - `/fires/:id` -> Fire detail
-- `/shelters` -> Shelters + visitor logs
+- `/shelters` -> Shelters + visitor logs (feature flag `refuges`)
 - `/faq`, `/manual`, `/glossary`, `/contact`
 
 ### State and data flow
@@ -62,7 +63,19 @@ API (FastAPI, /api/v1)
   - `POST /api/v1/audit/land-use`
     - Body: `{ lat, lon, radius_meters, cadastral_id? }`
     - Response: `AuditResponse` (see backend `app/api/v1/audit.py`)
-- `/reports` (live):
+- `/exploracion` (live):
+  - `POST /api/v1/explorations/`
+  - `GET /api/v1/explorations/`
+  - `GET /api/v1/explorations/{id}`
+  - `PATCH /api/v1/explorations/{id}`
+  - `POST /api/v1/explorations/{id}/items`
+  - `DELETE /api/v1/explorations/{id}/items/{item_id}`
+  - `POST /api/v1/explorations/{id}/quote`
+  - `POST /api/v1/explorations/{id}/generate`
+  - `GET /api/v1/explorations/{id}/assets`
+- `/reports` (legacy alias):
+  - Frontend redirige a `/exploracion` para compatibilidad de enlaces.
+- `/reports` (live API helpers):
   - `POST /api/v1/reports/judicial`
     - Body: `{ fire_event_id, report_type?, include_climate?, include_imagery?, requester_name?, case_reference?, language? }`
     - Response: `JudicialReportResponse` (`src/types/report.ts`)
@@ -76,7 +89,7 @@ API (FastAPI, /api/v1)
   - `GET /api/v1/payments/{payment_request_id}`
   - `GET /api/v1/payments/credits/balance`
   - `GET /api/v1/payments/credits/transactions`
-- `/certificates`: uses mock data (`verifyCertificate`, local issue simulation). Planned:
+- `/certificates`: usa mock data y está detrás de `feature flag` (`certificates`). Planned:
   - `POST /api/v1/certificates/issue`
     - Body: `{ fire_event_id, issued_to, requester_email }`
     - Response: `{ status, certificate_number, download_url, verification_hash }`

@@ -1,4 +1,4 @@
-﻿import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import {
   ArrowDown,
   ArrowRight,
@@ -55,6 +55,7 @@ import {
   searchFireEvents,
   getExplorationPreview,
 } from '@/services/endpoints/fire-events'
+import { geocodeLocation, reverseGeocode } from '@/services/endpoints/geocode'
 import { getFireProvinces } from '@/services/endpoints/fires'
 import {
   addExplorationItem,
@@ -70,6 +71,14 @@ import { getFireTitle } from '@/types/fire'
 import type { FireMapItem } from '@/types/map'
 
 const FireMap = lazy(() => import('@/components/fire-map').then((mod) => ({ default: mod.FireMap })))
+
+function normalizeForProvince(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim()
+}
 
 type StepId = 1 | 2 | 3
 
@@ -291,6 +300,8 @@ export default function ExplorationPage() {
   const [searchHasNext, setSearchHasNext] = useState(false)
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [addressNotInProvinceError, setAddressNotInProvinceError] = useState<string | null>(null)
+  const [datesRequiredError, setDatesRequiredError] = useState<string | null>(null)
   const [coordLat, setCoordLat] = useState('')
   const [coordLon, setCoordLon] = useState('')
   const [coordRadius, setCoordRadius] = useState('5000')
@@ -428,8 +439,24 @@ export default function ExplorationPage() {
   const handleSearch = async (page: number = 1, append: boolean = false) => {
     setSearchLoading(true)
     setSearchError(null)
+    setAddressNotInProvinceError(null)
+    setDatesRequiredError(null)
     setCoordError(null)
     try {
+      const trimmedText = searchText?.trim() ?? ''
+      const trimmedProvince = searchProvince?.trim() ?? ''
+      const hasFrom = Boolean(searchFrom?.trim())
+      const hasTo = Boolean(searchTo?.trim())
+
+      if (trimmedProvince && !hasFrom && !hasTo) {
+        setDatesRequiredError(t('explorationDatesRequired'))
+        if (!append) setSearchResults([])
+        setSearchPage(page)
+        setSearchHasNext(false)
+        setSearchLoading(false)
+        return
+      }
+
       const hasCoordInput =
         coordLat.trim().length > 0 ||
         coordLon.trim().length > 0
@@ -463,14 +490,50 @@ export default function ExplorationPage() {
         bbox = buildRadiusBbox(lat, lon, radiusValue)
       }
 
-      const response = await searchFireEvents({
-        province: searchProvince ? [searchProvince] : undefined,
-        date_from: searchFrom || undefined,
-        date_to: searchTo || undefined,
-        q: searchText || undefined,
-        bbox,
-        page,
-      })
+      const needsAddressValidation = trimmedText.length >= 2 && trimmedProvince.length > 0
+
+      if (needsAddressValidation) {
+        let geocodeResult: Awaited<ReturnType<typeof geocodeLocation>> | null = null
+        try {
+          geocodeResult = await geocodeLocation(trimmedText)
+        } catch {
+          // geocode failed
+        }
+        if (!geocodeResult?.result) {
+          setAddressNotInProvinceError(t('explorationAddressNotInProvince'))
+          if (!append) setSearchResults([])
+          setSearchPage(page)
+          setSearchHasNext(false)
+          setSearchLoading(false)
+          return
+        }
+        let reverseResult: Awaited<ReturnType<typeof reverseGeocode>> | null = null
+        try {
+          reverseResult = await reverseGeocode(geocodeResult.result.lat, geocodeResult.result.lon)
+        } catch {
+          // reverse geocode failed
+        }
+        const displayName = reverseResult?.display_name ?? ''
+        const normalizedDisplay = normalizeForProvince(displayName)
+        const normalizedSelected = normalizeForProvince(trimmedProvince)
+        if (!normalizedDisplay.includes(normalizedSelected)) {
+          setAddressNotInProvinceError(t('explorationAddressNotInProvince'))
+          if (!append) setSearchResults([])
+          setSearchPage(page)
+          setSearchHasNext(false)
+          setSearchLoading(false)
+          return
+        }
+      }
+
+      const params: Parameters<typeof searchFireEvents>[0] = { page }
+      if (trimmedProvince) params.province = trimmedProvince
+      if (searchFrom?.trim()) params.date_from = searchFrom.trim()
+      if (searchTo?.trim()) params.date_to = searchTo.trim()
+      if (trimmedText) params.q = trimmedText
+      if (bbox) params.bbox = bbox
+
+      const response = await searchFireEvents(params)
 
       setSearchResults((prev) => (append ? [...prev, ...response.fires] : response.fires))
       setSearchPage(page)
@@ -913,8 +976,12 @@ export default function ExplorationPage() {
                         <div className="space-y-2">
                           <span className="text-xs font-semibold text-muted-foreground">{t('province')}</span>
                           <Select
-                            value={searchProvince}
-                            onValueChange={(value) => setSearchProvince(value === 'all' ? '' : value)}
+                            value={searchProvince || 'all'}
+                            onValueChange={(value) => {
+                              setSearchProvince(value === 'all' ? '' : value)
+                              setAddressNotInProvinceError(null)
+                              setDatesRequiredError(null)
+                            }}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder={t('filter')} />
@@ -935,13 +1002,19 @@ export default function ExplorationPage() {
                             <Input
                               type="date"
                               value={searchFrom}
-                              onChange={(event) => setSearchFrom(event.target.value)}
+                              onChange={(event) => {
+                                setSearchFrom(event.target.value)
+                                setDatesRequiredError(null)
+                              }}
                               max={today}
                             />
                             <Input
                               type="date"
                               value={searchTo}
-                              onChange={(event) => setSearchTo(event.target.value)}
+                              onChange={(event) => {
+                                setSearchTo(event.target.value)
+                                setDatesRequiredError(null)
+                              }}
                               max={today}
                             />
                           </div>
@@ -952,7 +1025,10 @@ export default function ExplorationPage() {
                         <span className="text-xs font-semibold text-muted-foreground">{t('search')}</span>
                         <Input
                           value={searchText}
-                          onChange={(event) => setSearchText(event.target.value)}
+                          onChange={(event) => {
+                            setSearchText(event.target.value)
+                            setAddressNotInProvinceError(null)
+                          }}
                           placeholder={t('explorationSearchPlaceholder')}
                         />
                       </div>
@@ -1096,7 +1172,13 @@ export default function ExplorationPage() {
                         </div>
                       )}
                       {searchError && <p className="text-sm text-destructive">{searchError}</p>}
-                      {!searchLoading && searchResults.length === 0 && !searchError && (
+                      {addressNotInProvinceError && (
+                        <p className="text-sm text-muted-foreground">{addressNotInProvinceError}</p>
+                      )}
+                      {datesRequiredError && (
+                        <p className="text-sm text-muted-foreground">{datesRequiredError}</p>
+                      )}
+                      {!searchLoading && searchResults.length === 0 && !searchError && !addressNotInProvinceError && !datesRequiredError && (
                         <div className="space-y-2 text-sm text-muted-foreground">
                           <p className="font-semibold text-foreground">{t('explorationNoResultsTitle')}</p>
                           <p>{t('explorationNoResultsHint')}</p>

@@ -185,7 +185,7 @@ cd wildfire-recovery-argentina
 ### 2. Configurar variables de entorno
 
 ```bash
-cp .env.example .env
+cp .env.template .env
 # Editar .env con tus credenciales
 ```
 
@@ -203,13 +203,12 @@ docker-compose ps
 
 ```bash
 # Backend
-cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Frontend
-cd ../frontend
+cd frontend
 npm install
 ```
 
@@ -327,13 +326,13 @@ alembic upgrade head
 
 | Método | Endpoint | Descripción | Auth |
 |--------|----------|-------------|------|
-| `GET` | `/api/v1/fires` | Listar incendios con filtros | API Key |
-| `GET` | `/api/v1/fires/{id}` | Detalle de incendio | API Key |
-| `GET` | `/api/v1/fires/stats` | KPIs del dashboard | API Key |
-| `POST` | `/api/v1/audit/land-use` | Auditoría legal | API Key |
+| `GET` | `/api/v1/fires` | Listar incendios con filtros | Público |
+| `GET` | `/api/v1/fires/{id}` | Detalle de incendio | Público |
+| `GET` | `/api/v1/fires/stats` | KPIs del dashboard | API Key o JWT |
+| `POST` | `/api/v1/audit/land-use` | Verificación legal de terreno | JWT |
 | `GET` | `/api/v1/quality/fire-event/{id}` | Score de calidad | API Key |
 | `GET` | `/api/v1/analysis/recurrence` | Análisis de recurrencia H3 | API Key |
-| `POST` | `/api/v1/reports/judicial` | Generar reporte judicial | API Key |
+| `POST` | `/api/v1/reports/judicial` | Generar reporte judicial | Público (MVP actual) |
 | `POST` | `/api/v1/contact` | Formulario de contacto | Público |
 | `GET` | `/functions/v1/public-stats` | Estadísticas públicas | Público |
 
@@ -345,11 +344,20 @@ curl -H "X-API-Key: your-api-key" \
      https://api.forestguard.com.ar/api/v1/fires
 ```
 
+```bash
+# Usando JWT (ejemplo para /audit/land-use)
+curl -X POST \
+     -H "Authorization: Bearer <jwt>" \
+     -H "Content-Type: application/json" \
+     -d '{"lat": -34.6037, "lon": -58.3816, "radius_meters": 1000}' \
+     https://api.forestguard.com.ar/api/v1/audit/land-use
+```
+
 ### Ejemplo: Auditoría legal
 
 ```bash
 curl -X POST \
-     -H "X-API-Key: your-api-key" \
+     -H "Authorization: Bearer <jwt>" \
      -H "Content-Type: application/json" \
      -d '{"lat": -34.6037, "lon": -58.3816, "radius_meters": 1000}' \
      https://api.forestguard.com.ar/api/v1/audit/land-use

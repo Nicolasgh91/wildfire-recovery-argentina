@@ -81,6 +81,7 @@ router = APIRouter()
 def get_exploration_service(
     db: Session = Depends(deps.get_db),
 ) -> ExplorationService:
+    """Return exploration service bound to the current DB session."""
     return ExplorationService(db)
 
 
@@ -95,6 +96,7 @@ def create_exploration(
     service: ExplorationService = Depends(get_exploration_service),
     current_user=Depends(get_current_user),
 ) -> ExplorationResponse:
+    """Create a new exploration draft for the authenticated user."""
     try:
         investigation = service.create_investigation(current_user.id, payload)
     except ValueError as exc:
@@ -126,6 +128,7 @@ def list_explorations(
     service: ExplorationService = Depends(get_exploration_service),
     current_user=Depends(get_current_user),
 ) -> ExplorationListResponse:
+    """List paginated explorations that belong to the authenticated user."""
     return service.list_investigations(current_user.id, page, page_size)
 
 
@@ -139,6 +142,7 @@ def get_exploration(
     service: ExplorationService = Depends(get_exploration_service),
     current_user=Depends(get_current_user),
 ) -> ExplorationResponse:
+    """Retrieve one exploration with all configured comparison items."""
     investigation = service.get_investigation(
         current_user.id, investigation_id
     )
@@ -170,6 +174,7 @@ def update_exploration(
     service: ExplorationService = Depends(get_exploration_service),
     current_user=Depends(get_current_user),
 ) -> ExplorationResponse:
+    """Update exploration metadata (currently only title)."""
     investigation = service.get_investigation(
         current_user.id, investigation_id
     )
@@ -203,6 +208,7 @@ def add_exploration_item(
     service: ExplorationService = Depends(get_exploration_service),
     current_user=Depends(get_current_user),
 ) -> ExplorationItemResponse:
+    """Add a pre/post date comparison item to an exploration."""
     investigation = service.get_investigation(
         current_user.id, investigation_id
     )
@@ -236,6 +242,7 @@ def delete_exploration_item(
     service: ExplorationService = Depends(get_exploration_service),
     current_user=Depends(get_current_user),
 ) -> None:
+    """Delete one comparison item from an exploration."""
     investigation = service.get_investigation(
         current_user.id, investigation_id
     )
@@ -260,6 +267,7 @@ def get_exploration_quote(
     service: ExplorationService = Depends(get_exploration_service),
     current_user=Depends(get_current_user),
 ) -> ExplorationQuoteResponse:
+    """Calculate required credits for the current exploration item set."""
     investigation = service.get_investigation(
         current_user.id, investigation_id
     )
@@ -291,6 +299,7 @@ def generate_exploration(
     service: ExplorationService = Depends(get_exploration_service),
     current_user=Depends(get_current_user),
 ) -> ExplorationGenerateResponse:
+    """Queue HD image generation for an exploration using idempotent requests."""
     request_id = getattr(request.state, "request_id", None)
     try:
         job, credits_spent, credits_remaining = service.generate_images(
@@ -377,6 +386,7 @@ def list_exploration_assets(
     service: ExplorationService = Depends(get_exploration_service),
     current_user=Depends(get_current_user_optional),
 ) -> ExplorationAssetsResponse:
+    """List generated assets for owner user or a valid shared token."""
     if not share_token and not current_user:
         raise HTTPException(status_code=401, detail="Token requerido")
 

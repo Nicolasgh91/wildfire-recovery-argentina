@@ -30,6 +30,7 @@ export function FireMap({
     <div className={`${height} w-full overflow-hidden rounded-lg border border-border isolate`}>
       <MapView
         fires={fires}
+        selectedFireId={selectedFire?.id ?? null}
         center={safeCenter}
         interactive={interactive}
         className="h-full w-full"

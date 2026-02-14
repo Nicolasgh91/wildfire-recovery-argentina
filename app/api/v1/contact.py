@@ -32,6 +32,7 @@ router = APIRouter()
 
 
 def get_contact_service() -> ContactService:
+    """Return contact service instance used by the UC-F01 endpoint."""
     return ContactService()
 
 
@@ -51,6 +52,7 @@ async def submit_contact(
     attachment: Optional[UploadFile] = File(None),
     service: ContactService = Depends(get_contact_service),
 ) -> ContactResponse:
+    """Accept and enqueue a public contact request with optional attachment."""
     request_id = uuid4().hex
     request = ContactRequest(
         name=name,
@@ -87,15 +89,15 @@ async def submit_contact(
             detail="Service temporarily unavailable. Please try again later.",
         ) from exc
 
+    email_domain = request.email.split("@")[-1] if "@" in request.email else None
     logger.info(
-        "AUDIT: Contact request accepted id=%s email=%s has_attachment=%s",
+        "AUDIT: Contact request accepted id=%s has_attachment=%s",
         request_id,
-        request.email,
         bool(contact_attachment),
         extra={
             "event": "contact_request_accepted",
             "request_id": request_id,
-            "email": request.email,
+            "email_domain": email_domain,
             "has_attachment": bool(contact_attachment),
         },
     )
