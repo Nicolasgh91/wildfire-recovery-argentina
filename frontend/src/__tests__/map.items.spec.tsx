@@ -1,5 +1,6 @@
 import { render, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { I18nProvider } from '@/context/LanguageContext'
 import MapPage from '@/pages/MapPage'
 
@@ -19,9 +20,11 @@ vi.mock('@/components/fire-map', () => ({
 
 const renderMap = () =>
   render(
-    <I18nProvider>
-      <MapPage />
-    </I18nProvider>,
+    <MemoryRouter>
+      <I18nProvider>
+        <MapPage />
+      </I18nProvider>
+    </MemoryRouter>,
   )
 
 describe('MapPage items mapping', () => {

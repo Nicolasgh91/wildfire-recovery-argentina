@@ -1,10 +1,11 @@
 import { Marker, Popup } from 'react-leaflet'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/context/LanguageContext'
 import type { FireMapItem } from '@/types/map'
+import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 
 export type FireMarkersPopupVariant = 'default' | 'fire_detail'
 
@@ -51,6 +52,7 @@ function createFireIcon(severity?: FireMapItem['severity']) {
 
 export function FireMarkers({ fires, onFireSelect, popupVariant = 'default' }: FireMarkersProps) {
   const { t } = useI18n()
+  const navigate = useNavigate()
 
   if (!fires.length) return null
 
@@ -103,8 +105,8 @@ export function FireMarkers({ fires, onFireSelect, popupVariant = 'default' }: F
                     <p>
                       {t('popupProtectedAreaPercentage')}:{' '}
                       {fire.in_protected_area &&
-                      fire.overlap_percentage !== null &&
-                      fire.overlap_percentage !== undefined
+                        fire.overlap_percentage !== null &&
+                        fire.overlap_percentage !== undefined
                         ? `${fire.overlap_percentage.toFixed(1)}%`
                         : 'N/A'}
                     </p>
@@ -165,10 +167,12 @@ export function FireMarkers({ fires, onFireSelect, popupVariant = 'default' }: F
                         </p>
                       )}
                   </div>
-                  <Button asChild size="sm" className="w-full">
-                    <Link to={`/fires/${detailId}`}>
-                      {t('viewDetails')}
-                    </Link>
+                  <Button size="sm" className="w-full" onClick={() => {
+                    const ctx = { returnTo: 'map' as const, map: { selectedFireId: fire.id } }
+                    sessionStorage.setItem(RETURN_CONTEXT_KEY, JSON.stringify(ctx))
+                    navigate(`/fires/${detailId}`, { state: ctx })
+                  }}>
+                    {t('viewDetails')}
                   </Button>
                 </div>
               )}

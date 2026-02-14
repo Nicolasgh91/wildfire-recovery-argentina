@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowRight, Trees } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/context/LanguageContext'
 import { useEpisodesByMode } from '@/hooks/queries/useEpisodesByMode'
 import { FireCardSkeleton } from '@/components/fires/fire-card'
+import { RETURN_CONTEXT_KEY } from '@/types/navigation'
+import type { RestoreContext } from '@/types/navigation'
 
 const StoriesBar = lazy(() => import('@/components/stories-bar').then((m) => ({ default: m.StoriesBar })))
 const FireCard = lazy(() => import('@/components/fires/fire-card').then((m) => ({ default: m.FireCard })))
@@ -15,11 +17,49 @@ const DEFAULT_LIMIT = 20
 
 export default function HomePage() {
   const { t } = useI18n()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [selectedProvince, setSelectedProvince] = useState('all')
   const gridRef = useRef<HTMLDivElement | null>(null)
   const [gridVisible, setGridVisible] = useState(false)
   const [slideStage, setSlideStage] = useState(1) // 1: primer thumbnail, 2: segundo, 3: tercero
   const [showRecents, setShowRecents] = useState(false)
+
+  // Restore scroll position when returning from fire detail
+  useEffect(() => {
+    const restoreState = (location.state as RestoreContext | null)?.restore
+    let fromStorage = false
+
+    let scrollY: number | undefined = restoreState?.scrollY
+
+    if (scrollY === undefined) {
+      try {
+        const raw = sessionStorage.getItem(RETURN_CONTEXT_KEY)
+        if (raw) {
+          const ctx = JSON.parse(raw)
+          if (ctx.returnTo === 'home' && ctx.home?.scrollY != null) {
+            scrollY = ctx.home.scrollY
+            fromStorage = true
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (scrollY !== undefined && scrollY > 0) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollY!)
+      })
+    }
+
+    // Clean up: replace state to avoid re-applying on refresh
+    if (restoreState) {
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    if (fromStorage) {
+      sessionStorage.removeItem(RETURN_CONTEXT_KEY)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 1. Cargar episodios activos (siempre)
   const { data: activeData, isLoading: loadingActive } = useEpisodesByMode('active', DEFAULT_LIMIT)

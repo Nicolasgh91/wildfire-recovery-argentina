@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { I18nProvider } from '@/context/LanguageContext'
 import MapPage from '@/pages/MapPage'
 
@@ -20,26 +21,28 @@ describe('MapPage', () => {
         episodes:
           mode === 'active'
             ? [
-                {
-                  id: 'episode-1',
-                  centroid_lat: 10,
-                  centroid_lon: -64,
-                  frp_max: 25,
-                  status: 'active',
-                  provinces: ['Chubut'],
-                  estimated_area_hectares: 120,
-                  representative_event_id: 'event-1',
-                },
-              ]
+              {
+                id: 'episode-1',
+                centroid_lat: 10,
+                centroid_lon: -64,
+                frp_max: 25,
+                status: 'active',
+                provinces: ['Chubut'],
+                estimated_area_hectares: 120,
+                representative_event_id: 'event-1',
+              },
+            ]
             : [],
       },
       isLoading: false,
     }))
 
     render(
-      <I18nProvider>
-        <MapPage />
-      </I18nProvider>,
+      <MemoryRouter>
+        <I18nProvider>
+          <MapPage />
+        </I18nProvider>
+      </MemoryRouter>,
     )
 
     expect(screen.getByText('Mapa Interactivo')).toBeInTheDocument()

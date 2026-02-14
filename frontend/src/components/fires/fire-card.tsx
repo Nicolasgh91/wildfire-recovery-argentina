@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { MapPin, Calendar, Ruler, ArrowRight, Flame } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Calendar, Ruler, ArrowRight, Camera, Flame } from 'lucide-react'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip'
 import {
   Carousel,
   type CarouselApi,
@@ -19,6 +24,7 @@ import {
 } from '@/types/fire'
 import type { EpisodeListItem, EpisodeStatus } from '@/types/episode'
 import { cn } from '@/lib/utils'
+import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 
 const STATUS_LABELS: Record<EpisodeStatus, string> = {
   active: 'Activo',
@@ -43,10 +49,10 @@ function resolveStatus(episode: EpisodeListItem): EpisodeStatus {
   return 'extinct'
 }
 
-function buildEpisodeTitle(provinces?: string[] | null) {
-  if (!provinces || provinces.length === 0) return 'Incendio sin provincia'
-  if (provinces.length === 1) return `Incendio en ${provinces[0]}`
-  return `Incendio en ${provinces[0]} (+${provinces.length - 1})`
+function formatProvincesLabel(provinces?: string[] | null): string {
+  if (!provinces || provinces.length === 0) return 'Sin provincia'
+  if (provinces.length === 1) return provinces[0]
+  return `${provinces[0]} (+${provinces.length - 1})`
 }
 
 interface FireCardProps {
@@ -56,14 +62,27 @@ interface FireCardProps {
 
 export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
   const severity = getSeverityConfig(fire.frp_max)
-  const title = buildEpisodeTitle(fire.provinces)
+  const title = formatProvincesLabel(fire.provinces)
   const statusKey = resolveStatus(fire)
   const slides =
     fire.slides_data?.filter((slide) => slide.thumbnail_url || slide.url) ?? []
   const slidesToShow = slides.slice(0, Math.min(slides.length, slideStage))
+  // Heuristic: slides_data == null → data not loaded / absent.
+  // slidesToShow.length === 0 → no usable thumbnails.
+  // See frontend/docs/ui_debt_log.md — ideally backend exposes explicit flag.
+  const isImagePending =
+    fire.slides_data == null || slidesToShow.length === 0
   const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const detailId = fire.representative_event_id ?? fire.id
+  const navigate = useNavigate()
+
+  const handleViewDetails = useCallback(() => {
+    const scrollY = window.scrollY
+    const ctx = { returnTo: 'home' as const, home: { scrollY } }
+    sessionStorage.setItem(RETURN_CONTEXT_KEY, JSON.stringify(ctx))
+    navigate(`/fires/${detailId}`, { state: ctx })
+  }, [detailId, navigate])
 
   useEffect(() => {
     if (!carouselApi) return
@@ -84,7 +103,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
 
   return (
     <Card className="overflow-hidden gap-0 p-0 transition-all hover:-translate-y-1 hover:shadow-lg">
-      <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-emerald-50 via-emerald-100/50 to-amber-50">
+      <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-emerald-50 via-emerald-100/50 to-amber-50" data-testid="card-image">
         {slidesToShow.length ? (
           <Carousel className="h-full w-full" setApi={setCarouselApi}>
             <CarouselContent className="h-full ml-0">
@@ -100,7 +119,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
                         loading="lazy"
                         decoding="async"
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        />
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/10" />
                       <div className="absolute bottom-2 left-2 rounded bg-black/40 px-2 py-1 text-xs font-medium text-white">
                         {slide.type.toUpperCase()}
@@ -142,67 +161,59 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
             </div>
           </div>
         )}
+        {/* Primary badge: status overlay */}
+        {STATUS_LABELS[statusKey] && (
+          <Badge
+            variant="outline"
+            className={cn(
+              'absolute top-2 right-2 z-10 border font-medium backdrop-blur-sm',
+              STATUS_STYLES[statusKey] ?? 'bg-black/20 text-white border-white/30',
+            )}
+          >
+            {STATUS_LABELS[statusKey]}
+          </Badge>
+        )}
       </div>
 
       <CardContent className="p-4">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <h3 className="min-w-0 flex-1 line-clamp-2 text-lg font-semibold leading-tight text-foreground">
-            {title}
-          </h3>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+        <h3 className="line-clamp-1 text-lg font-semibold leading-tight text-foreground">
+          {title}
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {formatDate(fire.start_date)} · {formatHectares(fire.estimated_area_hectares)}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="secondary-badges">
+          <Badge variant="outline" className={cn('text-xs border', severity.badgeClasses)}>
+            {severity.label}
+          </Badge>
+          {fire.is_recent && (
             <Badge
               variant="outline"
-              className={cn('border font-medium whitespace-nowrap', severity.badgeClasses)}
+              className="border-amber-200 bg-amber-50 text-amber-700 text-xs"
             >
-              {severity.label}
+              Reciente
             </Badge>
-            <Badge
-              variant="outline"
-              className={cn('border font-medium whitespace-nowrap', STATUS_STYLES[statusKey])}
-            >
-              {STATUS_LABELS[statusKey]}
-            </Badge>
-            {fire.is_recent && (
-              <Badge
-                variant="outline"
-                className="border-amber-200 bg-amber-50 text-amber-700 text-xs whitespace-nowrap"
-              >
-                Reciente
-              </Badge>
-            )}
-            {slidesToShow.length === 0 && (
-              <Badge
-                variant="outline"
-                className="border-slate-200 bg-slate-50 text-slate-500 text-xs whitespace-nowrap"
-              >
-                Imagen pendiente
-              </Badge>
-            )}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <MapPin className="h-4 w-4 text-emerald-600" />
-            {fire.provinces?.[0] ?? 'Sin provincia'}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Calendar className="h-4 w-4 text-emerald-600" />
-            {formatDate(fire.start_date)}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Ruler className="h-4 w-4 text-emerald-600" />
-            {formatHectares(fire.estimated_area_hectares)}
-          </span>
+          )}
+          {isImagePending && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 p-1 text-slate-500"
+                  data-testid="image-pending-icon"
+                >
+                  <Camera className="h-3.5 w-3.5" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>Imagen pendiente</TooltipContent>
+            </Tooltip>
+          )}
         </div>
       </CardContent>
 
       <CardFooter className="border-t border-border bg-muted/30 p-4">
-        <Button asChild className="w-full gap-2 bg-emerald-500 text-white hover:bg-emerald-600">
-          <Link to={`/fires/${detailId}`}>
-            Ver detalles
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+        <Button className="w-full gap-2 bg-emerald-500 text-white hover:bg-emerald-600" onClick={handleViewDetails}>
+          Ver detalles
+          <ArrowRight className="h-4 w-4" />
         </Button>
       </CardFooter>
     </Card>

@@ -1,5 +1,5 @@
-import { Suspense, lazy } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Suspense, lazy, useCallback } from 'react'
+import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   Activity,
   AlertTriangle,
@@ -31,6 +31,8 @@ import {
   type FireStatus,
 } from '@/types/fire'
 import type { FireMapItem } from '@/types/map'
+import type { ReturnContext } from '@/types/navigation'
+import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 
 const FireMap = lazy(() =>
   import('@/components/fire-map').then((mod) => ({ default: mod.FireMap })),
@@ -86,7 +88,36 @@ export default function FireDetailPage() {
   const { t } = useI18n()
   const { id } = useParams<{ id: string }>()
   const fireId = id ?? ''
+  const navigate = useNavigate()
+  const location = useLocation()
 
+  const handleBack = useCallback(() => {
+    const state = location.state as ReturnContext | null
+    let ctx: ReturnContext | null = state?.returnTo ? state : null
+    let fromStorage = false
+
+    if (!ctx) {
+      try {
+        const raw = sessionStorage.getItem(RETURN_CONTEXT_KEY)
+        if (raw) {
+          ctx = JSON.parse(raw) as ReturnContext
+          fromStorage = true
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (ctx?.returnTo === 'home') {
+      navigate('/', { state: { restore: { scrollY: ctx.home?.scrollY ?? 0 } } })
+    } else if (ctx?.returnTo === 'map') {
+      navigate('/map', { state: { restore: { selectedFireId: ctx.map?.selectedFireId } } })
+    } else {
+      navigate('/')
+    }
+
+    if (fromStorage) {
+      sessionStorage.removeItem(RETURN_CONTEXT_KEY)
+    }
+  }, [location.state, navigate])
   const {
     data,
     isLoading,
@@ -294,15 +325,13 @@ export default function FireDetailPage() {
           )}
         </div>
         <Button
-          asChild
           variant="secondary"
           size="sm"
           className="absolute left-4 top-4 z-[1000] gap-2"
+          onClick={handleBack}
         >
-          <Link to="/fires/history">
-            <ArrowLeft className="h-4 w-4" />
-            {t('fireHistory')}
-          </Link>
+          <ArrowLeft className="h-4 w-4" />
+          {t('goBack')}
         </Button>
       </div>
 

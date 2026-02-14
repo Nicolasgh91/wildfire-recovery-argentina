@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Map, List, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -7,6 +7,9 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { useI18n } from '@/context/LanguageContext'
 import { useEpisodesByMode } from '@/hooks/queries/useEpisodesByMode'
 import type { FireMapItem } from '@/types/map'
+import { RETURN_CONTEXT_KEY } from '@/types/navigation'
+import type { RestoreContext } from '@/types/navigation'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 const FireMap = lazy(() =>
   import('@/components/fire-map').then((mod) => ({ default: mod.FireMap })),
@@ -23,6 +26,8 @@ const mapFallback = (
 
 export default function MapPage() {
   const { t } = useI18n()
+  const location = useLocation()
+  const navigate = useNavigate()
   const [selectedFire, setSelectedFire] = useState<FireMapItem | null>(null)
   const [showSidebar, setShowSidebar] = useState(true)
   const { data: activeData, isLoading: loadingActive } = useEpisodesByMode('active', 100)
@@ -62,7 +67,7 @@ export default function MapPage() {
             ? (episode.status as 'active' | 'monitoring')
             : isRecent
               ? 'monitoring'
-            : 'extinguished'
+              : 'extinguished'
         const title =
           episode.provinces && episode.provinces.length > 0
             ? `Incendio en ${episode.provinces[0]}`
@@ -80,6 +85,45 @@ export default function MapPage() {
         } satisfies FireMapItem
       })
   }, [activeData?.episodes, recentData?.episodes])
+
+  // Restore selected fire when returning from fire detail
+  useEffect(() => {
+    if (isLoading || mapItems.length === 0) return
+
+    const restoreState = (location.state as RestoreContext | null)?.restore
+    let fromStorage = false
+
+    let selectedFireId: string | undefined = restoreState?.selectedFireId
+
+    if (!selectedFireId) {
+      try {
+        const raw = sessionStorage.getItem(RETURN_CONTEXT_KEY)
+        if (raw) {
+          const ctx = JSON.parse(raw)
+          if (ctx.returnTo === 'map' && ctx.map?.selectedFireId) {
+            selectedFireId = ctx.map.selectedFireId
+            fromStorage = true
+          }
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (selectedFireId) {
+      const found = mapItems.find((f) => f.id === selectedFireId)
+      if (found) {
+        setSelectedFire(found)
+      }
+    }
+
+    // Clean up: replace state to avoid re-applying on refresh
+    if (restoreState) {
+      navigate(location.pathname, { replace: true, state: null })
+    }
+    if (fromStorage) {
+      sessionStorage.removeItem(RETURN_CONTEXT_KEY)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, mapItems.length])
 
   return (
     <div className="relative h-full">
@@ -127,9 +171,8 @@ export default function MapPage() {
                     key={fire.id}
                     type="button"
                     onClick={() => setSelectedFire(fire)}
-                    className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-muted ${
-                      selectedFire?.id === fire.id ? 'border-primary bg-primary/10' : 'border-border'
-                    }`}
+                    className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-muted ${selectedFire?.id === fire.id ? 'border-primary bg-primary/10' : 'border-border'
+                      }`}
                   >
                     <p className="mb-1 line-clamp-1 font-medium text-foreground">{fire.title}</p>
                     <div className="flex items-center justify-between">
@@ -159,9 +202,8 @@ export default function MapPage() {
                     key={fire.id}
                     type="button"
                     onClick={() => setSelectedFire(fire)}
-                    className={`shrink-0 rounded-lg border p-2 text-left transition-colors ${
-                      selectedFire?.id === fire.id ? 'border-primary bg-primary/10' : 'border-border'
-                    }`}
+                    className={`shrink-0 rounded-lg border p-2 text-left transition-colors ${selectedFire?.id === fire.id ? 'border-primary bg-primary/10' : 'border-border'
+                      }`}
                   >
                     <p className="w-24 truncate text-xs font-medium text-foreground">
                       {fire.province}

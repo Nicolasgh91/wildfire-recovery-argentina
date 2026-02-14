@@ -1,15 +1,25 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeAll, vi } from 'vitest'
 import { I18nProvider } from '@/context/LanguageContext'
 import FireDetailPage from '@/pages/FireDetail'
 
+// Track navigate calls
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  }
+})
+
 beforeAll(() => {
   if (!globalThis.ResizeObserver) {
     globalThis.ResizeObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
+      observe() { }
+      unobserve() { }
+      disconnect() { }
     }
   }
 })
@@ -95,21 +105,92 @@ vi.mock('@/components/fire-map', () => ({
   FireMap: () => <div data-testid="fire-map" />,
 }))
 
+function renderDetail(initialState?: Record<string, unknown>) {
+  return render(
+    <I18nProvider>
+      <MemoryRouter
+        initialEntries={[{ pathname: '/fires/fire-123', state: initialState }]}
+      >
+        <Routes>
+          <Route path="/fires/:id" element={<FireDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </I18nProvider>,
+  )
+}
+
 describe('FireDetailPage', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear()
+    sessionStorage.clear()
+  })
+
   it('renders fire detail with quality indicator and carousel', () => {
-    render(
-      <I18nProvider>
-        <MemoryRouter initialEntries={['/fires/fire-123']}>
-          <Routes>
-            <Route path="/fires/:id" element={<FireDetailPage />} />
-          </Routes>
-        </MemoryRouter>
-      </I18nProvider>,
-    )
+    renderDetail()
 
     expect(screen.getByText('Provincia')).toBeInTheDocument()
     expect(screen.getByText('Cordoba')).toBeInTheDocument()
     expect(screen.getByText('Calidad de datos')).toBeInTheDocument()
     expect(screen.getByText('85%')).toBeInTheDocument()
+  })
+
+  it('renders back button with "Volver atrás" text', () => {
+    renderDetail()
+
+    expect(screen.getByText('Volver atrás')).toBeInTheDocument()
+    expect(screen.queryByText('Históricos')).not.toBeInTheDocument()
+  })
+
+  it('navigates to Home with restore state when returnTo is home', () => {
+    renderDetail({ returnTo: 'home', home: { scrollY: 500 } })
+
+    fireEvent.click(screen.getByText('Volver atrás'))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/', {
+      state: { restore: { scrollY: 500 } },
+    })
+  })
+
+  it('navigates to Map with restore state when returnTo is map', () => {
+    renderDetail({ returnTo: 'map', map: { selectedFireId: 'fire-abc' } })
+
+    fireEvent.click(screen.getByText('Volver atrás'))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/map', {
+      state: { restore: { selectedFireId: 'fire-abc' } },
+    })
+  })
+
+  it('navigates to Map even without selectedFireId', () => {
+    renderDetail({ returnTo: 'map' })
+
+    fireEvent.click(screen.getByText('Volver atrás'))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/map', {
+      state: { restore: { selectedFireId: undefined } },
+    })
+  })
+
+  it('falls back to Home when no state is provided', () => {
+    renderDetail()
+
+    fireEvent.click(screen.getByText('Volver atrás'))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/')
+  })
+
+  it('falls back to sessionStorage when location.state is missing', () => {
+    const ctx = { returnTo: 'home', home: { scrollY: 300 } }
+    sessionStorage.setItem('fg:return_context', JSON.stringify(ctx))
+
+    renderDetail()
+
+    fireEvent.click(screen.getByText('Volver atrás'))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/', {
+      state: { restore: { scrollY: 300 } },
+    })
+    // Should clean up sessionStorage after use
+    expect(sessionStorage.getItem('fg:return_context')).toBeNull()
   })
 })

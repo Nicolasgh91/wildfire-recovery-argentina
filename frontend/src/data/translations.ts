@@ -59,6 +59,7 @@ export const translations = {
 
     // Common
     viewDetails: 'Ver detalles',
+    goBack: 'Volver atrás',
     download: 'Descargar',
     submit: 'Enviar',
     cancel: 'Cancelar',
@@ -444,6 +445,7 @@ export const translations = {
 
     // Common
     viewDetails: 'View Details',
+    goBack: 'Go back',
     download: 'Download',
     submit: 'Submit',
     cancel: 'Cancel',

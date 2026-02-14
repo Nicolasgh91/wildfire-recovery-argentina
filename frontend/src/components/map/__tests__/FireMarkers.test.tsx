@@ -1,9 +1,18 @@
 import { fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { I18nProvider } from '@/context/LanguageContext'
 import { FireMarkers } from '../layers/FireMarkers'
 import type { FireMapItem } from '@/types/map'
+
+const mockNavigate = vi.fn()
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  }
+})
 
 vi.mock('leaflet', () => ({
   __esModule: true,
@@ -45,7 +54,12 @@ describe('FireMarkers', () => {
     count_protected_areas: 2,
   }
 
-  it('renders popup with detail link and protected info', () => {
+  beforeEach(() => {
+    mockNavigate.mockClear()
+    sessionStorage.clear()
+  })
+
+  it('renders popup with detail button and protected info', () => {
     render(
       <MemoryRouter>
         <I18nProvider>
@@ -54,11 +68,30 @@ describe('FireMarkers', () => {
       </MemoryRouter>
     )
 
-    const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', `/fires/${fire.representative_event_id}`)
+    expect(screen.getByText('Ver detalles')).toBeInTheDocument()
     expect(screen.getByText('Test Fire')).toBeInTheDocument()
     expect(screen.getByText(/12.3%/)).toBeInTheDocument()
     expect(screen.getByText(/Reserva/)).toBeInTheDocument()
+  })
+
+  it('navigates to fire detail with map return context on click', () => {
+    render(
+      <MemoryRouter>
+        <I18nProvider>
+          <FireMarkers fires={[fire]} />
+        </I18nProvider>
+      </MemoryRouter>
+    )
+
+    fireEvent.click(screen.getByText('Ver detalles'))
+
+    expect(mockNavigate).toHaveBeenCalledWith(`/fires/${fire.representative_event_id}`, {
+      state: { returnTo: 'map', map: { selectedFireId: fire.id } },
+    })
+    // Should also persist to sessionStorage
+    const stored = JSON.parse(sessionStorage.getItem('fg:return_context')!)
+    expect(stored.returnTo).toBe('map')
+    expect(stored.map.selectedFireId).toBe('fire-123')
   })
 
   it('falls back to fire id when representative_event_id is missing', () => {
@@ -75,8 +108,8 @@ describe('FireMarkers', () => {
       </MemoryRouter>
     )
 
-    const link = screen.getByRole('link')
-    expect(link).toHaveAttribute('href', `/fires/${fireNoRep.id}`)
+    fireEvent.click(screen.getByText('Ver detalles'))
+    expect(mockNavigate).toHaveBeenCalledWith(`/fires/${fireNoRep.id}`, expect.any(Object))
   })
 
   it('fires onFireSelect when marker is clicked', () => {
@@ -94,7 +127,7 @@ describe('FireMarkers', () => {
     expect(onFireSelect).toHaveBeenCalledWith(expect.objectContaining({ id: fire.id }))
   })
 
-  it('renders fire_detail popup variant without detail link', () => {
+  it('renders fire_detail popup variant without detail button', () => {
     const fireDetail: FireMapItem = {
       ...fire,
       status: 'monitoring',
@@ -113,8 +146,9 @@ describe('FireMarkers', () => {
     )
 
     expect(screen.getByText('Incendio en monitoreo')).toBeInTheDocument()
-    expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    expect(screen.queryByText('Ver detalles')).not.toBeInTheDocument()
     expect(screen.getByText(/Áreas protegidas:/)).toBeInTheDocument()
     expect(screen.getByText(/Áreas protegidas: N\/A/)).toBeInTheDocument()
   })
 })
+
