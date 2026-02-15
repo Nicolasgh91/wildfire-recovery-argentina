@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo, useState } from 'react'
-import { BookOpen, Map, ClipboardCheck, FileText, Shield, Menu } from 'lucide-react'
+import { BookOpen, Map, ClipboardCheck, FileText, Shield, Layers, Menu } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -140,6 +140,23 @@ const manualSections: ManualSection[] = [
         <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
           <li>{t('manualCertVerify1')}</li>
           <li>{t('manualCertVerify2')}</li>
+        </ol>
+      </div>
+    ),
+  },
+  {
+    id: 'episodes',
+    title: 'manualSectionEpisodes',
+    icon: <Layers className="h-5 w-5" />,
+    content: (t) => (
+      <div className="space-y-4">
+        <p className="text-muted-foreground leading-relaxed">{t('manualEpisodesP1')}</p>
+        <p className="text-muted-foreground leading-relaxed">{t('manualEpisodesP2')}</p>
+        <h3 className="font-semibold text-foreground">{t('manualEpisodesHowTitle')}</h3>
+        <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
+          <li>{t('manualEpisodesHow1')}</li>
+          <li>{t('manualEpisodesHow2')}</li>
+          <li>{t('manualEpisodesHow3')}</li>
         </ol>
       </div>
     ),
