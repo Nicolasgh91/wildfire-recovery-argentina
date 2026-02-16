@@ -5,7 +5,7 @@ Usa Google Earth Engine + NDVI temporal
 
 import logging
 from datetime import datetime, timedelta
-from celery import shared_task
+from celery import group, shared_task
 from ..celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -80,20 +80,22 @@ def batch_recovery_analysis(self, fire_event_ids, months_list=None):
         logger.info(f"📊 Análisis en lote: {len(fire_event_ids)} fuegos...")
         
         months_list = months_list or [3, 6, 12]
-        results = []
-        
+
+        signatures = []
         for fire_id in fire_event_ids:
             for months in months_list:
-                task_result = analyze_recovery.apply_async(
-                    args=[fire_id, months],
-                    queue='analysis'
+                signatures.append(
+                    analyze_recovery.s(fire_id, months).set(queue='analysis')
                 )
-                results.append(task_result)
-        
+
+        group_result = group(signatures).apply_async() if signatures else None
+
         return {
-            'total_tasks_enqueued': len(results),
+            'total_tasks_enqueued': len(signatures),
             'fire_events': len(fire_event_ids),
             'time_windows': months_list,
+            'status': 'queued',
+            'group_id': group_result.id if group_result else None,
         }
         
     except Exception as exc:

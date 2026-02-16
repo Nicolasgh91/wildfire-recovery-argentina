@@ -17,6 +17,7 @@ from app.schemas.episode import (
     FireEpisodeListItem,
     FireEpisodeListResponse,
 )
+from app.services.imagery_service import resolve_carousel_home_limit
 
 router = APIRouter()
 
@@ -233,11 +234,16 @@ def list_fire_episodes(
     summary="Episodios para Home con thumbnails",
 )
 def list_active_episodes_for_home(
-    limit: int = Query(
-        20, ge=1, le=50, description="Maximo de episodios para Home"
+    limit: Optional[int] = Query(
+        None,
+        ge=1,
+        le=50,
+        description="Maximo de episodios para Home (default: carousel_home_limit)",
     ),
     db: Session = Depends(deps.get_db),
 ) -> FireEpisodeListResponse:
+    effective_limit = resolve_carousel_home_limit(db, override=limit)
+
     rows = (
         db.execute(
             text(
@@ -306,7 +312,7 @@ def list_active_episodes_for_home(
                 LIMIT :limit
                 """
             ),
-            {"limit": limit},
+            {"limit": effective_limit},
         )
         .mappings()
         .all()
@@ -351,7 +357,7 @@ def list_active_episodes_for_home(
 
     total = len(items)
     page = 1
-    page_size = limit
+    page_size = effective_limit
     total_pages = 1
 
     return FireEpisodeListResponse(

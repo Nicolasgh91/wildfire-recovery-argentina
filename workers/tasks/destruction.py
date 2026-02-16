@@ -5,7 +5,7 @@ post-incendio usando análisis multitemporal de Sentinel-2
 
 import logging
 from datetime import datetime, timedelta
-from celery import shared_task
+from celery import chord, group, shared_task
 from ..celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -116,29 +116,57 @@ def generate_destruction_report(self, fire_event_id):
     """
     try:
         logger.info(f"📄 Generando reporte para {fire_event_id}...")
-        
-        # Obtener datos de destrucción
-        destruction = detect_destruction.apply_async(
-            args=[fire_event_id],
-            queue='analysis'
-        ).get()
-        
-        # Obtener datos de clasificación
-        land_use = classify_land_use.apply_async(
-            args=[fire_event_id, datetime.utcnow().date().isoformat()],
-            queue='analysis'
-        ).get()
-        
-        report_data = {
+
+        report_date = datetime.utcnow().isoformat()
+        workflow = chord(
+            group(
+                detect_destruction.s(fire_event_id).set(queue='analysis'),
+                classify_land_use.s(
+                    fire_event_id, datetime.utcnow().date().isoformat()
+                ).set(queue='analysis'),
+            ),
+            compose_destruction_report.s(
+                fire_event_id=fire_event_id,
+                report_date=report_date,
+            ).set(queue='analysis'),
+        )
+        async_result = workflow.apply_async()
+
+        return {
             'fire_event_id': fire_event_id,
-            'destruction': destruction,
-            'land_use': land_use,
-            'report_date': datetime.utcnow().isoformat(),
+            'status': 'queued',
+            'workflow_id': async_result.id,
+            'report_date': report_date,
             'report_type': 'judicial_destruction',
         }
-        
-        return report_data
         
     except Exception as exc:
         logger.error(f"Error generando reporte: {exc}")
         raise self.retry(exc=exc, countdown=60)
+
+
+@shared_task(
+    name='workers.tasks.destruction.compose_destruction_report',
+    bind=True,
+)
+def compose_destruction_report(self, analysis_results, fire_event_id, report_date):
+    """
+    Compose final report payload from chord/group subtask outputs.
+    """
+    destruction = {}
+    land_use = {}
+    for item in analysis_results or []:
+        if not isinstance(item, dict):
+            continue
+        if "destruction_detected" in item:
+            destruction = item
+        elif "land_use_classes" in item:
+            land_use = item
+
+    return {
+        'fire_event_id': fire_event_id,
+        'destruction': destruction,
+        'land_use': land_use,
+        'report_date': report_date,
+        'report_type': 'judicial_destruction',
+    }
