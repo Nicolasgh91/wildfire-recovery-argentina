@@ -163,11 +163,12 @@ Estas mejoras aparecen como observaciones en el audit (performance/robustez/obse
 - [x] Hallazgos cerrados: `FG-EP-CHECK-03`, `FG-EP-CHECK-04`.
 - Nota: el gate de C1 fue parcial porque los tests smoke se agregaron en C3; el gate completo se re-ejecuto y paso al cierre de PR1.
 
-### PR2 (pendiente)
-- [ ] Lectura canonica de parametros de episodio en `ClusteringService`.
-- [ ] Ingestion real en `download_firms_daily` (sin stub).
-- [ ] Tests de parametros borde + idempotencia de ingestion.
-- [ ] Hallazgos a cerrar: `FG-EP-CHECK-01`, `FG-EP-CHECK-05`.
+### PR2 (completado)
+- [x] Lectura canonica de parametros de episodio en `ClusteringService`.
+- [x] Ingestion real en `download_firms_daily` (sin stub).
+- [x] Tests de parametros borde + idempotencia de ingestion.
+- [x] Hallazgos cerrados: `FG-EP-CHECK-01`, `FG-EP-CHECK-05`.
+- Nota: se aplico ajuste minimo de logging en `workers/tasks/ingestion.py` para compatibilidad con formatter PII del repo (sin cambio de alcance funcional del plan).
 
 ### PR3 (pendiente)
 - [ ] Estados legacy removidos de runtime (`controlled`/`extinguished`).
