@@ -71,7 +71,8 @@ from app.utils.watermark import apply_watermark
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_BATCH_SIZE = 15
+DEFAULT_CAROUSEL_HOME_LIMIT = 20
+MAX_CAROUSEL_HOME_LIMIT = 50
 DEFAULT_CLOUD_THRESHOLDS = [10, 20, 30, 50]
 
 THUMB_DIMENSIONS: Union[int, str] = "768x576"
@@ -143,6 +144,64 @@ class RepresentativeEventRow:
     status: Optional[str]
 
 
+def _extract_int_param(value: Optional[object]) -> Optional[int]:
+    if isinstance(value, dict):
+        value = value.get("value")
+    try:
+        parsed = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return parsed
+
+
+def _clamp_home_limit(value: int) -> int:
+    return max(1, min(value, MAX_CAROUSEL_HOME_LIMIT))
+
+
+def resolve_carousel_home_limit(db: Session, override: Optional[int] = None) -> int:
+    """
+    Resolve canonical Home carousel limit for generation and API endpoints.
+
+    Precedence:
+    1. Explicit override argument.
+    2. `system_parameters.carousel_home_limit` (canonical).
+    3. `system_parameters.carousel_batch_size` (legacy fallback).
+    4. `DEFAULT_CAROUSEL_HOME_LIMIT`.
+    """
+    if override is not None:
+        return _clamp_home_limit(int(override))
+
+    def _fetch_param(param_key: str) -> Optional[object]:
+        try:
+            row = (
+                db.execute(
+                    text(
+                        "SELECT param_value FROM system_parameters WHERE param_key = :key"
+                    ),
+                    {"key": param_key},
+                )
+                .mappings()
+                .first()
+            )
+        except SQLAlchemyError as exc:
+            logger.warning("system_parameters lookup failed for %s: %s", param_key, exc)
+            db.rollback()
+            return None
+        if not row:
+            return None
+        return row.get("param_value")
+
+    canonical_value = _extract_int_param(_fetch_param("carousel_home_limit"))
+    if canonical_value is not None and canonical_value > 0:
+        return _clamp_home_limit(canonical_value)
+
+    legacy_value = _extract_int_param(_fetch_param("carousel_batch_size"))
+    if legacy_value is not None and legacy_value > 0:
+        return _clamp_home_limit(legacy_value)
+
+    return DEFAULT_CAROUSEL_HOME_LIMIT
+
+
 class ImageryService:
     """
     UC-F08: Daily carousel thumbnails for active episodes.
@@ -179,15 +238,7 @@ class ImageryService:
         return row.get("param_value")
 
     def _resolve_batch_size(self, override: Optional[int] = None) -> int:
-        if override:
-            return int(override)
-        value = self._get_system_param("carousel_batch_size")
-        if isinstance(value, dict) and "value" in value:
-            try:
-                return int(value["value"])
-            except (TypeError, ValueError):
-                return DEFAULT_BATCH_SIZE
-        return DEFAULT_BATCH_SIZE
+        return resolve_carousel_home_limit(self.db, override=override)
 
     def _resolve_cloud_thresholds(self) -> List[int]:
         value = self._get_system_param("cloud_coverage_thresholds")
