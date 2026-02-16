@@ -48,7 +48,7 @@ def download_firms_daily(self, days: int = 2, dry_run: bool = False):
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
-        logger.info("FIRMS ingestion finished: %s", result)
+        logger.info(f"FIRMS ingestion finished: {result}")
         return result
 
     except Exception as exc:
