@@ -195,7 +195,7 @@ def enrich_recent_fire_events(
             "lookback_hours": lookback_hours,
             "max_events": max_events,
         }
-        logger.info("Geo enrichment completed: %s", result)
+        logger.info(f"Geo enrichment completed: {result}")
         return result
     except Exception as exc:
         db.rollback()
