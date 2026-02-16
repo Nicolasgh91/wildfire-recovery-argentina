@@ -995,11 +995,15 @@ class FireService:
             status = FireStatus.ACTIVE
         elif status_value == "monitoring":
             status = FireStatus.MONITORING
-        elif status_value == "controlled":
-            status = FireStatus.MONITORING
-        elif status_value in ("extinguished", "extinct", "closed"):
+        elif status_value in ("extinct", "closed"):
             status = FireStatus.EXTINCT
         else:
+            if status_value:
+                logger.warning(
+                    "Unknown episode status '%s' for episode %s, applying fallback",
+                    status_value,
+                    episode.id,
+                )
             status = FireStatus.EXTINCT
             if end_date:
                 now = datetime.now(timezone.utc)
