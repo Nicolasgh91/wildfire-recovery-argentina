@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
+from app.services.episode_flow_parameters import load_canonical_episode_flow_parameters
 from app.services.episode_service import EpisodeService
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,44 @@ class ClusteringService:
             min_points=int(row["min_points"]),
             temporal_window_hours=int(row["temporal_window_hours"]),
         )
+
+    def _resolve_episode_parameters(
+        self, version: ClusteringVersion
+    ) -> tuple[float, int, str]:
+        params = load_canonical_episode_flow_parameters(self.db)
+        source = "system_parameters"
+
+        epsilon_fallback = version.epsilon_km * 1000.0
+        temporal_fallback = version.temporal_window_hours
+
+        raw_epsilon = params.get("episode_spatial_epsilon_meters", epsilon_fallback)
+        raw_temporal = params.get("episode_temporal_window_hours", temporal_fallback)
+
+        try:
+            epsilon_meters = float(raw_epsilon)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid episode_spatial_epsilon_meters=%r. Falling back to "
+                "clustering_versions epsilon_km=%s.",
+                raw_epsilon,
+                version.epsilon_km,
+            )
+            epsilon_meters = epsilon_fallback
+            source = "clustering_versions_fallback"
+
+        try:
+            temporal_window_hours = max(1, int(raw_temporal))
+        except (TypeError, ValueError):
+            logger.warning(
+                "Invalid episode_temporal_window_hours=%r. Falling back to "
+                "clustering_versions temporal_window_hours=%s.",
+                raw_temporal,
+                version.temporal_window_hours,
+            )
+            temporal_window_hours = temporal_fallback
+            source = "clustering_versions_fallback"
+
+        return epsilon_meters, temporal_window_hours, source
 
     def _load_recalc_episode_ids(self) -> List[UUID]:
         rows = self.db.execute(
@@ -306,13 +345,17 @@ class ClusteringService:
         episodes_merged = 0
         candidate_counts: List[int] = []
 
-        epsilon_meters = version.epsilon_km * 1000.0
+        (
+            epsilon_meters,
+            temporal_window_hours,
+            parameters_source,
+        ) = self._resolve_episode_parameters(version)
 
         for event in to_process:
             candidates = self._find_candidate_episodes(
                 event,
                 epsilon_meters=epsilon_meters,
-                temporal_window_hours=version.temporal_window_hours,
+                temporal_window_hours=temporal_window_hours,
             )
             candidate_counts.append(len(candidates))
 
@@ -358,11 +401,15 @@ class ClusteringService:
             self.db.commit()
 
         logger.info(
-            "Clustering complete: events=%s created=%s updated=%s merged=%s",
+            "Clustering complete: events=%s created=%s updated=%s merged=%s "
+            "epsilon_m=%s temporal_h=%s source=%s",
             len(to_process),
             episodes_created,
             episodes_updated,
             episodes_merged,
+            epsilon_meters,
+            temporal_window_hours,
+            parameters_source,
         )
         logger.info(f"Clustering candidate metrics: {candidate_metrics}")
 
@@ -371,6 +418,12 @@ class ClusteringService:
             "episodes_created": episodes_created,
             "episodes_updated": episodes_updated,
             "episodes_merged": episodes_merged,
+            "parameters_used": {
+                "episode_spatial_epsilon_meters": epsilon_meters,
+                "episode_temporal_window_hours": temporal_window_hours,
+                "source": parameters_source,
+                "clustering_version_id": str(version.id),
+            },
             "candidate_metrics": candidate_metrics,
         }
 
