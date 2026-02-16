@@ -73,6 +73,9 @@ Rama: `chore/repo-consistency-pr1-pr3`
 ### PR2 - Parametros canonicos + ingesta real
 | Timestamp | Commit | Accion | Comandos | Resultado | Notas |
 |---|---|---|---|---|---|
+| 2026-02-16T00:37:23-03:00 | `06f5bfc` | PR2-C1: `ClusteringService` usa parametros canonicos de `system_parameters` para runtime de episodios | `pytest tests/unit/test_clustering_service.py tests/integration/test_fg_ep_22_system_parameters.py tests/unit/test_ingestion_task.py tests/integration/test_firms_ingestion_idempotency.py -q`; `pytest tests/unit/test_clustering_service.py tests/integration/test_fg_ep_22_system_parameters.py -q` | Parcial (subset existente OK) | Los tests de ingestion/idempotencia aun no existian en C1; gate completo se difirio a C3. |
+| 2026-02-16T00:45:09-03:00 | `798000f` | PR2-C2: `download_firms_daily` integra pipeline real incremental con lazy import | `pytest tests/unit/test_clustering_service.py tests/integration/test_fg_ep_22_system_parameters.py tests/unit/test_ingestion_task.py tests/integration/test_firms_ingestion_idempotency.py -q`; `pytest tests/unit/test_clustering_service.py tests/integration/test_fg_ep_22_system_parameters.py -q` | Parcial (subset existente OK) | Gate completo mantenido para C3 al incorporar tests faltantes. |
+| 2026-02-16T00:55:29-03:00 | `c9b03bd` | PR2-C3: tests canonicos/idempotencia + ajuste minimo de logging en task de ingestion | `pytest tests/unit/test_clustering_service.py tests/integration/test_fg_ep_22_system_parameters.py tests/unit/test_ingestion_task.py tests/integration/test_firms_ingestion_idempotency.py -q` | OK | Gate PR2 completo en verde (`7 passed`). FG-EP-CHECK-01 y FG-EP-CHECK-05 cerrados. |
 
 ### PR3 - Legacy status + carrusel + geo + canvas
 | Timestamp | Commit | Accion | Comandos | Resultado | Notas |
@@ -85,12 +88,19 @@ Rama: `chore/repo-consistency-pr1-pr3`
 | PR1 | `f6b9993` | Lazy init DB/session + validacion explicita de `DATABASE_URL` para workers |
 | PR1 | `8d86202` | Eliminacion de modulos legacy con task names duplicados |
 | PR1 | `ac58546` | Nuevos smoke tests para registry Celery y bootstrap DB |
+| PR2 | `06f5bfc` | Clustering runtime de episodios gobernado por parametros canonicos (`system_parameters`) |
+| PR2 | `798000f` | Ingestion real en `download_firms_daily` via `run_incremental_pipeline` |
+| PR2 | `c9b03bd` | Tests PR2 de parametros/idempotencia y ajuste de logging compatible con formatter PII |
 
 ## Desvios respecto al audit/fix plan
 | Timestamp | Que paso | Causa raiz probable | Decision y justificacion | Archivos afectados |
 |---|---|---|---|---|
 | 2026-02-16T00:24:11-03:00 | Gate PR1 del commit C1 referenciaba tests aun no creados (`test_db_session_bootstrap`, `test_celery_registry_smoke`) | El gate del PR esta definido para el estado completo PR1, pero C1 es un commit atomico previo a C3 donde se agregan esos tests | Ejecutar de inmediato el smoke import y subset existente (`test_celery_runtime`, `test_health_celery`) para validar C1; re-ejecutar gate completo al cerrar PR1 | `temp_files/repo_consistency/pr1-c1-import.log`, `temp_files/repo_consistency/pr1-c1-pytest.log`, `temp_files/repo_consistency/pr1-c1-pytest-existing.log` |
+| 2026-02-16T00:37:23-03:00 | Gate PR2 en C1/C2 incluyo tests aun no creados (`test_ingestion_task`, `test_firms_ingestion_idempotency`) | El plan fija el gate final de PR2, pero C1/C2 son commits atomicos previos a C3 donde se agregan esos tests | Ejecutar subset existente tras cada commit y correr gate completo al finalizar C3, manteniendo cobertura incremental sin saltar validacion | `temp_files/repo_consistency/pr2-c1-pytest.log`, `temp_files/repo_consistency/pr2-c1-pytest-existing.log`, `temp_files/repo_consistency/pr2-c2-pytest.log`, `temp_files/repo_consistency/pr2-c2-pytest-existing.log`, `temp_files/repo_consistency/pr2-c3-pytest.log` |
+| 2026-02-16T00:55:29-03:00 | PR2-C3 incluyo un cambio minimo en `workers/tasks/ingestion.py` ademas de tests | El formatter PII local trata argumentos `dict` como iterable de keys, rompiendo `logger.info(..., result)` con `TypeError` | Ajustar logging a string interpolado (`f"..."`) para preservar comportamiento runtime y permitir el gate; alcance sigue dentro de FG-EP-CHECK-05 (ingestion task operativa) | `workers/tasks/ingestion.py`, `tests/unit/test_ingestion_task.py`, `tests/integration/test_firms_ingestion_idempotency.py` |
 
 ## Hallazgos nuevos y resolucion
 | Timestamp | Hallazgo | Impacto | Resolucion |
 |---|---|---|---|
+| 2026-02-16T00:52:00-03:00 | Incompatibilidad entre formatter PII y logging con argumento `dict` en task de ingestion | Fallo runtime en `download_firms_daily` durante tests (`TypeError`) | Logging final normalizado a string para evitar expansion de keys; test unitario de wrapper pasa y gate PR2 completo en verde |
+| 2026-02-16T00:52:30-03:00 | Test de idempotencia usaba `legacy_hash` no equivalente al fallback SQL real | Falso negativo: segunda corrida insertaba duplicado en modo sin `detection_hash` | Test actualizado para construir `legacy_hash` con mismo contrato que pipeline/sql; idempotencia validada |
