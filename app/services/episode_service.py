@@ -136,9 +136,20 @@ class EpisodeService:
         if now - last_seen_at > timedelta(hours=grace_hours):
             return "extinct"
 
+        unknown_statuses = sorted(
+            status
+            for status in event_statuses
+            if status not in {"active", "monitoring", "extinct"}
+        )
+        if unknown_statuses:
+            logger.warning(
+                "Unknown fire_event statuses while resolving episode status: %s",
+                unknown_statuses,
+            )
+
         if "active" in event_statuses:
             return "active"
-        if "monitoring" in event_statuses or "controlled" in event_statuses:
+        if "monitoring" in event_statuses:
             return "monitoring"
         return "active"
 
