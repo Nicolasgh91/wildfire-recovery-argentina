@@ -1,10 +1,10 @@
 """
-Ingestion Task: Descargar y procesar datos de NASA FIRMS
+Ingestion tasks for NASA FIRMS data.
 """
 
 import logging
-import os
-from datetime import datetime
+from datetime import datetime, timezone
+
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
@@ -12,76 +12,72 @@ logger = logging.getLogger(__name__)
 
 @shared_task(
     bind=True,
-    name='workers.tasks.ingestion.download_firms_daily',
-    queue='ingestion',
+    name="workers.tasks.ingestion.download_firms_daily",
+    queue="ingestion",
     max_retries=3,
 )
 def download_firms_daily(self, days: int = 2, dry_run: bool = False):
     """
-    Descarga datos diarios de NASA FIRMS (VIIRS) para Argentina.
-    Se ejecuta automaticamente a las 00:00 UTC via Celery Beat.
+    Execute real incremental FIRMS ingestion pipeline.
 
-    Retorna:
-        dict: {
-            'success': bool,
-            'records_inserted': int,
-            'duplicates_found': int,
-            'total_filtered': int,
-            'timestamp': str
-        }
+    Returns:
+        dict with ingestion metrics and basic traceability fields.
     """
     try:
-        logger.info(f"🔄 Iniciando descarga FIRMS (days={days}, dry_run={dry_run})...")
-        
-        # TODO: Integrate with scripts/load_firms_incremental.py
-        # For now, return a stub result to avoid circular imports
+        logger.info("Starting FIRMS ingestion (days=%s, dry_run=%s)", days, dry_run)
+
+        # Lazy import keeps worker module import-time lightweight.
+        from scripts.load_firms_incremental import run_incremental_pipeline
+
+        pipeline_result = run_incremental_pipeline(days=days, dry_run=dry_run)
+        if not isinstance(pipeline_result, dict):
+            raise RuntimeError(
+                "run_incremental_pipeline must return a dict with ingestion metrics"
+            )
+
         result = {
-            'success': True,
-            'records_inserted': 0,
-            'duplicates_found': 0,
-            'total_filtered': 0,
-            'timestamp': datetime.utcnow().isoformat(),
-            'note': 'Stub implementation - integrate with load_firms_incremental.py'
+            "success": bool(pipeline_result.get("success", True)),
+            "records_inserted": int(pipeline_result.get("records_inserted", 0)),
+            "duplicates_found": int(pipeline_result.get("duplicates_found", 0)),
+            "total_filtered": int(pipeline_result.get("total_filtered", 0)),
+            "events_created": int(pipeline_result.get("events_created", 0)),
+            "areas_calculated": int(pipeline_result.get("areas_calculated", 0)),
+            "intersections": int(pipeline_result.get("intersections", 0)),
+            "dry_run": bool(dry_run),
+            "source": "scripts.load_firms_incremental.run_incremental_pipeline",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        
-        logger.info(f"✅ Descarga completada: {result}")
+
+        logger.info("FIRMS ingestion finished: %s", result)
         return result
-        
+
     except Exception as exc:
-        logger.error(f"❌ Error en descarga FIRMS: {exc}")
-        # Retry exponencial
+        logger.error("FIRMS ingestion failed: %s", exc)
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
 
 
 @shared_task(
-    name='workers.tasks.ingestion.process_firms_batch',
+    name="workers.tasks.ingestion.process_firms_batch",
     bind=True,
 )
 def process_firms_batch(self, csv_data, batch_id):
     """
-    Procesa un lote de detecciones FIRMS.
-    
-    Args:
-        csv_data: Contenido CSV del FIRMS
-        batch_id: ID unico del lote
-    
-    Retorna:
-        dict con resultados de procesamiento
+    Process a FIRMS batch payload.
+
+    This task remains a lightweight placeholder for future per-batch logic.
     """
     try:
-        logger.info(f"📦 Procesando lote {batch_id}...")
-        
-        # Aqui va parsing de CSV, filtrado de calidad, etc.
-        # Stub por ahora
+        logger.info("Processing FIRMS batch %s", batch_id)
+
         processed = {
-            'batch_id': batch_id,
-            'total_records': 0,
-            'valid_records': 0,
-            'filtered_out': 0,
+            "batch_id": batch_id,
+            "total_records": 0,
+            "valid_records": 0,
+            "filtered_out": 0,
         }
-        
+
         return processed
-        
+
     except Exception as exc:
-        logger.error(f"Error procesando lote {batch_id}: {exc}")
+        logger.error("Failed processing FIRMS batch %s: %s", batch_id, exc)
         raise self.retry(exc=exc, countdown=30)
