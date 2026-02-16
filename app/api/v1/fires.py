@@ -66,6 +66,7 @@ from app.services.supabase_auth import (
 )
 from app.services.export_service import ExportService
 from app.services.fire_service import FireFilterParams, FireService
+from app.services.imagery_service import resolve_carousel_home_limit
 
 router = APIRouter()
 filters_router = APIRouter()
@@ -209,12 +210,17 @@ def list_fires(
     description="Retorna incendios activos y extinguidos recientes con thumbnails generados (slides_data).",
 )
 def list_active_fires_for_home(
-    limit: int = Query(
-        20, ge=1, le=50, description="Maximo de incendios para Home"
+    limit: Optional[int] = Query(
+        None,
+        ge=1,
+        le=50,
+        description="Maximo de incendios para Home (default: carousel_home_limit)",
     ),
+    db: Session = Depends(deps.get_db),
     service: FireService = Depends(get_fire_service),
 ) -> FireListResponse:
-    return service.list_active_with_thumbnails(limit)
+    effective_limit = resolve_carousel_home_limit(db, override=limit)
+    return service.list_active_with_thumbnails(effective_limit)
 
 
 @router.get(
