@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ArrowRight, Trees } from 'lucide-react'
+import { AlertTriangle, ArrowRight, RefreshCcw, Trees } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/context/LanguageContext'
@@ -62,13 +62,13 @@ export default function HomePage() {
   }, [])
 
   // 1. Cargar episodios activos (siempre)
-  const { data: activeData, isLoading: loadingActive } = useEpisodesByMode('active', DEFAULT_LIMIT)
+  const { data: activeData, isLoading: loadingActive, isError: errorActive, refetch: refetchActive } = useEpisodesByMode('active', DEFAULT_LIMIT)
   const activeEpisodes = activeData?.episodes ?? []
 
   // 2. Cargar recientes SOLO si el usuario los pide O si no hay activos
   //    (Lazy loading para evitar doble request inicial)
   const enableRecent = showRecents || (activeEpisodes.length === 0 && !loadingActive)
-  const { data: recentData, isLoading: loadingRecent } = useEpisodesByMode(
+  const { data: recentData, isLoading: loadingRecent, isError: errorRecent, refetch: refetchRecent } = useEpisodesByMode(
     'recent',
     DEFAULT_LIMIT,
     enableRecent
@@ -77,6 +77,7 @@ export default function HomePage() {
 
   // Loading es true si cargamos activos O (estamos cargando recientes explícitamente)
   const isLoading = loadingActive || (enableRecent && loadingRecent)
+  const isError = errorActive || (enableRecent && errorRecent)
 
   const displayEpisodes = useMemo(() => {
     // Si no hay activos, mostrar recientes (fallback)
@@ -180,9 +181,36 @@ export default function HomePage() {
         </div>
 
         <div ref={gridRef} className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {(!gridVisible || isLoading) && <FireCardSkeleton />}
+          {isError && !isLoading && (
+            <div className="col-span-full rounded-lg border border-destructive/50 bg-destructive/10 p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 shrink-0 text-destructive" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-destructive">
+                    {t('fireLoadError')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('fireLoadErrorDetail')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    refetchActive()
+                    if (enableRecent) refetchRecent()
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-destructive/20 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/30 transition-colors"
+                >
+                  <RefreshCcw className="h-3.5 w-3.5" />
+                  {t('retry')}
+                </button>
+              </div>
+            </div>
+          )}
+          {(!gridVisible || isLoading) && !isError && <FireCardSkeleton />}
           {gridVisible &&
             !isLoading &&
+            !isError &&
             filteredEpisodes.map((episode) => (
               <Suspense key={episode.id} fallback={<FireCardSkeleton />}>
                 <FireCard key={episode.id} fire={episode} slideStage={slideStage} />

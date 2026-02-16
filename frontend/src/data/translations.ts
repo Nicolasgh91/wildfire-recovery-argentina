@@ -89,6 +89,8 @@ export const translations = {
     urgentFires: 'Incendios Urgentes',
     recentFiresToggle: 'Ver recientes',
     recentFiresEmpty: 'No hay incendios activos ni recientes en los últimos 60 días.',
+    fireLoadError: 'Error al cargar incendios',
+    fireLoadErrorDetail: 'No pudimos obtener los datos. Verificá tu conexión e intentá de nuevo.',
 
     // Fire Detail
     reliabilityScore: 'Puntuación de Confiabilidad',
@@ -735,6 +737,8 @@ export const translations = {
     urgentFires: 'Urgent Fires',
     recentFiresToggle: 'Show recent',
     recentFiresEmpty: 'No active or recent fires in the last 60 days.',
+    fireLoadError: 'Error loading fires',
+    fireLoadErrorDetail: 'Could not fetch data. Check your connection and try again.',
 
     // Fire Detail
     reliabilityScore: 'Reliability Score',

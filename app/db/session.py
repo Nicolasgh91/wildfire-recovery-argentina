@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.core.config import settings
 
 _engine_lock = Lock()
+_session_factory_lock = Lock()
 _engine: Engine | None = None
 _session_factory: sessionmaker | None = None
 
@@ -54,7 +55,7 @@ def _get_session_factory() -> sessionmaker:
     if _session_factory is not None:
         return _session_factory
 
-    with _engine_lock:
+    with _session_factory_lock:
         if _session_factory is None:
             _session_factory = sessionmaker(
                 autocommit=False,

@@ -1,4 +1,6 @@
+import logging
 import math
+import time
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
@@ -18,6 +20,8 @@ from app.schemas.episode import (
     FireEpisodeListResponse,
 )
 from app.services.imagery_service import resolve_carousel_home_limit
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -150,7 +154,9 @@ def list_fire_episodes(
     if status:
         query = query.filter(FireEpisode.status == status)
 
+    t0 = time.monotonic()
     total = query.count()
+    t_count = time.monotonic() - t0
 
     if mode_value == "recent":
         query = query.order_by(
@@ -170,13 +176,20 @@ def list_fire_episodes(
         sort_field = sort_map.get(sort_by, FireEpisode.gee_priority)
         query = query.order_by(desc(sort_field) if sort_desc else asc(sort_field))
 
+    t1 = time.monotonic()
     episodes = query.offset((page - 1) * page_size).limit(page_size).all()
+    t_fetch = time.monotonic() - t1
+
+    t2 = time.monotonic()
     representative_map = _load_representative_event_map(
         db, [episode.id for episode in episodes]
     )
+    t_rep = time.monotonic() - t2
+
     now = datetime.now(timezone.utc)
     recent_cutoff = now - timedelta(days=RECENT_DAYS)
 
+    t3 = time.monotonic()
     items: List[FireEpisodeListItem] = []
     for episode in episodes:
         end = episode.end_date or episode.last_seen_at
@@ -217,7 +230,20 @@ def list_fire_episodes(
             )
         )
 
+    t_serial = time.monotonic() - t3
+
     total_pages = math.ceil(total / page_size) if page_size else 1
+
+    logger.info(
+        "list_fire_episodes mode=%s page=%d count_ms=%.1f fetch_ms=%.1f rep_ms=%.1f serial_ms=%.1f total=%d",
+        mode_value,
+        page,
+        t_count * 1000,
+        t_fetch * 1000,
+        t_rep * 1000,
+        t_serial * 1000,
+        total,
+    )
 
     return FireEpisodeListResponse(
         total=total,
