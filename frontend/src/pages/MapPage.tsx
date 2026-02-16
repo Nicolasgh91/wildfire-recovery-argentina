@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
-import { Map, List, X } from 'lucide-react'
+import { AlertTriangle, Map, List, RefreshCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -30,9 +30,10 @@ export default function MapPage() {
   const navigate = useNavigate()
   const [selectedFire, setSelectedFire] = useState<FireMapItem | null>(null)
   const [showSidebar, setShowSidebar] = useState(true)
-  const { data: activeData, isLoading: loadingActive } = useEpisodesByMode('active', 100)
-  const { data: recentData, isLoading: loadingRecent } = useEpisodesByMode('recent', 100)
+  const { data: activeData, isLoading: loadingActive, isError: errorActive, refetch: refetchActive } = useEpisodesByMode('active', 100)
+  const { data: recentData, isLoading: loadingRecent, isError: errorRecent, refetch: refetchRecent } = useEpisodesByMode('recent', 100)
   const isLoading = loadingActive || loadingRecent
+  const isError = errorActive || errorRecent
 
   const mapItems = useMemo(() => {
     const activeEpisodes = activeData?.episodes ?? []
@@ -163,7 +164,28 @@ export default function MapPage() {
                 {isLoading && (
                   <div className="text-sm text-muted-foreground">{t('loading')}</div>
                 )}
-                {!isLoading && mapItems.length === 0 && (
+                {isError && !isLoading && (
+                  <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+                      <p className="flex-1 text-xs text-destructive">
+                        {t('fireLoadErrorDetail')}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          refetchActive()
+                          refetchRecent()
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md bg-destructive/20 px-2 py-1 text-xs font-medium text-destructive hover:bg-destructive/30 transition-colors"
+                      >
+                        <RefreshCcw className="h-3 w-3" />
+                        {t('retry')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!isLoading && !isError && mapItems.length === 0 && (
                   <div className="text-sm text-muted-foreground">{t('recentFiresEmpty')}</div>
                 )}
                 {mapItems.map((fire) => (
