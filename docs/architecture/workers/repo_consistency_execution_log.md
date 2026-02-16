@@ -66,6 +66,9 @@ Rama: `chore/repo-consistency-pr1-pr3`
 ### PR1 - Bootstrap Celery + colisiones
 | Timestamp | Commit | Accion | Comandos | Resultado | Notas |
 |---|---|---|---|---|---|
+| 2026-02-16T00:24:11-03:00 | `f6b9993` | PR1-C1: lazy DB bootstrap + validacion DATABASE_URL en worker startup | `python -c import celery_app`; `pytest tests/unit/test_db_session_bootstrap.py tests/unit/test_celery_registry_smoke.py tests/unit/test_celery_runtime.py tests/unit/test_health_celery.py -q` | Parcial (import OK, pytest gate parcial OK) | `tests/unit/test_db_session_bootstrap.py` y `tests/unit/test_celery_registry_smoke.py` todavia no existian en C1; se ejecuto subset existente y se registro desvio. |
+| 2026-02-16T00:27:48-03:00 | `8d86202` | PR1-C2: eliminacion de modulos legacy con task names colisionados | `python -c import celery_app`; `pytest tests/unit/test_celery_runtime.py tests/unit/test_health_celery.py -q` | OK | Sin referencias residuales a `app/services/clustering.py` ni `app/services/destruction.py`. |
+| 2026-02-16T00:29:30-03:00 | `ac58546` | PR1-C3: smoke tests de registry Celery y bootstrap DB | `python -c import celery_app`; `pytest tests/unit/test_db_session_bootstrap.py tests/unit/test_celery_registry_smoke.py tests/unit/test_celery_runtime.py tests/unit/test_health_celery.py -q` | OK | Gate PR1 completo en verde. FG-EP-CHECK-03 y FG-EP-CHECK-04 cerrados. |
 
 ### PR2 - Parametros canonicos + ingesta real
 | Timestamp | Commit | Accion | Comandos | Resultado | Notas |
@@ -78,10 +81,15 @@ Rama: `chore/repo-consistency-pr1-pr3`
 ## Registro de commits
 | PR | Commit | Resumen |
 |---|---|---|
+| Stage0 | `08afcc3` | Inicializacion de execution log + checklist operativo |
+| PR1 | `f6b9993` | Lazy init DB/session + validacion explicita de `DATABASE_URL` para workers |
+| PR1 | `8d86202` | Eliminacion de modulos legacy con task names duplicados |
+| PR1 | `ac58546` | Nuevos smoke tests para registry Celery y bootstrap DB |
 
 ## Desvios respecto al audit/fix plan
 | Timestamp | Que paso | Causa raiz probable | Decision y justificacion | Archivos afectados |
 |---|---|---|---|---|
+| 2026-02-16T00:24:11-03:00 | Gate PR1 del commit C1 referenciaba tests aun no creados (`test_db_session_bootstrap`, `test_celery_registry_smoke`) | El gate del PR esta definido para el estado completo PR1, pero C1 es un commit atomico previo a C3 donde se agregan esos tests | Ejecutar de inmediato el smoke import y subset existente (`test_celery_runtime`, `test_health_celery`) para validar C1; re-ejecutar gate completo al cerrar PR1 | `temp_files/repo_consistency/pr1-c1-import.log`, `temp_files/repo_consistency/pr1-c1-pytest.log`, `temp_files/repo_consistency/pr1-c1-pytest-existing.log` |
 
 ## Hallazgos nuevos y resolucion
 | Timestamp | Hallazgo | Impacto | Resolucion |
