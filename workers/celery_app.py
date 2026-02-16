@@ -14,6 +14,7 @@ from app.core.celery_runtime import (
     resolve_celery_broker_url,
     resolve_celery_result_backend,
 )
+from app.db.session import ensure_database_url_configured
 from app.workers.dlq import enqueue_failure
 
 class DlqTask(Task):
@@ -48,6 +49,13 @@ class DlqTask(Task):
         enqueue_failure(payload)
 
         return super().on_failure(exc, task_id, args, kwargs, einfo)
+
+
+def _validate_worker_runtime_configuration() -> None:
+    ensure_database_url_configured(context="Celery worker startup")
+
+
+_validate_worker_runtime_configuration()
 
 
 # Inicializar app Celery
