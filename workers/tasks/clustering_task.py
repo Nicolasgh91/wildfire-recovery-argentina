@@ -5,7 +5,7 @@ Episode clustering task (UC-F13).
 import argparse
 import json
 import logging
-from celery import shared_task
+from celery import chain, shared_task
 
 from sqlalchemy import text
 from app.db.session import SessionLocal
@@ -37,6 +37,50 @@ def cluster_fire_episodes(self, days_back: int = 90, max_events: int = 5000):
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
     finally:
         db.close()
+
+
+@celery_app.task(
+    bind=True,
+    name="workers.tasks.clustering_task.cluster_fire_episodes_pipeline",
+    queue="clustering",
+    max_retries=3,
+)
+def cluster_fire_episodes_pipeline(
+    self,
+    days_back: int = 90,
+    max_events: int = 5000,
+    geo_lookback_hours: int | None = None,
+):
+    """
+    Enqueue non-blocking post-clustering pipeline using Celery canvas.
+
+    Chain:
+      1) cluster_fire_episodes
+      2) geo_enrichment.enrich_recent_fire_events (immutable signature)
+    """
+    from workers.tasks.geo_enrichment import enrich_recent_fire_events
+
+    effective_geo_lookback = (
+        int(geo_lookback_hours)
+        if geo_lookback_hours is not None
+        else max(int(days_back) * 24, 24)
+    )
+
+    workflow = chain(
+        cluster_fire_episodes.s(days_back=days_back, max_events=max_events),
+        enrich_recent_fire_events.si(
+            lookback_hours=effective_geo_lookback,
+            max_events=max_events,
+        ),
+    )
+    async_result = workflow.apply_async()
+    return {
+        "success": True,
+        "workflow_id": async_result.id,
+        "days_back": days_back,
+        "max_events": max_events,
+        "geo_lookback_hours": effective_geo_lookback,
+    }
 
 
 @shared_task(name="workers.tasks.clustering_task.recluster_episode", bind=True)

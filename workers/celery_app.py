@@ -67,6 +67,7 @@ celery_app = Celery(
         'workers.tasks.ingestion',
         'workers.tasks.clustering',
         'workers.tasks.clustering_task',
+        'workers.tasks.geo_enrichment',
         'workers.tasks.episode_merge_task',
         'workers.tasks.carousel_task',
         'workers.tasks.closure_report_task',
@@ -94,6 +95,8 @@ celery_app.conf.update(
         'workers.tasks.ingestion.download_firms_daily': {'queue': 'ingestion'},
         'workers.tasks.clustering.cluster_detections': {'queue': 'clustering'},
         'workers.tasks.clustering_task.cluster_fire_episodes': {'queue': 'clustering'},
+        'workers.tasks.clustering_task.cluster_fire_episodes_pipeline': {'queue': 'clustering'},
+        'workers.tasks.geo_enrichment.enrich_recent_fire_events': {'queue': 'analysis'},
         'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
         'workers.tasks.closure_report_task.generate_closure_reports': {'queue': 'analysis'},
         'workers.tasks.exploration_hd_task.generate_exploration_hd': {'queue': 'analysis'},
@@ -123,9 +126,9 @@ celery_app.conf.update(
             'options': {'queue': 'clustering'}
         },
         'cluster-episodes-daily': {
-            'task': 'workers.tasks.clustering_task.cluster_fire_episodes',
+            'task': 'workers.tasks.clustering_task.cluster_fire_episodes_pipeline',
             'schedule': crontab(hour=2, minute=0),  # 02:00 UTC
-            'kwargs': {'days_back': 90, 'max_events': 5000},
+            'kwargs': {'days_back': 90, 'max_events': 5000, 'geo_lookback_hours': 96},
             'options': {'queue': 'clustering'}
         },
         'carousel-daily': {
