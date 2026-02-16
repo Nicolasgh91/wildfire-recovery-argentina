@@ -119,3 +119,29 @@ Rama: `chore/repo-consistency-pr1-pr3`
 | 2026-02-16T00:52:00-03:00 | Incompatibilidad entre formatter PII y logging con argumento `dict` en task de ingestion | Fallo runtime en `download_firms_daily` durante tests (`TypeError`) | Logging final normalizado a string para evitar expansion de keys; test unitario de wrapper pasa y gate PR2 completo en verde |
 | 2026-02-16T00:52:30-03:00 | Test de idempotencia usaba `legacy_hash` no equivalente al fallback SQL real | Falso negativo: segunda corrida insertaba duplicado en modo sin `detection_hash` | Test actualizado para construir `legacy_hash` con mismo contrato que pipeline/sql; idempotencia validada |
 | 2026-02-16T01:24:50-03:00 | Logging de resultado `dict` en `geo_enrichment` reprodujo el mismo fallo del formatter PII | Excepcion en task y retry innecesario durante tests de PR3 | Logging final de task convertido a string interpolado y cobertura unitaria agregada en `test_geo_enrichment_task.py` |
+
+## Cierre final (revalidacion post-documentacion)
+- Timestamp: 2026-02-16T01:35:00-03:00 aprox.
+- Objetivo: confirmar gates PR1/PR2/PR3 en estado final de rama tras commits documentales.
+
+### Comandos ejecutados
+- PR1 gate:
+  - `./.venv/Scripts/python.exe -c "from workers.celery_app import celery_app; celery_app.loader.import_default_modules(); print('ok')"`
+  - `./.venv/Scripts/python.exe -m pytest tests/unit/test_db_session_bootstrap.py tests/unit/test_celery_registry_smoke.py tests/unit/test_celery_runtime.py tests/unit/test_health_celery.py -q`
+- PR2 gate:
+  - `./.venv/Scripts/python.exe -m pytest tests/unit/test_clustering_service.py tests/integration/test_fg_ep_22_system_parameters.py tests/unit/test_ingestion_task.py tests/integration/test_firms_ingestion_idempotency.py -q`
+- PR3 gate:
+  - `./.venv/Scripts/python.exe -m pytest tests/unit/test_episode_status_resolution.py tests/unit/test_fire_status_canonical.py tests/unit/test_carousel_limit_canonical.py tests/integration/test_carousel_home_limit_contract.py tests/unit/test_geo_enrichment_task.py tests/unit/test_destruction_canvas.py tests/unit/test_recovery_canvas.py -q`
+  - `./.venv/Scripts/python.exe -c "from workers.celery_app import celery_app; celery_app.loader.import_default_modules(); print('ok')"`
+
+### Resultado
+- PR1 gate: OK (`10 passed`), smoke import Celery `ok`.
+- PR2 gate: OK (`7 passed`).
+- PR3 gate: OK (`18 passed`), smoke import Celery `ok`.
+
+### Evidencia
+- `temp_files/repo_consistency/pr1-final-import.log`
+- `temp_files/repo_consistency/pr1-final-pytest.log`
+- `temp_files/repo_consistency/pr2-final-pytest.log`
+- `temp_files/repo_consistency/pr3-final-pytest.log`
+- `temp_files/repo_consistency/pr3-final-import.log`
