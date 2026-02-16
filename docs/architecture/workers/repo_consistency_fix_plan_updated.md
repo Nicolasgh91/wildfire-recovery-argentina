@@ -118,10 +118,10 @@ Objetivo: cerrar hallazgos FG-EP-CHECK con bajo riesgo y validación incremental
 
 ## Checklist global de aceptación
 
-- [ ] Hallazgos bloqueantes y alta severidad cerrados en PR1/PR2.
-- [ ] Todos los PRs incluyen tests nuevos o ajustados y CI en verde.
-- [ ] Documentación técnica actualizada (flujo, parámetros, colas, tasks).
-- [ ] Smoke de Celery y pipeline mínimo pasan en entorno local/CI.
+- [x] Hallazgos bloqueantes y alta severidad cerrados en PR1/PR2.
+- [x] Todos los PRs incluyen tests nuevos o ajustados y CI en verde.
+- [x] Documentacion tecnica actualizada (flujo, parametros, colas, tasks).
+- [x] Smoke de Celery y pipeline minimo pasan en entorno local/CI.
 - [ ] Se define dueño operativo de parámetros canónicos y del schedule de enriquecimientos.
 
 ---
@@ -170,10 +170,13 @@ Estas mejoras aparecen como observaciones en el audit (performance/robustez/obse
 - [x] Hallazgos cerrados: `FG-EP-CHECK-01`, `FG-EP-CHECK-05`.
 - Nota: se aplico ajuste minimo de logging en `workers/tasks/ingestion.py` para compatibilidad con formatter PII del repo (sin cambio de alcance funcional del plan).
 
-### PR3 (pendiente)
-- [ ] Estados legacy removidos de runtime (`controlled`/`extinguished`).
-- [ ] Limite canonico de carrusel unificado (generacion + endpoints).
-- [ ] Task de geo-enrichment incremental integrada post-clustering.
-- [ ] Reemplazo de `.get()` bloqueante por canvas Celery.
-- [ ] Tests de estado/carrusel/geo/orquestacion.
-- [ ] Hallazgos a cerrar: `FG-EP-CHECK-02`, `FG-EP-CHECK-06`, `FG-EP-CHECK-07`, `FG-EP-CHECK-08`.
+### PR3 (completado)
+- [x] Estados legacy removidos de runtime (controlled/extinguished).
+- [x] Limite canonico de carrusel unificado (generacion + endpoints).
+- [x] Task de geo-enrichment incremental integrada post-clustering.
+- [x] Reemplazo de .get() bloqueante por canvas Celery.
+- [x] Tests de estado/carrusel/geo/orquestacion.
+- [x] Hallazgos cerrados: FG-EP-CHECK-02, FG-EP-CHECK-06, FG-EP-CHECK-07, FG-EP-CHECK-08.
+- Nota: se aplico ajuste minimo de logging en workers/tasks/geo_enrichment.py por compatibilidad con formatter PII (sin ampliar alcance funcional del plan).
+
+
