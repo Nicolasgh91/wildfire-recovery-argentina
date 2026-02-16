@@ -16,6 +16,12 @@ const faqItems = [
   { question: 'faqQ3', answer: 'faqA3' },
   { question: 'faqQ4', answer: 'faqA4' },
   { question: 'faqQ5', answer: 'faqA5' },
+  { question: 'faqQ6', answer: 'faqA6' },
+  { question: 'faqQ7', answer: 'faqA7' },
+  { question: 'faqQ8', answer: 'faqA8' },
+  { question: 'faqQ9', answer: 'faqA9' },
+  { question: 'faqQ10', answer: 'faqA10' },
+  { question: 'faqQ11', answer: 'faqA11' },
 ]
 
 export default function FaqPage() {

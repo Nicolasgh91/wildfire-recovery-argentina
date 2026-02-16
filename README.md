@@ -1,6 +1,6 @@
-# 🌲 ForestGuard
+# ForestGuard
 
-**Plataforma de inteligencia geoespacial para la fiscalización legal y monitoreo de recuperación de zonas afectadas por incendios forestales en Argentina.**
+**Plataforma full-stack de inteligencia geoespacial que centraliza y expone de forma transparente datos satelitales públicos dispersos sobre incendios forestales en Argentina.**
 
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com)
@@ -14,66 +14,88 @@
 
 ---
 
-## 📋 Tabla de contenidos
+## Tabla de contenidos
 
-- [Descripción](#-descripción)
-- [Características](#-características)
-- [Arquitectura](#-arquitectura)
-- [Stack tecnológico](#-stack-tecnológico)
-- [Requisitos previos](#-requisitos-previos)
-- [Instalación](#-instalación)
-- [Configuración](#-configuración)
-- [Uso](#-uso)
-- [API Reference](#-api-reference)
-- [Casos de uso](#-casos-de-uso)
-- [Roadmap](#-roadmap)
-- [Contribución](#-contribución)
-- [Licencia](#-licencia)
-
----
-
-## 🎯 Descripción
-
-ForestGuard transforma datos satelitales (NASA FIRMS, Sentinel-2/Google Earth Engine) en **evidencia legal verificable** y reportes auditables para el cumplimiento de la **Ley 26.815** (Art. 22 bis) de Argentina, que establece prohibiciones de uso del suelo de 30 a 60 años en zonas afectadas por incendios forestales.
-
-### ¿Por qué ForestGuard?
-
-- 🔥 **+35,000 incendios** registrados en Argentina entre 2015-2026
-- ⚖️ **Vacío de fiscalización** en la aplicación de la Ley 26.815
-- 🛰️ **Datos satelitales infrautilizados** para evidencia legal
-- 📊 **Falta de herramientas** accesibles para ONGs, fiscalías y ciudadanos
+- [Sobre este proyecto](#sobre-este-proyecto)
+- [Qué demuestra este proyecto](#qué-demuestra-este-proyecto)
+- [Qué hace ForestGuard](#qué-hace-forestguard)
+- [Características](#características)
+- [Arquitectura](#arquitectura)
+- [Stack tecnológico](#stack-tecnológico)
+- [Requisitos previos](#requisitos-previos)
+- [Instalación](#instalación)
+- [Configuración](#configuración)
+- [Uso](#uso)
+- [API Reference](#api-reference)
+- [Casos de uso](#casos-de-uso)
+- [Roadmap](#roadmap)
+- [Qué aprendí construyendo esto](#qué-aprendí-construyendo-esto)
+- [Contribución](#contribución)
+- [Licencia](#licencia)
 
 ---
 
-## ✨ Características
+## Sobre este proyecto
+
+ForestGuard es mi primera aplicación full-stack completa y mi primera API diseñada y construida integralmente. Es un proyecto de aprendizaje aplicado que está desplegado y corriendo en producción sobre infraestructura de costo cero.
+
+La plataforma nació de una pregunta concreta: los datos satelitales sobre incendios forestales en Argentina existen y son públicos, pero están dispersos en múltiples APIs, formatos y servicios que requieren conocimiento técnico para acceder. No existía una herramienta unificada que permitiera a un ciudadano común explorar esa información de forma accesible.
+
+ForestGuard resuelve eso: ingiere datos de NASA FIRMS, procesa imágenes de Sentinel-2 vía Google Earth Engine, integra datos climáticos de Open-Meteo, y presenta todo a través de una interfaz que permite investigar sin conocimientos técnicos previos.
+
+---
+
+## Qué demuestra este proyecto
+
+- **Autonomía técnica**: Desarrollado íntegramente por una sola persona — todas las decisiones de arquitectura, infraestructura, modelado de datos y despliegue fueron tomadas y ejecutadas de forma independiente.
+- **Capacidad arquitectónica**: Backend API (FastAPI) + workers asíncronos (Celery) + base de datos geoespacial (PostGIS + H3 indexing) + circuit breakers para servicios externos + storage distribuido.
+- **Pensamiento sistémico**: El flujo completo va desde la ingesta automática de datos satelitales (NASA FIRMS cada 12h) hasta la generación de PDFs con cadena de custodia digital y hash SHA-256, pasando por clustering espacio-temporal, procesamiento de imágenes y análisis de vegetación.
+- **Decisiones de costo cero**: Toda la infraestructura opera sobre free tiers — Oracle Cloud Free Tier (VM ARM64), Supabase Free Tier (PostgreSQL + Auth), Google Earth Engine Free Tier (procesamiento satelital), sin comprometer funcionalidad ni disponibilidad.
+
+---
+
+## Qué hace ForestGuard
+
+ForestGuard centraliza datos satelitales públicos de múltiples fuentes (NASA FIRMS, Sentinel-2/Google Earth Engine, Open-Meteo) y los transforma en información estructurada, verificable y accesible para cualquier persona.
+
+### El problema que resuelve
+
+- +35,000 incendios registrados en Argentina entre 2015-2026
+- Datos satelitales públicos dispersos en múltiples APIs y formatos incompatibles
+- Sin herramienta unificada que permita a ciudadanos, ONGs o investigadores explorar esta información
+- La Ley 26.815 establece restricciones de uso del suelo en zonas afectadas, pero no existía una forma accesible de consultar si un terreno está alcanzado
+
+---
+
+## Características
 
 ### Monitoreo en tiempo real
-- 🛰️ Integración con NASA FIRMS (VIIRS/MODIS) cada 12 horas
-- 🗺️ Visualización de incendios activos en mapa interactivo
-- 📍 Clustering espacial inteligente con índices H3
-- 🔔 Alertas por proximidad a áreas protegidas
+- Integración con NASA FIRMS (VIIRS/MODIS) cada 12 horas
+- Visualización de incendios activos en mapa interactivo
+- Clustering espacial inteligente con índices H3
+- Alertas por proximidad a áreas protegidas
 
-### Fiscalización legal
-- ⚖️ Auditoría de uso del suelo con cálculo automático de prohibiciones
-- 📜 Certificados legales verificables con hash SHA-256 y QR
-- 📋 Reportes judiciales con cadena de custodia digital
-- 🔐 Trazabilidad completa de evidencia
+### Verificación de terreno
+- Verificación de uso del suelo con consulta de restricciones (Ley 26.815)
+- Certificados verificables con hash SHA-256 y QR
+- Reportes técnicos con cadena de custodia digital
+- Trazabilidad completa de evidencia
 
 ### Análisis y reportes
-- 📈 Dashboard histórico con filtros avanzados y exportación
-- 🔄 Análisis de recurrencia y tendencias con forecasting
-- 🌱 Monitoreo de recuperación de vegetación (NDVI/NBR)
-- 📊 Estadísticas públicas agregadas
+- Dashboard histórico con filtros avanzados y exportación CSV/GeoJSON
+- Análisis de recurrencia y tendencias con forecasting
+- Monitoreo de recuperación de vegetación (NDVI/NBR)
+- Estadísticas públicas agregadas
 
 ### Evidencia satelital
-- 🖼️ Imágenes Sentinel-2 con múltiples bandas (RGB, SWIR, NBR)
-- 📸 Carrusel de imágenes pre/post incendio
-- 🔬 Thumbnails optimizados + HD on-demand
-- 📍 Metadata reproducible para verificación independiente
+- Imágenes Sentinel-2 con múltiples bandas (RGB, SWIR, NBR)
+- Carrusel de imágenes pre/post incendio
+- Thumbnails optimizados + HD on-demand
+- Metadata reproducible para verificación independiente
 
 ---
 
-## 🏗️ Arquitectura
+## Arquitectura
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -116,54 +138,65 @@ ForestGuard transforma datos satelitales (NASA FIRMS, Sentinel-2/Google Earth En
 |------------|------------|-----------|
 | **Frontend** | React + Vite + TailwindCSS | UI responsive con mapas interactivos |
 | **API** | FastAPI + Uvicorn | Endpoints REST con auth y rate limiting |
-| **Workers** | Celery + Redis | Procesamiento asíncrono (GEE, PDFs) |
-| **Database** | PostgreSQL + PostGIS | Almacenamiento geoespacial |
-| **Auth** | Supabase Auth | Autenticación y RLS |
-| **Storage** | Google Cloud Storage | Imágenes y reportes |
+| **Workers** | Celery + Redis | Procesamiento asíncrono (ingesta FIRMS, clustering, imágenes GEE, PDFs) |
+| **Database** | PostgreSQL + PostGIS | Almacenamiento geoespacial con H3 indexing |
+| **Auth** | Supabase Auth | Autenticación JWT y Row Level Security |
+| **Storage** | Google Cloud Storage | Imágenes satelitales y reportes PDF |
 | **Edge** | Supabase Edge Functions | Estadísticas públicas |
 
+### Workers especializados
+
+| Queue | Worker | Función |
+|-------|--------|---------|
+| `ingestion` | worker-ingestion | Descarga diaria NASA FIRMS (VIIRS/MODIS) |
+| `clustering` | worker-clustering | ST-DBSCAN espacio-temporal sobre detecciones |
+| `analysis` | worker-analysis | Imágenes GEE, análisis NDVI/NBR, reportes PDF, carrusel |
+
 ---
 
-## 🛠️ Stack tecnológico
+## Stack tecnológico
 
 ### Backend
-- **Python 3.11+** - Lenguaje principal
-- **FastAPI** - Framework web async
-- **Celery** - Task queue distribuida
-- **Redis** - Message broker y cache
-- **SQLAlchemy + GeoAlchemy2** - ORM con soporte geoespacial
-- **Alembic** - Migraciones de base de datos
+- **Python 3.11+** — Lenguaje principal
+- **FastAPI** — Framework web async
+- **Celery** — Task queue distribuida
+- **Redis** — Message broker y cache
+- **SQLAlchemy + GeoAlchemy2** — ORM con soporte geoespacial
+- **Alembic** — Migraciones de base de datos
 
 ### Frontend
-- **React 18** - UI library
-- **Vite** - Build tool
-- **TypeScript** (opcional) - Type safety
-- **TailwindCSS** - Estilos utility-first
-- **Shadcn/UI** - Componentes accesibles
-- **MapLibre GL** - Mapas vectoriales
-- **deck.gl** - Visualización H3
+- **React 19** — UI library
+- **Vite** — Build tool
+- **TypeScript** — Type safety
+- **TailwindCSS** — Estilos utility-first
+- **Shadcn/UI + Radix UI** — Componentes accesibles
+- **Leaflet** — Mapas interactivos
+- **TanStack React Query** — Server state management
+- **i18next** — Internacionalización (ES/EN)
 
 ### Base de datos
-- **PostgreSQL 14+** - Base de datos relacional
-- **PostGIS** - Extensión geoespacial
-- **Supabase** - Backend as a Service
+- **PostgreSQL 14+** — Base de datos relacional
+- **PostGIS** — Extensión geoespacial (Geography columns, ST_Distance, ST_Intersects)
+- **H3** — Indexación espacial hexagonal (resolución 7-9)
+- **Supabase** — Backend as a Service (Auth + RLS + Edge Functions)
 
 ### Servicios externos
-- **NASA FIRMS** - Detección de focos de calor
-- **Google Earth Engine** - Procesamiento de imágenes satelitales
-- **Open-Meteo** - Datos climáticos (ERA5-Land)
-- **MercadoPago** - Procesamiento de pagos (post-MVP)
+- **NASA FIRMS** — Detección de focos de calor (VIIRS/MODIS)
+- **Google Earth Engine** — Procesamiento de imágenes Sentinel-2 (NDVI, NBR, SWIR)
+- **Open-Meteo** — Datos climáticos históricos (ERA5-Land)
+- **MercadoPago** — Procesamiento de pagos (post-MVP)
 
 ### Infraestructura
-- **Docker + Docker Compose** - Containerización
-- **Nginx** - Reverse proxy
-- **Oracle Cloud** - Hosting (VM Ampere/ARM64)
+- **Docker + Docker Compose** — Containerización (API + 3 workers + Redis + Celery Beat + Flower)
+- **Nginx** — Reverse proxy con SSL
+- **Oracle Cloud** — Hosting (VM Ampere ARM64, Free Tier)
+- **Let's Encrypt** — Certificados SSL
 
 ---
 
-## 📦 Requisitos previos
+## Requisitos previos
 
-- **Python** >= 3.x
+- **Python** >= 3.11
 - **Node.js** >= 18
 - **Docker** y **Docker Compose**
 - **PostgreSQL** >= 14 con PostGIS
@@ -173,7 +206,7 @@ ForestGuard transforma datos satelitales (NASA FIRMS, Sentinel-2/Google Earth En
 
 ---
 
-## 🚀 Instalación
+## Instalación
 
 ### 1. Clonar el repositorio
 
@@ -237,7 +270,7 @@ npm run dev
 
 ---
 
-## ⚙️ Configuración
+## Configuración
 
 ### Variables de entorno requeridas
 
@@ -292,7 +325,7 @@ base64 -w 0 credentials.json > credentials_base64.txt
 
 ---
 
-## 📖 Uso
+## Uso
 
 ### Acceder a la aplicación
 
@@ -322,7 +355,7 @@ alembic upgrade head
 
 ---
 
-## 📚 API Reference
+## API Reference
 
 ### Endpoints principales
 
@@ -331,10 +364,10 @@ alembic upgrade head
 | `GET` | `/api/v1/fires` | Listar incendios con filtros | Público |
 | `GET` | `/api/v1/fires/{id}` | Detalle de incendio | Público |
 | `GET` | `/api/v1/fires/stats` | KPIs del dashboard | API Key o JWT |
-| `POST` | `/api/v1/audit/land-use` | Verificación legal de terreno | JWT |
+| `POST` | `/api/v1/audit/land-use` | Verificación de terreno | JWT |
 | `GET` | `/api/v1/quality/fire-event/{id}` | Score de calidad | API Key |
 | `GET` | `/api/v1/analysis/recurrence` | Análisis de recurrencia H3 | API Key |
-| `POST` | `/api/v1/reports/judicial` | Generar reporte judicial | Público (MVP actual) |
+| `POST` | `/api/v1/reports/judicial` | Generar reporte técnico | Público (MVP actual) |
 | `POST` | `/api/v1/contact` | Formulario de contacto | Público |
 | `GET` | `/functions/v1/public-stats` | Estadísticas públicas | Público |
 
@@ -355,7 +388,7 @@ curl -X POST \
      https://api.forestguard.com.ar/api/v1/audit/land-use
 ```
 
-### Ejemplo: Auditoría legal
+### Ejemplo: Verificación de terreno
 
 ```bash
 curl -X POST \
@@ -386,74 +419,69 @@ curl -X POST \
 
 ---
 
-## 🎯 Casos de uso
+## Casos de uso
 
-### UC-F01: Contacto y soporte
-Formulario de contacto con adjuntos (máx 5MB), rate limiting y fallback SMTP
-sincrónico cuando Redis/Celery no está disponible.
+Para documentación detallada de cada caso de uso, ver [docs/use_cases.md](docs/use_cases.md).
 
-**Troubleshooting rápido (UC-F01):**
-- `GET /api/v1/health/celery` debe devolver `healthy` para el camino asíncrono.
-- Si Redis/Celery está degradado, el endpoint usa fallback SMTP en línea.
-- Si el endpoint devuelve `503`, revisar logs de API para `contact_delivery_failed`
-  y validar `SMTP_HOST`/credenciales.
-
-### UC-F02: Estadísticas públicas
-Datos agregados anónimos vía Edge Function con cache HTTP.
-
-### UC-F03: Histórico y dashboard
-Dashboard interactivo con filtros, KPIs, y exportación CSV/GeoJSON.
-
-### UC-F04: Calidad del dato
-Score de confiabilidad ponderado (detecciones 40%, imágenes 20%, clima 20%, independientes 20%).
-
-### UC-F05: Recurrencia y tendencias
-Análisis espacial con índices H3 y forecasting de tendencias.
-
-### UC-F06: Auditoría legal
-Determinación de prohibiciones según Ley 26.815 con evidencia verificable.
-
-### UC-F08: Carrusel satelital
-Thumbnails diarios de incendios activos con priorización inteligente.
-
-### UC-F09: Reportes de cierre
-Comparativas pre/post incendio con cálculo de severidad (dNBR).
-
-### UC-F11: Reportes judiciales
-PDFs con cadena de custodia, hash SHA-256 y QR de verificación.
-
-### UC-F13: Episodios macro
-Clustering de eventos con versionado de parámetros y metadata reproducible.
+| UC | Nombre | Estado | Descripción |
+|----|--------|--------|-------------|
+| UC-F01 | Contacto y soporte | Implementado | Formulario con adjuntos, rate limiting y fallback SMTP sincrónico |
+| UC-F02 | Estadísticas públicas | Implementado | Datos agregados anónimos vía Edge Function con cache HTTP |
+| UC-F03 | Histórico y dashboard | Implementado | Dashboard interactivo con filtros, KPIs y exportación CSV/GeoJSON |
+| UC-F04 | Calidad del dato | Implementado | Score de confiabilidad ponderado (detecciones, imágenes, clima, independientes) |
+| UC-F05 | Recurrencia y tendencias | Implementado | Análisis espacial con índices H3 y forecasting de tendencias |
+| UC-F06 | Verificación de terreno | Implementado | Consulta de restricciones Ley 26.815 con evidencia satelital verificable |
+| UC-F08 | Carrusel satelital | Implementado | Thumbnails diarios de incendios activos con priorización inteligente |
+| UC-F09 | Reportes de cierre | Implementado | Comparativas pre/post incendio con cálculo de severidad (dNBR) |
+| UC-F11 | Reportes técnicos verificables | Implementado | PDFs con cadena de custodia, hash SHA-256 y QR de verificación |
+| UC-F13 | Episodios macro | Implementado | Clustering de eventos con versionado de parámetros y metadata reproducible |
 
 ---
 
-## 🗺️ Roadmap
+## Roadmap
 
-### ✅ Completado (56%)
+### Completado
 - [x] Fase 0: Tablas base (clima, metadata)
 - [x] Fase 1: Modelo de datos (H3, episodios, parámetros)
 - [x] T2.1-T2.5: API endpoints principales
+- [x] T2.6: Verificación de terreno
+- [x] Fase 3: Workers de imágenes (carrusel, thumbnails)
+- [x] Frontend: UI completa con i18n (ES/EN)
 
-### ⏳ En progreso
-- [ ] T2.6: Auditoría legal
-
-### 📅 Próximamente
-- [ ] Fase 3: Workers de imágenes
-- [ ] Fase 4: Reportes PDF
+### En progreso
+- [ ] Fase 4: Reportes PDF (cierre, técnicos)
 - [ ] Fase 5: Testing y observabilidad
 
-### 🔮 Post-MVP
+### Próximamente
 - [ ] UC-F07: Registro de visitantes offline
-- [ ] UC-F10: Certificación legal monetizada
-- [ ] UC-F12: VAE (recuperación de vegetación)
-- [ ] Integración MercadoPago
+- [ ] UC-F10: Certificación monetizada
+- [ ] UC-F12: VAE (detección de cambio de uso del suelo por ML)
+- [ ] Integración MercadoPago completa
 - [ ] App móvil PWA
 
 ---
 
-## 🤝 Contribución
+## Qué aprendí construyendo esto
 
-¡Las contribuciones son bienvenidas! Por favor lee nuestra [guía de contribución](CONTRIBUTING.md).
+- **Async-first architecture**: Diseñar con task queues (Celery) desde el inicio simplifica el manejo de operaciones lentas (GEE tarda 30s-5min por imagen), pero introduce complejidad en monitoreo, retries y dead letter queues. La separación en queues especializadas (ingestion, clustering, analysis) fue una decisión determinante para poder escalar workers de forma independiente.
+
+- **Reproducibilidad satelital**: Las imágenes de Sentinel-2 son ópticas y dependen de las condiciones atmosféricas. Un sistema que depende de ellas necesita manejar progresión de umbrales de nubosidad (10% → 20% → 30% → 50%), fallbacks a fechas alternativas, y comunicar claramente al usuario por qué una imagen puede no estar disponible.
+
+- **Seguridad por defecto con Supabase**: Implementar Row Level Security desde el inicio es una decisión arquitectónica, no una feature. Combinado con validación JWT vía JWKS y separación de service key vs anon key, permite que la base de datos sea el enforcement point de autorización.
+
+- **Optimización bajo restricciones de free tiers**: Oracle Cloud Free Tier (1GB RAM ARM64), Supabase Free (500MB DB), GEE Free (50k requests/day). Estas restricciones forzaron decisiones de diseño reales: connection pooling agresivo, pool_size=5 con max_overflow=10, reciclado de conexiones cada hora, thumbnails optimizados (768x576) en lugar de imágenes full-resolution.
+
+- **H3 para consultas geoespaciales eficientes**: Convertir lat/lon a índices H3 (resolución 8) permite agregar datos espaciales sin joins geográficos costosos. Las materialized views sobre H3 cells hacen que los heatmaps de recurrencia sean consultas simples sobre índices en lugar de operaciones geométricas.
+
+- **Circuit breakers para APIs externas**: Google Earth Engine tiene rate limits estrictos (1 req/s, 50k/día). Implementar circuit breaker con estados open/half-open/closed evita cascadas de failures y permite degradación controlada cuando GEE no responde.
+
+- **Separación service layer / API / workers**: Mantener la lógica de negocio en servicios inyectables (no en routes ni en tasks) permite que el mismo servicio sea invocado desde un endpoint API o desde un worker Celery sin duplicación de código.
+
+---
+
+## Contribución
+
+Las contribuciones son bienvenidas. Por favor lee nuestra [guía de contribución](CONTRIBUTING.md).
 
 ### Proceso
 
@@ -472,32 +500,28 @@ Clustering de eventos con versionado de parámetros y metadata reproducible.
 
 ---
 
-## 📄 Licencia
+## Licencia
 
 Este proyecto está bajo la licencia MIT. Ver [LICENSE](LICENSE) para más detalles.
 
 ---
 
-## Información pública recolectada en esta API
+## Fuentes de datos públicos integrados
 
-- **NASA FIRMS** por los datos de detección de incendios
-- **ESA/Copernicus** por las imágenes Sentinel-2
-- **Google Earth Engine** por el procesamiento satelital
-- **Open-Meteo** por los datos climáticos
-
----
-
-## 📞 Contacto
-
-- **Website**: [forestguard.com.ar](https://forestguard.freedynamicdns.org/docs) (API docs de momento. Web UI en proceso)
-- **Email**: nicolasgabrielh91@gmail.com - Analista Técnico Funcional
-- **Twitter**: [@ForestGuardAR](https://twitter.com/ForestGuardAR)
+- **NASA FIRMS** — Detección de focos de calor (VIIRS/MODIS)
+- **ESA/Copernicus** — Imágenes Sentinel-2 (10m resolución, multibanda)
+- **Google Earth Engine** — Procesamiento y análisis de imágenes satelitales
+- **Open-Meteo** — Datos climáticos históricos (ERA5-Land)
+- **IGN / APN** — Geometrías de áreas protegidas y regiones políticas
 
 ---
 
-<p align="center">
-  Hecho con ❤️ para proteger nuestros bosques
-</p>
+## Contacto
+
+- **Website**: [forestguard.freedynamicdns.org](https://forestguard.freedynamicdns.org)
+- **Email**: nicolasgabrielh91@gmail.com — Analista Técnico Funcional
+
+---
 
 <p align="center">
   <img src="docs/assets/footer-trees.png" alt="Trees" width="600"/>
