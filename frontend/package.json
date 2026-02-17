@@ -14,7 +14,8 @@
     "test:ui": "npx playwright test",
     "test:ui:headed": "npx playwright test --headed",
     "build:analyze": "tsc -b && vite build --mode production",
-    "build:budget": "tsc -b && vite build --mode production && node scripts/check-bundle-budget.mjs"
+    "build:budget": "tsc -b && vite build --mode production && node scripts/check-bundle-budget.mjs",
+    "build:visualize": "VISUALIZE=true tsc -b && VISUALIZE=true vite build --mode production"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -102,6 +103,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
+    "rollup-plugin-visualizer": "^5.14.0",
     "vitest": "^4.0.18"
   },
   "overrides": {

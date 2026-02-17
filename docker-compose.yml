@@ -234,8 +234,12 @@ services:
       dockerfile: Dockerfile
     container_name: forestguard-frontend
     restart: unless-stopped
+    # Runtime memory limit: nginx serving static files needs < 30 MB
+    mem_limit: 64m
     depends_on:
       - api
+    networks:
+      - forestguard
     logging:
       driver: "json-file"
       options:
