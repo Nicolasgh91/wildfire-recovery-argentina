@@ -1,32 +1,25 @@
-# ETAPA 1: Construcción (Build)
-FROM node:20-alpine as build
+# syntax=docker/dockerfile:1.7
 
+FROM node:20-alpine AS deps
 WORKDIR /app
 
-# Copiamos solo el package.json primero para aprovechar el caché de Docker
+# Evita descargar binarios de Cypress durante el build de producción.
+ENV CYPRESS_INSTALL_BINARY=0
+
 COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --include=dev --no-audit --no-fund
 
-# Instalamos dependencias (incluyendo dev dependencies para el build)
-RUN npm ci
-
-# Copiamos el resto del código
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Construimos la app (genera la carpeta /dist)
-RUN npx vite build --mode production || true
+# Build orientado a runtime estático: sin type-check extra ni sourcemaps por defecto.
+ENV NODE_ENV=production
+ENV VITE_BUILD_SOURCEMAP=false
+RUN npm run build:docker
 
-# ETAPA 2: Servidor Web (Production)
-# Usamos una imagen de Nginx súper liviana
-FROM nginx:alpine
-
-# Eliminamos configuración por defecto de nginx
-RUN rm /etc/nginx/conf.d/default.conf
-
-# Copiamos los archivos compilados de la Etapa 1 a la carpeta de Nginx
+FROM nginx:1.27-alpine AS runtime
 COPY --from=build /app/dist /usr/share/nginx/html
-
-# Exponemos el puerto 80 (interno del contenedor)
 EXPOSE 80
-
-# Nginx corre solo en primer plano
 CMD ["nginx", "-g", "daemon off;"]

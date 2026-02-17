@@ -65,7 +65,8 @@ export default defineConfig(async () => {
     },
 
     build: {
-      sourcemap: true,
+      sourcemap: process.env.VITE_BUILD_SOURCEMAP === 'true',
+      minify: 'esbuild',
       chunkSizeWarningLimit: 500,
       rollupOptions: {
         output: {
