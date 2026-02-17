@@ -5,7 +5,9 @@ WORKDIR /app
 
 # Copiamos solo el package.json primero para aprovechar el caché de Docker
 COPY package.json package-lock.json ./
-RUN npm install
+
+# Instalamos dependencias (incluyendo dev dependencies para el build)
+RUN npm ci
 
 # Copiamos el resto del código
 COPY . .
@@ -16,6 +18,9 @@ RUN npm run build
 # ETAPA 2: Servidor Web (Production)
 # Usamos una imagen de Nginx súper liviana
 FROM nginx:alpine
+
+# Eliminamos configuración por defecto de nginx
+RUN rm /etc/nginx/conf.d/default.conf
 
 # Copiamos los archivos compilados de la Etapa 1 a la carpeta de Nginx
 COPY --from=build /app/dist /usr/share/nginx/html

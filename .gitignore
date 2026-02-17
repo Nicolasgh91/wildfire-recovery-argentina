@@ -44,9 +44,10 @@ yarn-error.log*
 debug_output.txt
 test_log.txt
 validation_errors.log
+tests/
 
 # Node & Frontend
-node_modules/
+frontend/node_modules/
 .next/
 out/
 build/
@@ -73,6 +74,7 @@ clientLibraryConfig-oracle-free-tier.json
 supabase/.temp/
 postgres_data/
 *.sql
+supabase
 
 # Data & Bloatware
 data/
@@ -103,3 +105,6 @@ coverage.xml
 #Internal documentation
 architecture
 docs
+
+#Scripts locales
+scripts\locales
