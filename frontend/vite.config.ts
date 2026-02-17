@@ -30,6 +30,27 @@ export default defineConfig(async () => {
     }
   }
 
+  // Optional bundle visualization (generates dist/stats.html)
+  if (process.env.VISUALIZE === 'true') {
+    try {
+      const { visualizer } = await import('rollup-plugin-visualizer')
+      plugins.push(
+        visualizer({
+          filename: 'dist/stats.html',
+          gzipSize: true,
+          brotliSize: true,
+        }),
+      )
+    } catch (err) {
+      console.warn('rollup-plugin-visualizer no está instalado; omitiendo análisis de bundle.')
+    }
+  }
+
+  // Source maps: enabled locally for debugging, disabled in Docker/CI
+  // to reduce Rollup memory usage by ~2-3x.
+  // Set GENERATE_SOURCEMAP=false in Docker (or any memory-constrained env).
+  const generateSourcemap = process.env.GENERATE_SOURCEMAP !== 'false'
+
   return {
     plugins,
 
@@ -65,7 +86,7 @@ export default defineConfig(async () => {
     },
 
     build: {
-      sourcemap: true,
+      sourcemap: generateSourcemap,
       chunkSizeWarningLimit: 500,
       rollupOptions: {
         output: {
@@ -75,6 +96,9 @@ export default defineConfig(async () => {
             'vendor-charts': ['recharts'],
             'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-popover', '@radix-ui/react-select', '@radix-ui/react-tabs', '@radix-ui/react-tooltip'],
             'vendor-query': ['@tanstack/react-query'],
+            'vendor-motion': ['framer-motion'],
+            'vendor-i18n': ['i18next', 'react-i18next'],
+            'vendor-geo': ['h3-js'],
           },
         },
       },
