@@ -1,32 +1,46 @@
-# ETAPA 1: Construcción (Build)
-FROM node:18-alpine as build
+# ── Stage 1: Build ──────────────────────────────────────────────
+FROM node:20-alpine AS build
+
+# Constrain Node.js heap to 512 MB.
+# On a 1 GB VM the kernel + Docker + npm overhead occupy ~300-400 MB,
+# leaving ~600 MB usable.  512 MB gives V8 a hard ceiling while
+# leaving room for Rollup worker threads and OS buffers.
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
+# Disable sourcemaps in Docker builds to reduce Rollup memory by ~2-3x.
+ENV GENERATE_SOURCEMAP=false
+
+# Skip critters plugin (not installed, but explicit is clearer).
+ENV USE_CRITTERS=false
 
 WORKDIR /app
 
-# Copiamos solo el package.json primero para aprovechar el caché de Docker
+# 1) Copy lockfiles first for layer caching
 COPY package.json package-lock.json ./
 
-# Instalamos dependencias (incluyendo dev dependencies para el build)
-RUN npm ci
+# 2) Install ALL dependencies (dev deps needed for build tooling).
+#    --ignore-scripts avoids postinstall scripts that may consume memory;
+#    esbuild ships pre-built binaries so no postinstall is needed.
+RUN npm ci --ignore-scripts
 
-# Copiamos el resto del código
+# 3) Copy source (filtered by .dockerignore)
 COPY . .
 
-# Construimos la app (genera la carpeta /dist)
-RUN npm run build
+# 4) Run Vite build — NO || true so OOM surfaces as build failure (exit 137).
+#    We run vite directly (skipping tsc -b) because the Docker build only
+#    needs the JS bundle; TypeScript checking runs in CI.
+RUN npx vite build --mode production
 
-# ETAPA 2: Servidor Web (Production)
-# Usamos una imagen de Nginx súper liviana
+# ── Stage 2: Serve ──────────────────────────────────────────────
 FROM nginx:alpine
 
-# Eliminamos configuración por defecto de nginx
+# Remove default config and add SPA-compatible one
 RUN rm /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copiamos los archivos compilados de la Etapa 1 a la carpeta de Nginx
+# Copy built assets from stage 1
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Exponemos el puerto 80 (interno del contenedor)
 EXPOSE 80
 
-# Nginx corre solo en primer plano
 CMD ["nginx", "-g", "daemon off;"]
