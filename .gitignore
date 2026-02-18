@@ -104,7 +104,6 @@ coverage.xml
 
 #Internal documentation
 architecture
-docs
 
 #Scripts locales
 scripts\locales
