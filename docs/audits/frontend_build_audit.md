@@ -138,25 +138,58 @@ Missing: `framer-motion`, `i18next`, `h3-js` not in manual chunks → bundled in
 
 ---
 
-## 7. Changes Applied
+## 7. Build Attempt Results
 
-### PR1: Dockerfile + .dockerignore + nginx (high impact, low risk)
+### Attempt 1 — `--max-old-space-size=512` (FAILED)
+
+```
+[build 6/6] RUN npx vite build --mode production         319.4s
+
+Mark-Compact (reduce) 508.6 (521.3) -> 507.0 (521.3) MB,
+  4072.27 / 0.00 ms  (average mu = 0.186, current mu = 0.196)
+Mark-Compact (reduce) 508.1 (521.3) -> 507.1 (521.3) MB,
+  4407.53 / 0.00 ms  (average mu = 0.105, current mu = 0.024)
+
+FATAL ERROR: Ineffective mark-compacts near heap limit
+  Allocation failed - JavaScript heap out of memory
+```
+
+**Analysis**: GC hit 508 MB with zero reclaimable memory. The working set
+during Vite's transform phase genuinely needs ~600–700 MB for this project's
+79 prod dependencies + 500 source files. 512 MB is too low.
+
+### Root cause refinement
+
+The initial 512 MB estimate was based on typical Vite projects. This project
+has an unusually heavy transform workload:
+- 79 production dependencies (including d3 subtree via recharts, WASM via h3-js)
+- `@sentry/vite-plugin` loaded via static import (~20–50 MB wasted in Docker)
+- `npx` spawns extra Node.js process (~30–50 MB overhead)
+
+### Corrected approach
+
+| Fix | Detail | Memory saved |
+|-----|--------|-------------|
+| Raise heap to 1024 MB | 30% GC headroom over 700 MB working set | Allows completion |
+| Dynamic Sentry import | `await import()` only when env vars are set | ~20–50 MB in Docker |
+| Direct `./node_modules/.bin/vite` | Skip `npx` process overhead | ~30–50 MB |
+
+---
+
+## 8. Changes Applied
+
+### Round 1: Dockerfile + .dockerignore + nginx + Vite config
 
 | File | Change |
 |------|--------|
-| `frontend/Dockerfile` | `NODE_OPTIONS=--max-old-space-size=512`, removed `\|\| true`, added `--ignore-scripts` to `npm ci`, added `GENERATE_SOURCEMAP=false`, added `COPY nginx.conf` |
+| `frontend/Dockerfile` | `NODE_OPTIONS=--max-old-space-size=1024`, removed `\|\| true`, `--ignore-scripts` on `npm ci`, `GENERATE_SOURCEMAP=false`, `COPY nginx.conf`, direct `./node_modules/.bin/vite` instead of `npx` |
 | `frontend/nginx.conf` | Created: SPA routing, gzip, asset caching, deny hidden files |
 | `frontend/.dockerignore` | Expanded: `.git`, test tooling, docs, Docker files, `.env.*` |
 | `docker-compose.yml` | Added `networks: [forestguard]` and `mem_limit: 64m` to frontend service |
-
-### PR2: Vite config optimizations (medium impact, low risk)
-
-| File | Change |
-|------|--------|
-| `frontend/vite.config.ts` | `sourcemap` controlled by `GENERATE_SOURCEMAP` env var (default: true locally, false in Docker); added 3 new vendor chunks (`vendor-motion`, `vendor-i18n`, `vendor-geo`); added conditional `rollup-plugin-visualizer` |
+| `frontend/vite.config.ts` | `sourcemap` controlled by `GENERATE_SOURCEMAP` env var; `@sentry/vite-plugin` changed to dynamic import; added 3 new vendor chunks (`vendor-motion`, `vendor-i18n`, `vendor-geo`); added conditional `rollup-plugin-visualizer` |
 | `frontend/package.json` | Added `rollup-plugin-visualizer` devDep; added `build:visualize` script |
 
-### PR3: CI build pipeline (strategic)
+### Round 2: CI build pipeline (strategic)
 
 | File | Change |
 |------|--------|
@@ -165,28 +198,30 @@ Missing: `framer-motion`, `i18next`, `h3-js` not in manual chunks → bundled in
 
 ---
 
-## 8. Expected Results (Comparative)
+## 9. Expected Results (Comparative)
 
-| Metric | Before | After (PR1+PR2) | After (PR3, CI build) |
-|--------|--------|-----------------|----------------------|
-| Node.js V8 heap ceiling | ~1.5 GB (default) | 512 MB (hard cap) | N/A (CI has 7 GB) |
-| Peak build memory on VM | ~1.5–2 GB (swap thrash) | ~400–600 MB | 0 (pull only, ~30 MB) |
-| Build time on VM | Freezes / OOM killed | ~60–90s (estimated) | ~20s (docker pull) |
+| Metric | Before (original) | After (on-VM, 1024 MB) | After (CI build) |
+|--------|-------------------|------------------------|-------------------|
+| Node.js V8 heap ceiling | ~1.5 GB (default) | 1024 MB (hard cap) | N/A (CI has 7 GB) |
+| Peak build memory on VM | ~1.5–2 GB (swap thrash) | ~1.1 GB (bounded swap) | 0 (pull only, ~30 MB) |
+| Build time on VM | Freezes / OOM killed | ~2–4 min (swap-bound) | ~20s (docker pull) |
 | Sourcemaps in prod image | Yes (2–3x memory) | No (conditional) | No |
-| `dist/` after build | Empty/broken (|| true) | Complete (fails loudly on OOM) | Complete (built in CI) |
+| `dist/` after build | Empty/broken (\|\| true) | Complete (fails loudly on OOM) | Complete (built in CI) |
 | Image size (final) | ~20 MB (nginx:alpine + dist) | ~20 MB | ~20 MB |
 | Frontend nginx | Broken (no server block) | Working SPA routing | Working SPA routing |
 | OOM detection | Silent | Loud (exit 137 fails build) | N/A |
 
 ---
 
-## 9. Verification Checklist
+## 10. Verification Checklist
 
 Run these commands on the VM after deploying changes:
 
 ```bash
+# 0. IMPORTANT: stop other services first to free RAM for the build
+docker compose stop
+
 # 1. Build context size (should be < 5 MB)
-cd /path/to/project
 docker compose build --no-cache frontend 2>&1 | head -3
 
 # 2. Build completes without OOM
@@ -229,7 +264,7 @@ docker stop fg-test
 
 ---
 
-## 10. Known Issues (Out of Scope)
+## 11. Known Issues (Out of Scope)
 
 1. **Nginx reverse proxy architecture**: The root-level `nginx.conf` serves from its own filesystem (`root /usr/share/nginx/html`), not from the frontend container. To fix: change to `proxy_pass http://frontend:80;` in `location /`.
 
@@ -239,7 +274,7 @@ docker stop fg-test
 
 ---
 
-## 11. Long-Term Recommendation
+## 12. Long-Term Recommendation
 
 For a 1 GB VM, **building any modern Node.js application inside Docker is operating at the edge of feasibility**. The recommended long-term strategy is:
 
