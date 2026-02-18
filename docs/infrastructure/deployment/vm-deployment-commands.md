@@ -1,5 +1,21 @@
 # VM Deployment Commands - CI-Built Frontend Image
 
+## Deploy Entrypoint Oficial (VM)
+
+```bash
+# Siempre usar el deploy versionado del repo
+cd /home/opc
+./scripts/deploy.sh
+```
+
+Si existe un script legacy en raiz (`/home/opc/deploy.sh`) neutralizarlo:
+
+```bash
+cd /home/opc
+test -f ./deploy.sh && mv ./deploy.sh ./deploy.sh.legacy.$(date +%Y%m%d_%H%M%S) || true
+chmod +x scripts/deploy.sh scripts/setup-ssl.sh scripts/renew-ssl.sh scripts/renew-ssl-cron.sh scripts/verify-ssl.sh
+```
+
 ## Phase 1: Current Container Status Verification
 
 ### 1.1 Check All Running Containers
