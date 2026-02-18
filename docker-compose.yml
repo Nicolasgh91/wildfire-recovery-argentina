@@ -228,6 +228,11 @@ services:
     command: celery -A workers.celery_app flower --port=5555
 
   # Frontend
+  # For production deployment with CI-built images:
+  # 1. Comment/remove the 'build' section below
+  # 2. Add: image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/frontend:latest
+  # 3. Remove or rename docker-compose.override.yml
+  # See: docs/deployment/ci-frontend-deployment.md
   frontend:
     build:
       context: ./frontend
