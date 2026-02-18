@@ -15,6 +15,23 @@ ENV GENERATE_SOURCEMAP=false
 # Skip critters plugin (not installed, but explicit is clearer).
 ENV USE_CRITTERS=false
 
+# Build-time frontend variables (must be provided by docker compose args).
+ARG VITE_API_BASE_URL=/api/v1
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_API_KEY
+ARG VITE_USE_SUPABASE_JWT=false
+ARG VITE_SENTRY_DSN=
+ARG VITE_AUTH_REDIRECT_URL=https://forestguard.freedynamicdns.org/auth/callback
+
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+ENV VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+ENV VITE_API_KEY=${VITE_API_KEY}
+ENV VITE_USE_SUPABASE_JWT=${VITE_USE_SUPABASE_JWT}
+ENV VITE_SENTRY_DSN=${VITE_SENTRY_DSN}
+ENV VITE_AUTH_REDIRECT_URL=${VITE_AUTH_REDIRECT_URL}
+
 WORKDIR /app
 
 # 1) Copy lockfiles first for layer caching
@@ -33,6 +50,7 @@ COPY . .
 #    needs the JS bundle; TypeScript checking runs in CI.
 #    Use ./node_modules/.bin/ instead of npx to avoid spawning an extra
 #    Node.js process (~30-50 MB overhead on a memory-constrained system).
+RUN node ./scripts/validate-build-env.mjs
 RUN ./node_modules/.bin/vite build --mode production
 
 # ── Stage 2: Serve ──────────────────────────────────────────────
