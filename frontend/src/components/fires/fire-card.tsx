@@ -72,7 +72,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
   const slidesToShow = slides.slice(0, Math.min(slides.length, slideStage))
   // Heuristic: slides_data == null → data not loaded / absent.
   // slidesToShow.length === 0 → no usable thumbnails.
-  // See frontend/docs/ui_debt_log.md — ideally backend exposes explicit flag.
+  // See docs/frontend/ui_debt_log.md - ideally backend exposes explicit flag.
   const isImagePending =
     fire.slides_data == null || slidesToShow.length === 0
   const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null)

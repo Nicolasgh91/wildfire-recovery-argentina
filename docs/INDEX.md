@@ -20,7 +20,7 @@ docs/
 | Document | Path | Description |
 |----------|------|-------------|
 | **README** | [`README.md`](../README.md) | Project overview, setup, API reference |
-| **Frontend README** | [`frontend/README.md`](../frontend/README.md) | Frontend routes, contracts, feature flags |
+| **Frontend README** | [`frontend/README.md`](frontend/README.md) | Frontend routes, contracts, feature flags |
 
 ## 🏗️ Architecture & Design
 

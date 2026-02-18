@@ -169,8 +169,10 @@ watch -n 2 'docker stats --no-stream | grep frontend'
 # Check response times
 time curl -s http://localhost/ > /dev/null
 
-# Verify nginx configuration
-docker exec forestguard-frontend nginx -t
+# Verify nginx configuration safely
+docker compose ps --status running --services | grep -q '^nginx$' \
+  && docker compose exec -T nginx nginx -t \
+  || (echo "nginx is not running" && docker compose logs nginx --tail=100)
 
 # Check image size in use
 docker images forestguard-frontend --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}"
@@ -221,6 +223,11 @@ docker pull ghcr.io/nicolasgh91/wildfire-recovery-argentina/frontend:latest
 # If networking issues
 docker network ls
 docker network inspect wildfire-recovery-argentina_forestguard
+
+# SSL check and renewal (Docker Certbot mode)
+docker compose --profile ssl run --rm certbot certificates
+docker compose --profile ssl run --rm certbot renew --webroot --webroot-path=/var/www/certbot
+docker compose exec -T nginx nginx -s reload || docker compose restart nginx
 
 # If memory issues
 docker system prune -f
