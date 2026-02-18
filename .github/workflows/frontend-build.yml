@@ -1,4 +1,4 @@
-name: Frontend Build & Push
+name: Frontend Build & Push (Multi-architecture)
 
 on:
   push:
@@ -31,10 +31,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Set up QEMU (for ARM64 cross-compilation)
+      - name: Set up QEMU (for multi-architecture builds)
         uses: docker/setup-qemu-action@v3
         with:
-          platforms: linux/arm64
+          platforms: linux/amd64,linux/arm64
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
@@ -54,12 +54,12 @@ jobs:
             type=ref,event=branch
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push (ARM64)
+      - name: Build and push (Multi-architecture)
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
-          platforms: linux/arm64
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
