@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
-import bosqueLanding from '@/assets/bosque_landing.jpeg'
+import bosqueLanding from '@/assets/bosque_landing.webp'
 
 type RegisterValues = {
   firstName: string
