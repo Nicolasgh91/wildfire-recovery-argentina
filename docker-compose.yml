@@ -237,6 +237,14 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api/v1}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-${SUPABASE_URL:-}}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-${SUPABASE_ANON_KEY:-}}
+        VITE_API_KEY: ${VITE_API_KEY:-${API_KEY:-}}
+        VITE_USE_SUPABASE_JWT: ${VITE_USE_SUPABASE_JWT:-false}
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-${SENTRY_DSN:-}}
+        VITE_AUTH_REDIRECT_URL: ${VITE_AUTH_REDIRECT_URL:-https://forestguard.freedynamicdns.org/auth/callback}
     container_name: forestguard-frontend
     restart: unless-stopped
     # Runtime memory limit: nginx serving static files needs < 30 MB
