@@ -1,4 +1,3 @@
-import { sentryVitePlugin } from '@sentry/vite-plugin'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import path from 'path'
@@ -6,11 +5,15 @@ import path from 'path'
 export default defineConfig(async () => {
   const plugins = [react()]
 
+  // Dynamic import: only load @sentry/vite-plugin when actually needed.
+  // The static import was loading the entire Sentry module (~20-50 MB)
+  // into memory even in Docker builds where SENTRY_* vars are never set.
   const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
   const sentryOrg = process.env.SENTRY_ORG
   const sentryProject = process.env.SENTRY_PROJECT
 
   if (sentryAuthToken && sentryOrg && sentryProject) {
+    const { sentryVitePlugin } = await import('@sentry/vite-plugin')
     plugins.push(
       sentryVitePlugin({
         authToken: sentryAuthToken,

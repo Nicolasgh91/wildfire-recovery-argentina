@@ -1,11 +1,13 @@
 # ── Stage 1: Build ──────────────────────────────────────────────
 FROM node:20-alpine AS build
 
-# Constrain Node.js heap to 512 MB.
-# On a 1 GB VM the kernel + Docker + npm overhead occupy ~300-400 MB,
-# leaving ~600 MB usable.  512 MB gives V8 a hard ceiling while
-# leaving room for Rollup worker threads and OS buffers.
-ENV NODE_OPTIONS="--max-old-space-size=512"
+# Constrain Node.js heap to 1024 MB.
+# Vite 7 transform phase needs ~700 MB working set for this project.
+# 512 MB proved insufficient (OOM at 508 MB during mark-compact GC).
+# 1024 MB gives ~30% GC headroom.  On the 1 GB VM this will use swap
+# (~200-400 MB) but stays bounded — unlike the default 1.5 GB which
+# caused 8 GB of runaway swap thrashing.
+ENV NODE_OPTIONS="--max-old-space-size=1024"
 
 # Disable sourcemaps in Docker builds to reduce Rollup memory by ~2-3x.
 ENV GENERATE_SOURCEMAP=false
@@ -29,7 +31,9 @@ COPY . .
 # 4) Run Vite build — NO || true so OOM surfaces as build failure (exit 137).
 #    We run vite directly (skipping tsc -b) because the Docker build only
 #    needs the JS bundle; TypeScript checking runs in CI.
-RUN npx vite build --mode production
+#    Use ./node_modules/.bin/ instead of npx to avoid spawning an extra
+#    Node.js process (~30-50 MB overhead on a memory-constrained system).
+RUN ./node_modules/.bin/vite build --mode production
 
 # ── Stage 2: Serve ──────────────────────────────────────────────
 FROM nginx:alpine
