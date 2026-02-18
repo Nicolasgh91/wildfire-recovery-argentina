@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator'
 import { AnimatedGradientText } from '@/components/ui/AnimatedGradientText'
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
-import bosqueLanding from '@/assets/bosque_landing.jpeg'
+import bosqueLanding from '@/assets/bosque_landing.webp'
 
 export default function LoginPage() {
   const navigate = useNavigate()
