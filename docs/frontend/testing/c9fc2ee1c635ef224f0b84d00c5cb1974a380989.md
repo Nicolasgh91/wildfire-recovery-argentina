@@ -1,0 +1,126 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - link "ForestGuard" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img [ref=e6]
+        - generic [ref=e9]: ForestGuard
+      - navigation [ref=e10]:
+        - link "Inicio" [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img [ref=e12]
+          - text: Inicio
+        - link "Históricos" [ref=e15] [cursor=pointer]:
+          - /url: /fires/history
+          - img [ref=e16]
+          - text: Históricos
+        - link "Mapa" [ref=e18] [cursor=pointer]:
+          - /url: /map
+          - img [ref=e19]
+          - text: Mapa
+        - link "Verificar terreno" [ref=e21] [cursor=pointer]:
+          - /url: /audit
+          - img [ref=e22]
+          - text: Verificar terreno
+        - link "Exploración satelital" [ref=e26] [cursor=pointer]:
+          - /url: /exploracion
+          - img [ref=e27]
+          - text: Exploración satelital
+      - generic [ref=e30]:
+        - button "Toggle language" [ref=e31] [cursor=pointer]:
+          - img
+          - generic [ref=e32]: Toggle language
+        - button "Toggle theme" [ref=e33] [cursor=pointer]:
+          - img
+          - generic [ref=e34]: Toggle theme
+        - button [ref=e35] [cursor=pointer]:
+          - img
+    - main [ref=e36]:
+      - generic [ref=e39]:
+        - heading "Incendios activos en Argentina" [level=1] [ref=e41]
+        - generic [ref=e42]:
+          - combobox [ref=e44] [cursor=pointer]:
+            - generic: Todos
+            - img
+          - link "Históricos" [ref=e45] [cursor=pointer]:
+            - /url: /fires/history
+            - text: Históricos
+            - img
+    - contentinfo [ref=e57]:
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - generic [ref=e61]:
+              - img [ref=e62]
+              - generic [ref=e65]: ForestGuard
+            - paragraph [ref=e66]: Plataforma de monitoreo y recuperación de incendios forestales de Argentina. Protegemos nuestros bosques con tecnología satelital.
+          - generic [ref=e67]:
+            - heading "Producto" [level=3] [ref=e68]
+            - list [ref=e69]:
+              - listitem [ref=e70]:
+                - link "Mapa de Incendios" [ref=e71] [cursor=pointer]:
+                  - /url: /
+                  - img [ref=e72]
+                  - text: Mapa de Incendios
+              - listitem [ref=e74]:
+                - link "Auditoría Legal" [ref=e75] [cursor=pointer]:
+                  - /url: /audit
+                  - img [ref=e76]
+                  - text: Auditoría Legal
+              - listitem [ref=e80]:
+                - link "Exploración satelital" [ref=e81] [cursor=pointer]:
+                  - /url: /exploracion
+                  - img [ref=e82]
+                  - text: Exploración satelital
+              - listitem [ref=e85]:
+                - link "Reporte Ciudadano" [ref=e86] [cursor=pointer]:
+                  - /url: /citizen-report
+                  - img [ref=e87]
+                  - text: Reporte Ciudadano
+          - generic [ref=e90]:
+            - heading "Soporte" [level=3] [ref=e91]
+            - list [ref=e92]:
+              - listitem [ref=e93]:
+                - link "Preguntas Frecuentes" [ref=e94] [cursor=pointer]:
+                  - /url: /faq
+                  - img [ref=e95]
+                  - text: Preguntas Frecuentes
+              - listitem [ref=e98]:
+                - link "Manual de Usuario" [ref=e99] [cursor=pointer]:
+                  - /url: /manual
+                  - img [ref=e100]
+                  - text: Manual de Usuario
+              - listitem [ref=e102]:
+                - link "Glosario" [ref=e103] [cursor=pointer]:
+                  - /url: /glossary
+                  - img [ref=e104]
+                  - text: Glosario
+          - generic [ref=e107]:
+            - heading "Compañía" [level=3] [ref=e108]
+            - list [ref=e109]:
+              - listitem [ref=e110]:
+                - link "Contacto" [ref=e111] [cursor=pointer]:
+                  - /url: /contact
+                  - img [ref=e112]
+                  - text: Contacto
+              - listitem [ref=e115]:
+                - link "API Docs" [ref=e116] [cursor=pointer]:
+                  - /url: https://forestguard.freedynamicdns.org/docs
+                  - img [ref=e117]
+                  - text: API Docs
+        - generic [ref=e122]:
+          - paragraph [ref=e123]: © 2026 ForestGuard Argentina. Todos los derechos reservados.
+          - generic [ref=e124]:
+            - generic [ref=e125]: Hecho con
+            - generic [ref=e126]: ❤
+            - generic [ref=e127]: para proteger nuestros bosques
+  - region "Notifications (F8)":
+    - list
+  - generic [ref=e128]:
+    - img [ref=e130]
+    - button "Open Tanstack query devtools" [ref=e178] [cursor=pointer]:
+      - img [ref=e179]
+```
