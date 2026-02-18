@@ -4,10 +4,10 @@
 # =============================================================================
 #
 # Uso:
-#   ./deploy.sh          # Deploy normal
-#   ./deploy.sh --build  # Rebuild de la imagen
-#   ./deploy.sh --logs   # Ver logs
-#   ./deploy.sh --stop   # Detener servicios
+#   ./scripts/deploy.sh          # Deploy normal
+#   ./scripts/deploy.sh --build  # Rebuild de la imagen
+#   ./scripts/deploy.sh --logs   # Ver logs
+#   ./scripts/deploy.sh --stop   # Detener servicios
 #
 # =============================================================================
 
@@ -144,7 +144,7 @@ case "${1:-}" in
             echo "  - API:    http://$(curl -s ifconfig.me)/api/v1/"
         else
             echo "La API puede estar iniciando aun. Verificar con:"
-            echo "  ./deploy.sh --logs"
+            echo "  ./scripts/deploy.sh --logs"
         fi
         ;;
 esac
