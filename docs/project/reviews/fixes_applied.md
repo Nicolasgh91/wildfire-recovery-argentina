@@ -11,7 +11,7 @@
      - Ejemplos curl actualizados a Bearer JWT para auditoría.
 
 2. **Alineación de documentación frontend con UX/routing actual.**
-   - Archivo: `frontend/README.md`
+   - Archivo: `docs/frontend/README.md`
    - Ajustes:
      - Naming y rutas actualizadas: `/audit` (Verificar terreno), `/exploracion`, `/reports` alias legacy.
      - Rutas protegidas y feature flags (`certificates`, `refuges`) documentadas.

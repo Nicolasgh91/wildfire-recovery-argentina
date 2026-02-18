@@ -84,7 +84,7 @@ Fecha: 2026-02-14
 ### ID: PERF-009
 **Severidad:** media  
 **Área:** frontend  
-**Evidencia:** `frontend/README.md` indica uso de Leaflet + heatmap WebGL y listados históricos con paginación server-side  
+**Evidencia:** `docs/frontend/README.md` indica uso de Leaflet + heatmap WebGL y listados históricos con paginación server-side  
 **Riesgo:** Render de muchos marcadores sin cluster/virtualización puede bloquear main thread en equipos medios.  
 **Recomendación:** Asegurar clustering por zoom, memo de capas y throttling de actualizaciones al mover mapa.  
 **Estado:** pendiente

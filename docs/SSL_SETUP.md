@@ -1,0 +1,216 @@
+﻿# SSL Certificate Setup with Certbot (Docker Official Runbook)
+
+This is the official SSL runbook for ForestGuard production in Docker mode.
+
+## Scope
+
+- Official mode: Docker Compose + Certbot (`certbot/certbot`) + Nginx container.
+- This document replaces host-level `certbot --nginx` flows for Docker deployments.
+- Host-level SSL steps in other docs are considered legacy unless you run host Nginx intentionally.
+
+## Prerequisites
+
+1. Domain DNS (`SSL_DOMAIN`) points to the production server public IP.
+2. Ports `80` and `443` are open in security groups/firewall.
+3. Docker and Docker Compose are installed.
+4. `.env` contains:
+
+```bash
+SSL_DOMAIN=forestguard.freedynamicdns.org
+SSL_EMAIL=admin@forestguard.freedynamicdns.org
+SSL_CERT_PATH=/etc/letsencrypt/live/forestguard.freedynamicdns.org/fullchain.pem
+SSL_KEY_PATH=/etc/letsencrypt/live/forestguard.freedynamicdns.org/privkey.pem
+SSL_CHAIN_PATH=/etc/letsencrypt/live/forestguard.freedynamicdns.org/chain.pem
+```
+
+## Architecture Summary
+
+- `nginx` serves HTTP/HTTPS and ACME challenge path (`/.well-known/acme-challenge/`).
+- `certbot` is an on-demand service under Compose profile `ssl`.
+- Certificates are persisted in `./certbot/conf` and challenge files in `./certbot/www`.
+- Renewal is executed by host scheduler (cron/systemd) calling a one-shot command.
+
+## Quick Start
+
+### 1. Initial certificate issuance
+
+```bash
+chmod +x scripts/setup-ssl.sh scripts/renew-ssl.sh scripts/renew-ssl-cron.sh scripts/verify-ssl.sh
+./scripts/setup-ssl.sh
+```
+
+What it does:
+
+- Writes temporary HTTP-only `nginx-temp.runtime.conf` for ACME challenge.
+- Starts nginx.
+- Runs Certbot one-shot issuance via Docker:
+  - `docker compose --profile ssl run --rm certbot certonly --webroot ...`
+- Restores production `nginx.conf`.
+- Restarts nginx with TLS enabled.
+
+### 2. Verify SSL status
+
+```bash
+./scripts/verify-ssl.sh
+```
+
+### 3. Manual renewal
+
+```bash
+./scripts/renew-ssl.sh
+```
+
+Dry-run:
+
+```bash
+./scripts/renew-ssl.sh --dry-run
+```
+
+## Scheduler (Required)
+
+Use host scheduler for periodic one-shot renewal and nginx reload.
+
+### Option A: Cron (recommended baseline)
+
+Run daily at 03:15:
+
+```bash
+crontab -e
+```
+
+Add:
+
+```bash
+15 3 * * * cd /path/to/wildfire-recovery-argentina && ./scripts/renew-ssl-cron.sh >> /var/log/forestguard-ssl-renew.log 2>&1
+```
+
+### Option B: systemd timer
+
+Example service (`/etc/systemd/system/forestguard-ssl-renew.service`):
+
+```ini
+[Unit]
+Description=ForestGuard SSL renewal (Docker Certbot)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/wildfire-recovery-argentina
+ExecStart=/bin/bash ./scripts/renew-ssl-cron.sh
+```
+
+Example timer (`/etc/systemd/system/forestguard-ssl-renew.timer`):
+
+```ini
+[Unit]
+Description=Run ForestGuard SSL renewal daily
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now forestguard-ssl-renew.timer
+sudo systemctl list-timers | grep forestguard-ssl-renew
+```
+
+## Manual Commands Reference
+
+Issue certificate:
+
+```bash
+docker compose --profile ssl run --rm certbot certonly \
+  --webroot \
+  --webroot-path=/var/www/certbot \
+  --email "$SSL_EMAIL" \
+  --agree-tos \
+  --no-eff-email \
+  -d "$SSL_DOMAIN"
+```
+
+Check certbot status:
+
+```bash
+docker compose --profile ssl run --rm certbot certificates
+```
+
+Renew dry-run:
+
+```bash
+docker compose --profile ssl run --rm certbot renew --webroot --webroot-path=/var/www/certbot --dry-run
+```
+
+## Troubleshooting
+
+### Certificate issuance fails
+
+1. Confirm DNS points to server:
+
+```bash
+nslookup "$SSL_DOMAIN"
+```
+
+2. Confirm ports open and nginx reachable on HTTP:
+
+```bash
+curl -I "http://$SSL_DOMAIN/.well-known/acme-challenge/test"
+```
+
+3. Review logs:
+
+```bash
+docker compose logs nginx
+```
+
+### HTTPS fails after renewal
+
+1. Validate nginx config:
+
+```bash
+docker compose exec nginx nginx -t
+```
+
+2. Reload/restart nginx:
+
+```bash
+docker compose exec -T nginx nginx -s reload || docker compose restart nginx
+```
+
+3. Re-check certificate on disk:
+
+```bash
+openssl x509 -in "certbot/conf/live/$SSL_DOMAIN/fullchain.pem" -noout -dates
+```
+
+## File Map
+
+```text
+certbot/
+  conf/               # Let's Encrypt state + certs
+  www/                # ACME webroot challenge files
+scripts/
+  setup-ssl.sh        # Initial issuance
+  renew-ssl.sh        # Manual renewal
+  renew-ssl-cron.sh   # Scheduled renewal hook (cron/systemd)
+  verify-ssl.sh       # End-to-end verification
+docker-compose.yml    # nginx + certbot service (profile ssl)
+docker-compose.ssl.yml# One-shot issuance override
+nginx.conf            # Production TLS config
+nginx-temp.conf       # Static temporary config used by docker-compose.ssl.yml
+nginx-temp.runtime.conf # Runtime temporary config generated by setup script
+```
+
+## Notes
+
+- Let’s Encrypt certificates are typically valid for 90 days.
+- Do not run `certbot` inside nginx container.
+- Do not rely on long-running Certbot renewal loops in containers for this project.
+- Keep this file as the canonical SSL runbook for Docker deployments.
