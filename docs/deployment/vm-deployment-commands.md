@@ -1,24 +1,5 @@
 # VM Deployment Commands - CI-Built Frontend Image
 
-<<<<<<< HEAD
-## Deploy Entrypoint Oficial (VM)
-
-```bash
-# Siempre usar el deploy versionado del repo
-cd /home/opc
-./scripts/deploy.sh
-```
-
-Si existe un script legacy en raiz (`/home/opc/deploy.sh`) neutralizarlo:
-
-```bash
-cd /home/opc
-test -f ./deploy.sh && mv ./deploy.sh ./deploy.sh.legacy.$(date +%Y%m%d_%H%M%S) || true
-chmod +x scripts/deploy.sh scripts/setup-ssl.sh scripts/renew-ssl.sh scripts/renew-ssl-cron.sh scripts/verify-ssl.sh
-```
-
-=======
->>>>>>> 0147e4e8be4eb74165072a2c8ae35eb3f9d66183
 ## Phase 1: Current Container Status Verification
 
 ### 1.1 Check All Running Containers
@@ -188,10 +169,8 @@ watch -n 2 'docker stats --no-stream | grep frontend'
 # Check response times
 time curl -s http://localhost/ > /dev/null
 
-# Verify nginx configuration safely
-docker compose ps --status running --services | grep -q '^nginx$' \
-  && docker compose exec -T nginx nginx -t \
-  || (echo "nginx is not running" && docker compose logs nginx --tail=100)
+# Verify nginx configuration
+docker exec forestguard-frontend nginx -t
 
 # Check image size in use
 docker images forestguard-frontend --format "table {{.Repository}}:{{.Tag}}\t{{.Size}}"
@@ -242,11 +221,6 @@ docker pull ghcr.io/nicolasgh91/wildfire-recovery-argentina/frontend:latest
 # If networking issues
 docker network ls
 docker network inspect wildfire-recovery-argentina_forestguard
-
-# SSL check and renewal (Docker Certbot mode)
-docker compose --profile ssl run --rm certbot certificates
-docker compose --profile ssl run --rm certbot renew --webroot --webroot-path=/var/www/certbot
-docker compose exec -T nginx nginx -s reload || docker compose restart nginx
 
 # If memory issues
 docker system prune -f

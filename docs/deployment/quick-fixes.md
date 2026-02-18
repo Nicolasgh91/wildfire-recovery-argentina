@@ -1,24 +1,5 @@
 # Quick Fixes for Common Issues
 
-<<<<<<< HEAD
-## Deploy Entrypoint Oficial (VM)
-
-```bash
-# Siempre usar el deploy versionado del repo
-cd /home/opc
-./scripts/deploy.sh
-```
-
-Si existe un script legacy en raiz (`/home/opc/deploy.sh`) neutralizarlo:
-
-```bash
-cd /home/opc
-test -f ./deploy.sh && mv ./deploy.sh ./deploy.sh.legacy.$(date +%Y%m%d_%H%M%S) || true
-chmod +x scripts/deploy.sh scripts/setup-ssl.sh scripts/renew-ssl.sh scripts/renew-ssl-cron.sh scripts/verify-ssl.sh
-```
-
-=======
->>>>>>> 0147e4e8be4eb74165072a2c8ae35eb3f9d66183
 ## 🚨 Most Common Problems & Solutions
 
 ### 1. Website Down - Quick Diagnosis
@@ -34,10 +15,8 @@ curl -I https://forestguard.freedynamicdns.org/
 
 ### 2. Nginx Issues (Most Likely Cause)
 ```bash
-# Check if nginx is running before exec
-docker compose ps --status running --services | grep -q '^nginx$' \
-  && docker compose exec -T nginx nginx -t \
-  || (echo "nginx is not running" && docker compose logs nginx --tail=100)
+# Check nginx configuration
+docker compose exec nginx nginx -t
 
 # View nginx logs
 docker compose logs nginx
@@ -92,10 +71,7 @@ find ./certbot/conf -name "*.crt"
 openssl x509 -in ./certbot/conf/live/forestguard.freedynamicdns.org/fullchain.pem -text -noout | grep "Not After"
 
 # Renew certificates (if needed)
-docker compose --profile ssl run --rm certbot renew --webroot --webroot-path=/var/www/certbot
-
-# Reload nginx after renewal
-docker compose exec -T nginx nginx -s reload || docker compose restart nginx
+docker compose exec nginx certbot renew
 ```
 
 ### 6. Port/Firewall Issues
@@ -215,13 +191,13 @@ docker compose up -d
 ### SSL Certificate Expired
 ```bash
 # Check cert status
-openssl x509 -in ./certbot/conf/live/forestguard.freedynamicdns.org/fullchain.pem -noout -dates
+./certbot/conf/live/forestguard.freedynamicdns.org/fullchain.pem
 
 # Renew certificates
-docker compose --profile ssl run --rm certbot renew --webroot --webroot-path=/var/www/certbot
+docker compose exec nginx certbot renew
 
-# Reload nginx after renewal
-docker compose exec -T nginx nginx -s reload || docker compose restart nginx
+# Restart nginx after renewal
+docker compose restart nginx
 ```
 
 ## 📱 Testing After Fixes

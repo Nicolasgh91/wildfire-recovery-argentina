@@ -1,24 +1,5 @@
 # Quick Deployment Commands - Manual Steps
 
-<<<<<<< HEAD
-## Deploy Entrypoint Oficial (VM)
-
-```bash
-# Siempre usar el deploy versionado del repo
-cd /home/opc
-./scripts/deploy.sh
-```
-
-Si existe un script legacy en raiz (`/home/opc/deploy.sh`) neutralizarlo:
-
-```bash
-cd /home/opc
-test -f ./deploy.sh && mv ./deploy.sh ./deploy.sh.legacy.$(date +%Y%m%d_%H%M%S) || true
-chmod +x scripts/deploy.sh scripts/setup-ssl.sh scripts/renew-ssl.sh scripts/renew-ssl-cron.sh scripts/verify-ssl.sh
-```
-
-=======
->>>>>>> 0147e4e8be4eb74165072a2c8ae35eb3f9d66183
 ## 🚀 Start All Services & Deploy CI Frontend
 
 ### 1. Environment Check

@@ -144,7 +144,11 @@ case "${1:-}" in
             echo "  - API:    http://$(curl -s ifconfig.me)/api/v1/"
         else
             echo "La API puede estar iniciando aun. Verificar con:"
+<<<<<<< HEAD
             echo "  ./scripts/deploy.sh --logs"
+=======
+            echo "  ./deploy.sh --logs"
+>>>>>>> 0147e4e8be4eb74165072a2c8ae35eb3f9d66183
         fi
         ;;
 esac
