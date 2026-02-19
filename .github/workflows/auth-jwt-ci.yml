@@ -1,4 +1,15 @@
-name: Auth JWT Smoke
+name: Auth JWT CI
+
+# Gate CI — runs on every PR and push to main/develop.
+# This workflow is a required check for branch protection on main.
+#
+# Responsibilities:
+#   - Spin up a local PostgreSQL instance (no external dependencies).
+#   - Apply the users table migration.
+#   - Run integration tests that verify auth behavior with a real DB session.
+#
+# Unit-level auth matrix tests (BL-007) live in security.yml (auth-contracts
+# job) to avoid duplication. Both workflows are required checks on main.
 
 on:
   push:
@@ -26,8 +37,9 @@ concurrency:
 
 jobs:
   auth-jwt:
+    name: Auth JWT Integration
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+
     services:
       postgres:
         image: postgres:15
@@ -42,15 +54,28 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+
     env:
-      PYTHONPATH: .
+      # -------------------------------------------------------------------------
+      # CI smoke local values — do not replace with production values.
+      # These are intentionally dummy/insecure values safe for ephemeral CI use.
+      # Production secrets live in the VM .env file and are never in GitHub Actions.
+      # -------------------------------------------------------------------------
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-      SUPABASE_URL: https://example.supabase.co
+      ENVIRONMENT: local
+      # Supabase — dummy URL. JWT validation will fail with 401 (expected in tests).
+      SUPABASE_URL: https://ci-placeholder.supabase.co
+      SUPABASE_JWT_SECRET: ci-placeholder-secret-not-for-production
       SUPABASE_JWT_AUDIENCE: authenticated
-      API_KEY: ci-only-api-key
-      ADMIN_API_KEY: ci-admin-key
-      SECRET_KEY: ci-secret-key
+      # API keys — CI-only values, never used in production.
+      API_KEY: ci-test-api-key-not-for-production
+      ADMIN_API_KEY: ci-test-admin-key-not-for-production
+      # SECRET_KEY — only required for non-local ENVIRONMENT; set to dummy for safety.
+      SECRET_KEY: ci-placeholder-secret-key-for-testing-only-32x
+      # Redis — not used by tests; set to prevent Settings validation noise.
+      REDIS_URL: redis://localhost:6379/0
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -59,53 +84,24 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: requirements.txt
+          cache: pip
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
 
-      - name: DB smoke check
-        run: |
-          python - <<'PY'
-          import os
-          from sqlalchemy import create_engine, text
-
-          db_url = os.environ["DATABASE_URL"]
-          engine = create_engine(db_url, future=True)
-          with engine.connect() as conn:
-              value = conn.execute(text("SELECT 1")).scalar_one()
-          assert value == 1, f"Unexpected DB result: {value}"
-          print("DB smoke check passed")
-          PY
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
       - name: Auth JWT smoke check
         run: |
-          python - <<'PY'
-          from fastapi.testclient import TestClient
-          from app.main import app
+          # pgcrypto is required by the migration; the migration itself also runs CREATE EXTENSION.
+          psql "$TEST_DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";'
+          psql "$TEST_DATABASE_URL" -f database/migrations/create_users.sql
 
-          client = TestClient(app)
-
-          health = client.get("/health")
-          assert health.status_code == 200, f"/health expected 200, got {health.status_code}"
-
-          no_auth = client.get("/api/v1/audit/geocode?q=chubut")
-          assert no_auth.status_code == 401, f"no auth expected 401, got {no_auth.status_code} | body={no_auth.text}"
-
-          invalid_jwt = client.get(
-              "/api/v1/audit/geocode?q=chubut",
-              headers={"Authorization": "Bearer invalid.token.value"},
-          )
-          assert invalid_jwt.status_code == 401, f"invalid jwt expected 401, got {invalid_jwt.status_code} | body={invalid_jwt.text}"
-
-          only_api_key = client.get(
-              "/api/v1/audit/geocode?q=chubut",
-              headers={"X-API-Key": "ci-only-api-key"},
-          )
-          assert only_api_key.status_code == 401, f"api-key-only expected 401, got {only_api_key.status_code} | body={only_api_key.text}"
-
-          print("Auth JWT smoke check passed")
-          PY
+      - name: Run auth integration tests
+        # Tests: DB smoke (SELECT 1, table presence) + HTTP auth smoke
+        # (GET /health → 200, GET /api/v1/audit/geocode without/with invalid token → 401)
+        run: pytest tests/integration/test_auth_supabase_jwt.py -v

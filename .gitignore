@@ -44,7 +44,6 @@ yarn-error.log*
 debug_output.txt
 test_log.txt
 validation_errors.log
-tests/
 
 # Node & Frontend
 frontend/node_modules/
@@ -73,7 +72,8 @@ clientLibraryConfig-oracle-free-tier.json
 # Supabase / Database / Docker
 supabase/.temp/
 postgres_data/
-*.sql
+# *.sql excluded from ignore so database/migrations/*.sql can be tracked.
+# Data dumps belong in data/ (already ignored above) not in the repo root.
 supabase
 
 # Data & Bloatware
