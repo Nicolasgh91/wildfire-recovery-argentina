@@ -1,0 +1,252 @@
+src/components/reports/ReportRequestForm.tsx(155,5): error TS2322: Type 'Resolver<{ report_type: "historical" | "judicial"; include_climate: boolean; include_imagery: boolean; max_images: string; include_monthly_images: boolean; fire_event_id?: string | undefined; ... 5 more ...; end_date?: string | undefined; }, any, { ...; }>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+  Types of parameters 'options' and 'options' are incompatible.
+    Type 'ResolverOptions<ReportFormValues>' is not assignable to type 'ResolverOptions<{ report_type: "historical" | "judicial"; include_climate: boolean; include_imagery: boolean; max_images: string; include_monthly_images: boolean; fire_event_id?: string | undefined; ... 5 more ...; end_date?: string | undefined; }>'.
+      Type 'string | undefined' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/components/reports/ReportRequestForm.tsx(290,45): error TS2345: Argument of type '(values: ReportFormValues) => void' is not assignable to parameter of type 'SubmitHandler<TFieldValues>'.
+  Types of parameters 'values' and 'data' are incompatible.
+    Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+      Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(292,15): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(327,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(340,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(353,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(366,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(381,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(399,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(412,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(425,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(438,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(451,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/reports/ReportRequestForm.tsx(464,19): error TS2322: Type 'Control<ReportFormValues, any, TFieldValues>' is not assignable to type 'Control<ReportFormValues, any, ReportFormValues>'.
+  The types of '_options.resolver' are incompatible between these types.
+    Type 'Resolver<ReportFormValues, any, TFieldValues> | undefined' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues> | undefined'.
+      Type 'Resolver<ReportFormValues, any, TFieldValues>' is not assignable to type 'Resolver<ReportFormValues, any, ReportFormValues>'.
+        Type 'ResolverResult<ReportFormValues, TFieldValues> | Promise<ResolverResult<ReportFormValues, TFieldValues>>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+          Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverResult<ReportFormValues, ReportFormValues> | Promise<ResolverResult<ReportFormValues, ReportFormValues>>'.
+            Type 'ResolverSuccess<TFieldValues>' is not assignable to type 'ResolverSuccess<ReportFormValues>'.
+              Type 'TFieldValues' is not assignable to type 'ReportFormValues'.
+                Type 'FieldValues' is missing the following properties from type 'ReportFormValues': report_type, fire_event_id, include_climate, include_imagery, and 8 more.
+src/components/ui/AnimatedGradientText.tsx(19,10): error TS1484: 'ElementType' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/components/ui/AnimatedGradientText.tsx(19,23): error TS1484: 'ComponentPropsWithoutRef' is a type and must be imported using a type-only import when 'verbatimModuleSyntax' is enabled.
+src/hooks/queries/useActiveEpisodes.ts(11,10): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(options: DefinedInitialDataOptions<(<T>(previousData: T | undefined) => T | undefined), Error, <T>(previousData: T | undefined) => T | undefined, readonly ["episodes", "active", number]>, queryClient?: QueryClient | undefined): DefinedUseQueryResult<...>', gave the following error.
+    Type '({ signal }: { client: QueryClient; queryKey: readonly ["episodes", "active", number]; signal: AbortSignal; meta: Record<string, unknown> | undefined; pageParam?: unknown; direction?: unknown; }) => Promise<...>' is not assignable to type 'QueryFunction<(<T>(previousData: T | undefined) => T | undefined), readonly ["episodes", "active", number]>'.
+      Type 'Promise<EpisodeListResponse>' is not assignable to type '(<T>(previousData: T | undefined) => T | undefined) | Promise<(<T>(previousData: T | undefined) => T | undefined)>'.
+        Type 'Promise<EpisodeListResponse>' is not assignable to type 'Promise<(<T>(previousData: T | undefined) => T | undefined)>'.
+          Type 'EpisodeListResponse' is not assignable to type '<T>(previousData: T | undefined) => T | undefined'.
+            Type 'EpisodeListResponse' provides no match for the signature '<T>(previousData: T | undefined): T | undefined'.
+  Overload 2 of 3, '(options: UndefinedInitialDataOptions<EpisodeListResponse, Error, EpisodeListResponse, readonly ["episodes", "active", number]>, queryClient?: QueryClient | undefined): UseQueryResult<...>', gave the following error.
+    Object literal may only specify known properties, and 'cacheTime' does not exist in type 'UndefinedInitialDataOptions<EpisodeListResponse, Error, EpisodeListResponse, readonly ["episodes", "active", number]>'.
+  Overload 3 of 3, '(options: UseQueryOptions<EpisodeListResponse, Error, EpisodeListResponse, readonly ["episodes", "active", number]>, queryClient?: QueryClient | undefined): UseQueryResult<...>', gave the following error.
+    Object literal may only specify known properties, and 'cacheTime' does not exist in type 'UseQueryOptions<EpisodeListResponse, Error, EpisodeListResponse, readonly ["episodes", "active", number]>'.
+src/hooks/queries/useFires.ts(12,10): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(options: DefinedInitialDataOptions<(<T>(previousData: T | undefined) => T | undefined), Error, <T>(previousData: T | undefined) => T | undefined, readonly ["fires", "list", object]>, queryClient?: QueryClient | undefined): DefinedUseQueryResult<...>', gave the following error.
+    Type '({ signal }: { client: QueryClient; queryKey: readonly ["fires", "list", object]; signal: AbortSignal; meta: Record<string, unknown> | undefined; pageParam?: unknown; direction?: unknown; }) => Promise<...>' is not assignable to type 'QueryFunction<(<T>(previousData: T | undefined) => T | undefined), readonly ["fires", "list", object]>'.
+      Type 'Promise<FireListResponse>' is not assignable to type '(<T>(previousData: T | undefined) => T | undefined) | Promise<(<T>(previousData: T | undefined) => T | undefined)>'.
+        Type 'Promise<FireListResponse>' is not assignable to type 'Promise<(<T>(previousData: T | undefined) => T | undefined)>'.
+          Type 'FireListResponse' is not assignable to type '<T>(previousData: T | undefined) => T | undefined'.
+            Type 'FireListResponse' provides no match for the signature '<T>(previousData: T | undefined): T | undefined'.
+  Overload 2 of 3, '(options: UndefinedInitialDataOptions<FireListResponse, Error, FireListResponse, readonly ["fires", "list", object]>, queryClient?: QueryClient | undefined): UseQueryResult<...>', gave the following error.
+    Object literal may only specify known properties, and 'cacheTime' does not exist in type 'UndefinedInitialDataOptions<FireListResponse, Error, FireListResponse, readonly ["fires", "list", object]>'.
+  Overload 3 of 3, '(options: UseQueryOptions<FireListResponse, Error, FireListResponse, readonly ["fires", "list", object]>, queryClient?: QueryClient | undefined): UseQueryResult<...>', gave the following error.
+    Object literal may only specify known properties, and 'cacheTime' does not exist in type 'UseQueryOptions<FireListResponse, Error, FireListResponse, readonly ["fires", "list", object]>'.
+src/hooks/queries/useFireStats.ts(13,10): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(options: DefinedInitialDataOptions<(<T>(previousData: T | undefined) => T | undefined), Error, <T>(previousData: T | undefined) => T | undefined, readonly ["fires", "stats", object]>, queryClient?: QueryClient | undefined): DefinedUseQueryResult<...>', gave the following error.
+    Type '({ signal }: { client: QueryClient; queryKey: readonly ["fires", "stats", object]; signal: AbortSignal; meta: Record<string, unknown> | undefined; pageParam?: unknown; direction?: unknown; }) => Promise<...>' is not assignable to type 'QueryFunction<(<T>(previousData: T | undefined) => T | undefined), readonly ["fires", "stats", object]>'.
+      Type 'Promise<FireStatsResponse>' is not assignable to type '(<T>(previousData: T | undefined) => T | undefined) | Promise<(<T>(previousData: T | undefined) => T | undefined)>'.
+        Type 'Promise<FireStatsResponse>' is not assignable to type 'Promise<(<T>(previousData: T | undefined) => T | undefined)>'.
+          Type 'FireStatsResponse' is not assignable to type '<T>(previousData: T | undefined) => T | undefined'.
+            Type 'FireStatsResponse' provides no match for the signature '<T>(previousData: T | undefined): T | undefined'.
+  Overload 2 of 3, '(options: UndefinedInitialDataOptions<FireStatsResponse, Error, FireStatsResponse, readonly ["fires", "stats", object]>, queryClient?: QueryClient | undefined): UseQueryResult<...>', gave the following error.
+    Object literal may only specify known properties, and 'cacheTime' does not exist in type 'UndefinedInitialDataOptions<FireStatsResponse, Error, FireStatsResponse, readonly ["fires", "stats", object]>'.
+  Overload 3 of 3, '(options: UseQueryOptions<FireStatsResponse, Error, FireStatsResponse, readonly ["fires", "stats", object]>, queryClient?: QueryClient | undefined): UseQueryResult<...>', gave the following error.
+    Object literal may only specify known properties, and 'cacheTime' does not exist in type 'UseQueryOptions<FireStatsResponse, Error, FireStatsResponse, readonly ["fires", "stats", object]>'.
+src/hooks/queries/usePaymentStatus.ts(38,17): error TS2339: Property 'status' does not exist on type 'Query<PaymentStatusResponse, Error, PaymentStatusResponse, readonly unknown[]>'.
+src/hooks/queries/usePaymentStatus.ts(38,48): error TS2339: Property 'status' does not exist on type 'Query<PaymentStatusResponse, Error, PaymentStatusResponse, readonly unknown[]>'.
+src/pages/FireDetail.tsx(8,3): error TS6133: 'Download' is declared but its value is never read.
+src/pages/FireDetail.tsx(15,1): error TS6192: All imports in import declaration are unused.
+src/pages/FireDetail.tsx(228,9): error TS6133: 'slides' is declared but its value is never read.
+src/pages/FireHistory.tsx(6,3): error TS6133: 'BarChart3' is declared but its value is never read.
+src/pages/FireHistory.tsx(56,1): error TS6133: 'FireCardSkeleton' is declared but its value is never read.
+src/pages/FireHistory.tsx(449,23): error TS2339: Property 'fires' does not exist on type '<T>(previousData: T | undefined) => T | undefined'.
+src/pages/FireHistory.tsx(450,28): error TS2339: Property 'pagination' does not exist on type '<T>(previousData: T | undefined) => T | undefined'.
+src/pages/FireHistory.tsx(451,31): error TS2339: Property 'stats' does not exist on type '<T>(previousData: T | undefined) => T | undefined'.
+src/pages/FireHistory.tsx(452,22): error TS2339: Property 'ytd_comparison' does not exist on type '<T>(previousData: T | undefined) => T | undefined'.
+src/pages/FireHistory.tsx(483,44): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/pages/FireHistory.tsx(492,18): error TS7006: Parameter 'fire' implicitly has an 'any' type.
+src/pages/FireHistory.tsx(549,34): error TS2339: Property 'pagination' does not exist on type '<T>(previousData: T | undefined) => T | undefined'.
+src/pages/FireHistory.tsx(562,7): error TS2353: Object literal may only specify known properties, and 'cacheTime' does not exist in type 'FetchQueryOptions<FireListResponse, Error, FireListResponse, readonly ["fires", "list", object], never>'.
+src/pages/FireHistory.tsx(564,13): error TS2339: Property 'pagination' does not exist on type '<T>(previousData: T | undefined) => T | undefined'.
+src/pages/FireHistory.tsx(751,27): error TS2322: Type '(val: number) => string' is not assignable to type 'Formatter<number, NameType> & ((value: number, name: NameType, item: Payload<number, NameType>, index: number, payload: Payload<number, NameType>[]) => ReactNode | [...])'.
+  Type '(val: number) => string' is not assignable to type 'Formatter<number, NameType>'.
+    Types of parameters 'val' and 'value' are incompatible.
+      Type 'number | undefined' is not assignable to type 'number'.
+        Type 'undefined' is not assignable to type 'number'.
+src/pages/FireHistory.tsx(752,27): error TS2322: Type '(label: string, payload: readonly Payload<number, NameType>[] | Payload<number, NameType>[]) => string' is not assignable to type '((label: ReactNode, payload: readonly Payload<number, NameType>[]) => ReactNode) & ((label: any, payload: Payload<number, NameType>[]) => ReactNode)'.
+  Type '(label: string, payload: readonly Payload<number, NameType>[] | Payload<number, NameType>[]) => string' is not assignable to type '(label: ReactNode, payload: readonly Payload<number, NameType>[]) => ReactNode'.
+    Types of parameters 'label' and 'label' are incompatible.
+      Type 'ReactNode' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/pages/FireHistory.tsx(760,53): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: Props, context?: any): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<...> | Promise<...> | Component<...> | null | undefined', gave the following error.
+    Type '(v: number) => string' is not assignable to type 'LabelFormatter'.
+      Types of parameters 'v' and 'label' are incompatible.
+        Type 'RenderableText' is not assignable to type 'number'.
+          Type 'undefined' is not assignable to type 'number'.
+  Overload 2 of 2, '(props: Props): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | Promise<...> | Component<...> | null | undefined', gave the following error.
+    Type '(v: number) => string' is not assignable to type 'LabelFormatter'.
+      Types of parameters 'v' and 'label' are incompatible.
+        Type 'RenderableText' is not assignable to type 'number'.
+          Type 'undefined' is not assignable to type 'number'.
+src/pages/FireHistory.tsx(793,27): error TS2322: Type '(val: number) => string' is not assignable to type 'Formatter<number, NameType> & ((value: number, name: NameType, item: Payload<number, NameType>, index: number, payload: Payload<number, NameType>[]) => ReactNode | [...])'.
+  Type '(val: number) => string' is not assignable to type 'Formatter<number, NameType>'.
+    Types of parameters 'val' and 'value' are incompatible.
+      Type 'number | undefined' is not assignable to type 'number'.
+        Type 'undefined' is not assignable to type 'number'.
+src/pages/FireHistory.tsx(794,27): error TS2322: Type '(label: string, payload: readonly Payload<number, NameType>[] | Payload<number, NameType>[]) => string' is not assignable to type '((label: ReactNode, payload: readonly Payload<number, NameType>[]) => ReactNode) & ((label: any, payload: Payload<number, NameType>[]) => ReactNode)'.
+  Type '(label: string, payload: readonly Payload<number, NameType>[] | Payload<number, NameType>[]) => string' is not assignable to type '(label: ReactNode, payload: readonly Payload<number, NameType>[]) => ReactNode'.
+    Types of parameters 'label' and 'label' are incompatible.
+      Type 'ReactNode' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/pages/FireHistory.tsx(802,53): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: Props, context?: any): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<...> | Promise<...> | Component<...> | null | undefined', gave the following error.
+    Type '(v: number) => string' is not assignable to type 'LabelFormatter'.
+      Types of parameters 'v' and 'label' are incompatible.
+        Type 'RenderableText' is not assignable to type 'number'.
+          Type 'undefined' is not assignable to type 'number'.
+  Overload 2 of 2, '(props: Props): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | Promise<...> | Component<...> | null | undefined', gave the following error.
+    Type '(v: number) => string' is not assignable to type 'LabelFormatter'.
+      Types of parameters 'v' and 'label' are incompatible.
+        Type 'RenderableText' is not assignable to type 'number'.
+          Type 'undefined' is not assignable to type 'number'.
+src/pages/FireHistory.tsx(858,23): error TS2322: Type '(label: string, payload: readonly Payload<ValueType, NameType>[] | Payload<ValueType, NameType>[]) => string' is not assignable to type '((label: ReactNode, payload: readonly Payload<ValueType, NameType>[]) => ReactNode) & ((label: any, payload: Payload<ValueType, NameType>[]) => ReactNode)'.
+  Type '(label: string, payload: readonly Payload<ValueType, NameType>[] | Payload<ValueType, NameType>[]) => string' is not assignable to type '(label: ReactNode, payload: readonly Payload<ValueType, NameType>[]) => ReactNode'.
+    Types of parameters 'label' and 'label' are incompatible.
+      Type 'ReactNode' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/pages/FireHistory.tsx(864,49): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: Props, context?: any): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<...> | Promise<...> | Component<...> | null | undefined', gave the following error.
+    Type '(v: number) => string' is not assignable to type 'LabelFormatter'.
+      Types of parameters 'v' and 'label' are incompatible.
+        Type 'RenderableText' is not assignable to type 'number'.
+          Type 'undefined' is not assignable to type 'number'.
+  Overload 2 of 2, '(props: Props): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | Promise<...> | Component<...> | null | undefined', gave the following error.
+    Type '(v: number) => string' is not assignable to type 'LabelFormatter'.
+      Types of parameters 'v' and 'label' are incompatible.
+        Type 'RenderableText' is not assignable to type 'number'.
+          Type 'undefined' is not assignable to type 'number'.
+src/pages/FireHistory.tsx(892,25): error TS2322: Type '(val: number) => string' is not assignable to type 'Formatter<number, NameType> & ((value: number, name: NameType, item: Payload<number, NameType>, index: number, payload: Payload<number, NameType>[]) => ReactNode | [...])'.
+  Type '(val: number) => string' is not assignable to type 'Formatter<number, NameType>'.
+    Types of parameters 'val' and 'value' are incompatible.
+      Type 'number | undefined' is not assignable to type 'number'.
+        Type 'undefined' is not assignable to type 'number'.
+src/pages/FireHistory.tsx(893,25): error TS2322: Type '(label: string, payload: readonly Payload<number, NameType>[] | Payload<number, NameType>[]) => string' is not assignable to type '((label: ReactNode, payload: readonly Payload<number, NameType>[]) => ReactNode) & ((label: any, payload: Payload<number, NameType>[]) => ReactNode)'.
+  Type '(label: string, payload: readonly Payload<number, NameType>[] | Payload<number, NameType>[]) => string' is not assignable to type '(label: ReactNode, payload: readonly Payload<number, NameType>[]) => ReactNode'.
+    Types of parameters 'label' and 'label' are incompatible.
+      Type 'ReactNode' is not assignable to type 'string'.
+        Type 'undefined' is not assignable to type 'string'.
+src/pages/FireHistory.tsx(901,51): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(props: Props, context?: any): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<...> | Promise<...> | Component<...> | null | undefined', gave the following error.
+    Type '(v: number) => string' is not assignable to type 'LabelFormatter'.
+      Types of parameters 'v' and 'label' are incompatible.
+        Type 'RenderableText' is not assignable to type 'number'.
+          Type 'undefined' is not assignable to type 'number'.
+  Overload 2 of 2, '(props: Props): string | number | bigint | boolean | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | Promise<...> | Component<...> | null | undefined', gave the following error.
+    Type '(v: number) => string' is not assignable to type 'LabelFormatter'.
+      Types of parameters 'v' and 'label' are incompatible.
+        Type 'RenderableText' is not assignable to type 'number'.
+          Type 'undefined' is not assignable to type 'number'.
+src/pages/FireHistory.tsx(994,25): error TS7006: Parameter 'fire' implicitly has an 'any' type.
+src/pages/FireHistory.tsx(1136,37): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/services/api.ts(156,48): error TS2345: Argument of type 'AxiosRequestHeaders | undefined' is not assignable to parameter of type 'AxiosRequestHeaders'.
+  Type 'undefined' is not assignable to type 'AxiosRequestHeaders'.
+    Type 'undefined' is not assignable to type 'Partial<RawAxiosHeaders & { Accept: AxiosHeaderValue; "Content-Length": AxiosHeaderValue; "User-Agent": AxiosHeaderValue; "Content-Encoding": AxiosHeaderValue; Authorization: AxiosHeaderValue; } & { ...; }>'.

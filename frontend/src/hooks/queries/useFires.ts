@@ -14,6 +14,6 @@ export function useFires(filters?: FireFilters) {
     queryFn: ({ signal }) => getFires(filters, signal),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
-    cacheTime: 30 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   })
 }

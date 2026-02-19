@@ -34,7 +34,8 @@ export function usePaymentStatus(
       return response.data
     },
     enabled: options?.enabled ?? !!paymentRequestId,
-    refetchInterval: (data) => {
+    refetchInterval: (query) => {
+      const data = query.state.data
       if (data?.status === 'approved' || data?.status === 'rejected') {
         return false
       }

@@ -15,7 +15,7 @@ export function useFireStats(filters?: FireFilters) {
     queryFn: ({ signal }) => getFireStats(safeFilters, signal),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
-    cacheTime: 30 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
     structuralSharing: true,
   })
 }

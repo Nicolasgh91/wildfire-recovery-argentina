@@ -35,7 +35,7 @@ function setHeaderValue(headers: HeaderBag, key: string, value: string) {
   if (typeof setter === 'function') {
     setter.call(headers, key, value)
   } else {
-    ;(headers as Record<string, string>)[key] = value
+    ; (headers as Record<string, string>)[key] = value
   }
 }
 
@@ -153,7 +153,7 @@ export async function responseErrorInterceptor(error: AxiosError) {
   const skipAuthRedirect =
     (config as { skipAuthRedirect?: boolean } | undefined)?.skipAuthRedirect ||
     shouldSkipAuthRedirect(config)
-  const hasAuthHeader = Boolean(getHeaderValue(config?.headers, 'Authorization'))
+  const hasAuthHeader = Boolean(getHeaderValue(config?.headers || ({} as any), 'Authorization'))
   const status = error.response?.status
 
   if (

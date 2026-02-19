@@ -4,9 +4,10 @@ from urllib.parse import quote_plus  # ← AGREGADO
 from pydantic import AnyHttpUrl, Field, SecretStr, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.brand import brand
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "ForestGuard"
+    PROJECT_NAME: str = brand.APP_NAME
     VERSION: str = "3.0.0"
     API_V1_PREFIX: str = "/api/v1"
 

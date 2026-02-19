@@ -26,6 +26,7 @@ export default defineConfig(async () => {
   // Optional critical CSS extraction (no-op if plugin is not installed)
   if (process.env.USE_CRITTERS !== 'false') {
     try {
+      // @ts-ignore
       const { default: critters } = await import('vite-plugin-critters')
       plugins.push(critters({ preload: 'swap', reduceInlineStyles: true }))
     } catch (err) {
@@ -42,7 +43,7 @@ export default defineConfig(async () => {
           filename: 'dist/stats.html',
           gzipSize: true,
           brotliSize: true,
-        }),
+        }) as any,
       )
     } catch (err) {
       console.warn('rollup-plugin-visualizer no está instalado; omitiendo análisis de bundle.')

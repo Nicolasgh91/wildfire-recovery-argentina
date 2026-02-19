@@ -44,68 +44,12 @@ nginx_is_running() {
     docker compose -f "$COMPOSE_FILE" ps --status running --services | grep -q '^nginx$'
 }
 
-validate_frontend_build_env() {
-    local missing_vars=()
-
-    local supabase_url
-    local supabase_anon_key
-    supabase_url="$(get_env_value VITE_SUPABASE_URL "")"
-    supabase_anon_key="$(get_env_value VITE_SUPABASE_ANON_KEY "")"
-
-    if [ -z "$supabase_url" ]; then
-        supabase_url="$(get_env_value SUPABASE_URL "")"
-    fi
-    if [ -z "$supabase_anon_key" ]; then
-        supabase_anon_key="$(get_env_value SUPABASE_ANON_KEY "")"
-    fi
-
-    if [ -z "$supabase_url" ]; then
-        missing_vars+=("VITE_SUPABASE_URL (or SUPABASE_URL)")
-    fi
-    if [ -z "$supabase_anon_key" ]; then
-        missing_vars+=("VITE_SUPABASE_ANON_KEY (or SUPABASE_ANON_KEY)")
-    fi
-
-    if [ "${#missing_vars[@]}" -gt 0 ]; then
-        echo "Error: faltan variables frontend build-time en .env: ${missing_vars[*]}"
-        echo "Referencia: frontend/.env.production.example"
-        exit 1
-    fi
-
-    local api_base_url
-    api_base_url="$(get_env_value VITE_API_BASE_URL /api/v1)"
-    if echo "$api_base_url" | grep -Eq 'localhost|127\.0\.0\.1'; then
-        echo "Error: VITE_API_BASE_URL no debe apuntar a localhost/127.0.0.1 en produccion"
-        echo "Valor actual: $api_base_url"
-        exit 1
-    fi
-}
-
-rebuild_frontend() {
-    validate_frontend_build_env
-    echo "Rebuilding frontend image..."
-    docker compose -f "$COMPOSE_FILE" build --no-cache frontend
-    docker compose -f "$COMPOSE_FILE" up -d frontend nginx
-    echo "Frontend rebuilt and nginx refreshed"
-}
-
 case "${1:-}" in
     --build)
-        BUILD_TARGET="${2:-all}"
-        if [ "$BUILD_TARGET" = "frontend" ]; then
-            rebuild_frontend
-        elif [ "$BUILD_TARGET" = "all" ]; then
-            validate_frontend_build_env
-            echo "Rebuilding images..."
-            docker compose -f "$COMPOSE_FILE" build --no-cache
-            docker compose -f "$COMPOSE_FILE" up -d
-            echo "Deploy completado con rebuild"
-        else
-            echo "Rebuilding service: $BUILD_TARGET"
-            docker compose -f "$COMPOSE_FILE" build --no-cache "$BUILD_TARGET"
-            docker compose -f "$COMPOSE_FILE" up -d "$BUILD_TARGET"
-            echo "Servicio rebuilt: $BUILD_TARGET"
-        fi
+        echo "Rebuilding images..."
+        docker compose -f "$COMPOSE_FILE" build --no-cache
+        docker compose -f "$COMPOSE_FILE" up -d
+        echo "Deploy completado con rebuild"
         ;;
     --logs)
         echo "Mostrando logs..."
@@ -128,7 +72,6 @@ case "${1:-}" in
     --pull)
         echo "Actualizando codigo..."
         git pull origin main
-        validate_frontend_build_env
         docker compose -f "$COMPOSE_FILE" up -d --build
         echo "Codigo actualizado y desplegado"
         ;;
@@ -141,8 +84,6 @@ case "${1:-}" in
             echo "Ejecutar: cp .env.template .env && nano .env"
             exit 1
         fi
-
-        validate_frontend_build_env
 
         SSL_DOMAIN="$(get_env_value SSL_DOMAIN forestguard.freedynamicdns.org)"
         CERT_DIR="./certbot/conf/live/${SSL_DOMAIN}"

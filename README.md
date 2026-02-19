@@ -1,4 +1,4 @@
-# ForestGuard
+# Vestigia
 
 **Plataforma full-stack de inteligencia geoespacial que centraliza y expone de forma transparente datos satelitales públicos dispersos sobre incendios forestales en Argentina.**
 
@@ -9,8 +9,15 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
-  <img src="docs/assets/forestguard-banner.png" alt="ForestGuard Banner" width="800"/>
+  <img src="docs/assets/forestguard-banner.png" alt="Vestigia Banner" width="800"/>
 </p>
+
+<div align="center">
+
+| [🏠 Project](#vestigia) | [📚 Documentation](docs/INDEX.md) | [🚀 Features](#características) | [🏗️ Architecture](#arquitectura) | [🛠️ Install](#instalación) | [🌐 API](#api-reference) |
+| :---: | :---: | :---: | :---: | :---: | :---: |
+
+</div>
 
 ---
 
@@ -18,7 +25,7 @@
 
 - [Sobre este proyecto](#sobre-este-proyecto)
 - [Qué demuestra este proyecto](#qué-demuestra-este-proyecto)
-- [Qué hace ForestGuard](#qué-hace-forestguard)
+- [Qué hace Vestigia](#qué-hace-vestigia)
 - [Características](#características)
 - [Arquitectura](#arquitectura)
 - [Stack tecnológico](#stack-tecnológico)
@@ -37,11 +44,11 @@
 
 ## Sobre este proyecto
 
-ForestGuard es mi primera aplicación full-stack completa y mi primera API diseñada y construida integralmente. Es un proyecto de aprendizaje aplicado que está desplegado y corriendo en producción sobre infraestructura de costo cero.
+Vestigia es mi primera aplicación full-stack completa y mi primera API diseñada y construida integralmente. Es un proyecto de aprendizaje aplicado que está desplegado y corriendo en producción sobre infraestructura de costo cero.
 
 La plataforma nació de una pregunta concreta: los datos satelitales sobre incendios forestales en Argentina existen y son públicos, pero están dispersos en múltiples APIs, formatos y servicios que requieren conocimiento técnico para acceder. No existía una herramienta unificada que permitiera a un ciudadano común explorar esa información de forma accesible.
 
-ForestGuard resuelve eso: ingiere datos de NASA FIRMS, procesa imágenes de Sentinel-2 vía Google Earth Engine, integra datos climáticos de Open-Meteo, y presenta todo a través de una interfaz que permite investigar sin conocimientos técnicos previos.
+Vestigia resuelve eso: ingiere datos de NASA FIRMS, procesa imágenes de Sentinel-2 vía Google Earth Engine, integra datos climáticos de Open-Meteo, y presenta todo a través de una interfaz que permite investigar sin conocimientos técnicos previos.
 
 ---
 
@@ -54,9 +61,9 @@ ForestGuard resuelve eso: ingiere datos de NASA FIRMS, procesa imágenes de Sent
 
 ---
 
-## Qué hace ForestGuard
+## Qué hace Vestigia
 
-ForestGuard centraliza datos satelitales públicos de múltiples fuentes (NASA FIRMS, Sentinel-2/Google Earth Engine, Open-Meteo) y los transforma en información estructurada, verificable y accesible para cualquier persona.
+Vestigia centraliza datos satelitales públicos de múltiples fuentes (NASA FIRMS, Sentinel-2/Google Earth Engine, Open-Meteo) y los transforma en información estructurada, verificable y accesible para cualquier persona.
 
 ### El problema que resuelve
 
