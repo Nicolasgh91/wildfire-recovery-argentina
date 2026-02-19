@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { I18nProvider } from '@/context/LanguageContext'
 import { isFeatureEnabled } from '@/lib/featureFlags'
 import { useIdleTimer } from '@/hooks/useIdleTimer'
+import { HOME_PATH, resolveRootDestination } from '@/lib/routing'
 
 const HomePage = lazy(() => import('@/pages/Home'))
 const MapPage = lazy(() => import('@/pages/MapPage'))
@@ -40,12 +41,23 @@ function AppLoading() {
   )
 }
 
+function RootRouteGate() {
+  const { status } = useAuth()
+  const destination = resolveRootDestination(status)
+
+  if (destination === null) {
+    return <AppLoading />
+  }
+
+  return <Navigate to={destination} replace />
+}
+
 function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const { isAuthenticated, signOut } = useAuth()
   const isMapPage = pathname === '/map'
-  const hideChrome = pathname === '/login' || pathname === '/register'
+  const hideChrome = pathname === '/login' || pathname === '/register' || pathname === '/'
   const shellClass = isMapPage ? 'flex h-screen flex-col' : 'flex min-h-screen flex-col'
   const mainClass = hideChrome
     ? 'flex-1'
@@ -79,7 +91,8 @@ export default function App() {
             <AppShell>
               <Suspense fallback={<AppLoading />}>
                 <Routes>
-                  <Route path="/" element={<HomePage />} />
+                  <Route path="/" element={<RootRouteGate />} />
+                  <Route path={HOME_PATH} element={<HomePage />} />
                   <Route path="/map" element={<MapPage />} />
                   <Route
                     path="/audit"

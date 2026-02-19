@@ -13,6 +13,7 @@ import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import bosqueLanding from '@/assets/bosque_landing.webp'
 import { BRAND } from '@/config/brand'
+import { HOME_PATH, LOGIN_PATH } from '@/lib/routing'
 
 type RegisterValues = {
   firstName: string
@@ -63,7 +64,7 @@ export default function RegisterPage() {
 
   return (
     <div className="relative min-h-screen bg-background p-6 md:p-8">
-      <Link to="/" className="absolute left-6 top-6 flex items-center gap-2 md:left-8 md:top-8">
+      <Link to={LOGIN_PATH} className="absolute left-6 top-6 flex items-center gap-2 md:left-8 md:top-8">
         <Trees className="h-8 w-8 text-primary" />
         <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
       </Link>
@@ -138,7 +139,7 @@ export default function RegisterPage() {
                 </span>
               </div>
               <Button asChild variant="secondary" className="mt-4 w-full">
-                <Link to="/">{t('registerGuestAction')}</Link>
+                <Link to={HOME_PATH}>{t('registerGuestAction')}</Link>
               </Button>
             </div>
 

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { usePaymentStatus } from '@/hooks/queries/usePaymentStatus'
 import { useAuth } from '@/context/AuthContext'
 import { useI18n } from '@/context/LanguageContext'
+import { HOME_PATH } from '@/lib/routing'
 
 const POLLING_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -91,7 +92,7 @@ export default function PaymentReturnPage() {
         <p className="mb-6 text-gray-600">
           {t('paymentProcessingMessage')}
         </p>
-        <Button onClick={() => navigate('/')}>{t('paymentGoToHome')}</Button>
+        <Button onClick={() => navigate(HOME_PATH)}>{t('paymentGoToHome')}</Button>
       </div>
     )
   }

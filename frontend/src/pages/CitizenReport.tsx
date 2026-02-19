@@ -16,6 +16,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { useI18n } from '@/context/LanguageContext'
 import { fires } from '@/data/mockdata'
 import { reverseGeocode } from '@/services/endpoints/geocode'
+import { HOME_PATH } from '@/lib/routing'
 
 const AuditMap = lazy(() =>
   import('@/components/audit-map').then((mod) => ({ default: mod.AuditMap })),
@@ -115,7 +116,7 @@ function CitizenReportContent() {
               </div>
               <h2 className="mb-2 text-2xl font-bold text-primary">{t('reportSuccess')}</h2>
               <p className="text-muted-foreground">{t('reportSuccessMessage')}</p>
-              <Button className="mt-6" onClick={() => navigate('/')}>
+              <Button className="mt-6" onClick={() => navigate(HOME_PATH)}>
                 {t('home')}
               </Button>
             </CardContent>

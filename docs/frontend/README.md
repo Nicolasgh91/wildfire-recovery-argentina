@@ -13,7 +13,9 @@ React + Vite + Tailwind UI for ForestGuard.
 `react-router-dom` handles all routes inside `App.tsx`.
 
 Key routes:
-- `/` -> Home
+- `/` -> Redirect by auth state (`/login` for guest, `/home` for authenticated)
+- `/login` -> Landing/Login
+- `/home` -> Home
 - `/map` -> Map
 - `/audit` -> Verificar terreno (requiere login)
 - `/exploracion` -> Exploración satelital (wizard)
@@ -25,6 +27,8 @@ Key routes:
 - `/fires/:id` -> Fire detail
 - `/shelters` -> Shelters + visitor logs (feature flag `refuges`)
 - `/faq`, `/manual`, `/glossary`, `/contact`
+
+Detailed role/access behavior is documented in [`routing_access_ruc.md`](routing_access_ruc.md).
 
 ### State and data flow
 - Local component state for pages, plus React Query for server state.
@@ -57,7 +61,10 @@ API (FastAPI, /api/v1)
 ```
 
 ### API contracts per page
-- `/` Home: no API calls.
+- `/` Root gate: no API calls, redirect based on auth state.
+- `/home` Home (live):
+  - `GET /api/v1/fire-episodes?mode=active&page=1&page_size=20`
+  - `GET /api/v1/fire-episodes?mode=recent&page=1&page_size=20`
 - `/map`: uses mock data (`src/data/mockdata.ts`). Planned: `GET /api/v1/fires` with `status_scope=active`.
 - `/audit` (live):
   - `POST /api/v1/audit/land-use`
@@ -189,4 +196,3 @@ API (FastAPI, /api/v1)
 - La tarjeta de 'Calidad de datos' en FireDetail está comentada temporalmente; el resto de las tarjetas se reacomoda automáticamente.
 - El carrusel 'Obtener imágenes HD' está oculto temporalmente; las tarjetas restantes ocupan su espacio.
 - Los íconos/imports de secciones ocultas (ej. Download, AlertTriangle, Flame, MapPin) se mantienen para reactivarlos rápido.
-
