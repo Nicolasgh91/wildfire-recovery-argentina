@@ -6,6 +6,7 @@
 # Uso:
 #   ./scripts/deploy.sh          # Deploy normal
 #   ./scripts/deploy.sh --build  # Rebuild de la imagen
+#   ./scripts/deploy.sh --build frontend  # Rebuild solo frontend + nginx
 #   ./scripts/deploy.sh --logs   # Ver logs
 #   ./scripts/deploy.sh --stop   # Detener servicios
 #
@@ -75,7 +76,7 @@ case "${1:-}" in
         echo "Codigo actualizado y desplegado"
         ;;
     *)
-        echo "Desplegando ForestGuard..."
+        echo "Desplegando Vestigia..."
 
         # Verificar que existe .env
         if [ ! -f .env ]; then
@@ -83,6 +84,8 @@ case "${1:-}" in
             echo "Ejecutar: cp .env.template .env && nano .env"
             exit 1
         fi
+
+        validate_frontend_build_env
 
         SSL_DOMAIN="$(get_env_value SSL_DOMAIN forestguard.freedynamicdns.org)"
         CERT_DIR="./certbot/conf/live/${SSL_DOMAIN}"

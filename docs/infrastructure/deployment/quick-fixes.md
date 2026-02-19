@@ -64,6 +64,32 @@ docker images | grep frontend
 docker pull ghcr.io/nicolasgh91/wildfire-recovery-argentina/frontend:latest
 ```
 
+### 3.1 Blank Page After "Successful" Deploy
+```bash
+# Validate frontend build-time vars required by Vite bundle
+grep -E '^VITE_(API_BASE_URL|SUPABASE_URL|SUPABASE_ANON_KEY|API_KEY|USE_SUPABASE_JWT|SENTRY_DSN|AUTH_REDIRECT_URL)=' .env
+
+# Optional: hotfix file inside frontend build context
+cp frontend/.env.production.example frontend/.env.production
+# then edit frontend/.env.production with production values
+
+# Production guardrail: API base URL must not be localhost
+grep -E '^VITE_API_BASE_URL=' .env
+
+# Rebuild frontend only (new deploy.sh support)
+./scripts/deploy.sh --build frontend
+
+# Validate resulting containers and logs
+docker compose ps frontend nginx
+docker compose logs frontend --tail=120
+docker compose logs nginx --tail=120
+```
+
+Expected:
+- `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are present
+- `VITE_API_BASE_URL` uses `/api/v1` (or external non-localhost URL)
+- `frontend` and `nginx` are running after rebuild
+
 ### 4. API Backend Issues
 ```bash
 # Test API health
@@ -71,6 +97,10 @@ curl -f http://localhost:8000/health
 
 # Check API logs
 docker compose logs api
+docker compose logs api --tail=200
+
+# Verify health from inside the API container (useful for unhealthy status triage)
+docker compose exec -T api curl -f http://localhost:8000/health
 
 # Restart API
 docker compose restart api
