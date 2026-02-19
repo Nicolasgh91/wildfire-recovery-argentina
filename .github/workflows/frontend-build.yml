@@ -1,7 +1,5 @@
-name: Set up build secrets
-run: echo "Secrets mapped"
-
 name: Build and push (Multi-architecture)
+run: echo "Secrets mapped"
 uses: docker/build-push-action@v6
 with:
   context: ./frontend
