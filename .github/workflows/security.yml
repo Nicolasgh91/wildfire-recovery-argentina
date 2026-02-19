@@ -21,7 +21,16 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+  docs-layout:
+    name: Docs Layout Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - name: Validate markdown files location
+        run: bash scripts/check-docs-layout.sh
 
   pip-audit:
     name: Python Dependency Audit
@@ -95,7 +104,7 @@ jobs:
     name: Auto-merge Safe Patches
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
-    needs: [secret-scan, pip-audit, npm-audit, auth-contracts, bundle-budget]
+    needs: [secret-scan, docs-layout, pip-audit, npm-audit, auth-contracts, bundle-budget]
     permissions:
       contents: write
       pull-requests: write

@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useI18n } from '@/context/LanguageContext'
+import { BRAND } from '@/config/brand'
 
 export function Footer() {
   const { t } = useI18n()
@@ -79,7 +80,7 @@ export function Footer() {
           <div className="flex flex-col gap-4">
             <div className="flex items-center gap-2">
               <Trees className="h-8 w-8 text-primary" />
-              <span className="text-xl font-bold text-foreground">ForestGuard</span>
+              <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
               {t('footerBrandLine1')}
@@ -244,7 +245,7 @@ export function Footer() {
         <div className="mt-12 border-t border-border pt-8">
           <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
             <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} ForestGuard Argentina. {t('footerCopyright')}
+              &copy; {new Date().getFullYear()} {BRAND.name} Argentina. {t('footerCopyright')}
             </p>
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
               <span>{t('footerMadeWith')}</span>

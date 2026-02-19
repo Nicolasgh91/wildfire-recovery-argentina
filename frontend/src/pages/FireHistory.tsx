@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
-  BarChart3,
+
   Calendar,
   Filter,
   Flame,
@@ -53,7 +53,7 @@ import {
   type FireFiltersState,
   type FireSortValue,
 } from '@/types/fire'
-import { FireCardSkeleton } from '@/components/FireCardSkeleton'
+
 import { useExportMutation } from '@/hooks/mutations/useExportMutation'
 import { getFires } from '@/services/endpoints/fires'
 import { queryKeys } from '@/lib/queryClient'
@@ -113,8 +113,8 @@ const parseFilters = (searchParams: URLSearchParams): FireFiltersState => {
     province: searchParams.get('province') || '',
     status_scope:
       statusScopeParam === 'active' ||
-      statusScopeParam === 'historical' ||
-      statusScopeParam === 'all'
+        statusScopeParam === 'historical' ||
+        statusScopeParam === 'all'
         ? statusScopeParam
         : DEFAULT_FILTERS.status_scope,
     date_from: searchParams.get('date_from') || '',
@@ -480,7 +480,7 @@ export default function FireHistoryPage() {
 
   const topFrpData = useMemo(() => {
     if (!statsPayload) return []
-    return statsPayload.top_frp_fires.map((item) => ({
+    return statsPayload.top_frp_fires.map((item: any) => ({
       name: (item.province || '').trim() || (item.id ? item.id.slice(0, 6) : 'Sin nombre'),
       fullName: item.province || item.id,
       frp: item.max_frp ?? 0,
@@ -489,7 +489,7 @@ export default function FireHistoryPage() {
 
   const tableRows = useMemo(
     () =>
-      fires.map((fire) => ({
+      fires.map((fire: any) => ({
         id: fire.id,
         start_date: fire.start_date,
         end_date: fire.end_date,
@@ -559,7 +559,7 @@ export default function FireHistoryPage() {
       queryKey: queryKeys.fires.list(nextFilters),
       queryFn: ({ signal }) => getFires(nextFilters, signal),
       staleTime: 5 * 60 * 1000,
-      cacheTime: 30 * 60 * 1000,
+      gcTime: 30 * 60 * 1000,
     })
   }, [data?.pagination, effectivePageSize, filters, queryClient])
 
@@ -612,8 +612,8 @@ export default function FireHistoryPage() {
                 <div className="text-2xl font-semibold">
                   {statsPayload
                     ? `${formatNumber(statsPayload.active_fires)} / ${formatNumber(
-                        statsPayload.historical_fires
-                      )}`
+                      statsPayload.historical_fires
+                    )}`
                     : '—'}
                 </div>
                 <p className="text-xs text-muted-foreground">Activos / Historicos</p>
@@ -741,29 +741,29 @@ export default function FireHistoryPage() {
                         <BarChart
                           data={provincesChartData}
                           margin={{ top: 8, right: 8, left: 8, bottom: 12 }}
-                        barSize={26}
-                      >
-                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                        <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-                        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-                        <ChartTooltip
-                          content={<ChartTooltipContent />}
-                          formatter={(val: number) => val.toFixed(1)}
-                          labelFormatter={(label: string, payload) =>
-                            (payload?.[0]?.payload?.name as string) || label
-                          }
-                        />
-                        <Bar
-                          dataKey="fires"
-                          fill="var(--color-provinces)"
-                          radius={[4, 4, 0, 0]}
-                          label={{ position: 'top', formatter: (v: number) => v.toFixed(0), fontSize: 10 }}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </CardContent>
-              </Card>
+                          barSize={26}
+                        >
+                          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                          <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                          <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                          <ChartTooltip
+                            content={<ChartTooltipContent />}
+                            formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
+                            labelFormatter={(label: any, payload: any) =>
+                              (payload?.[0]?.payload?.name as string) || (label as string)
+                            }
+                          />
+                          <Bar
+                            dataKey="fires"
+                            fill="var(--color-provinces)"
+                            radius={[4, 4, 0, 0]}
+                            label={{ position: 'top', formatter: (v: any) => Number(v).toFixed(0), fontSize: 10 }}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
               </TabsContent>
               <TabsContent value="frp">
                 <Card>
@@ -774,36 +774,36 @@ export default function FireHistoryPage() {
                   <CardContent className="w-full overflow-hidden">
                     <ChartContainer config={chartConfig} className="h-56 w-full overflow-hidden">
                       <ResponsiveContainer width="100%" height="100%">
-                      <BarChart
-                        data={topFrpData}
-                        margin={{ top: 8, right: 8, left: 8, bottom: 12 }}
-                        barSize={24}
-                      >
-                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                        <XAxis
-                          dataKey="name"
-                          tickLine={false}
-                          axisLine={false}
-                          tick={{ fontSize: 10 }}
-                          tickFormatter={(v: string) => (v && v.length > 10 ? `${v.slice(0, 9)}…` : v)}
-                        />
-                        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-                        <ChartTooltip
-                          content={<ChartTooltipContent />}
-                          formatter={(val: number) => val.toFixed(1)}
-                          labelFormatter={(label: string, payload) =>
-                            (payload?.[0]?.payload?.fullName as string) || label
-                          }
-                        />
-                        <Bar
-                          dataKey="frp"
-                          fill="var(--color-frp)"
-                          radius={[4, 4, 0, 0]}
-                          label={{ position: 'top', formatter: (v: number) => v.toFixed(0), fontSize: 10 }}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
+                        <BarChart
+                          data={topFrpData}
+                          margin={{ top: 8, right: 8, left: 8, bottom: 12 }}
+                          barSize={24}
+                        >
+                          <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="name"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fontSize: 10 }}
+                            tickFormatter={(v: string) => (v && v.length > 10 ? `${v.slice(0, 9)}…` : v)}
+                          />
+                          <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                          <ChartTooltip
+                            content={<ChartTooltipContent />}
+                            formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
+                            labelFormatter={(label: any, payload: any) =>
+                              (payload?.[0]?.payload?.fullName as string) || (label as string)
+                            }
+                          />
+                          <Bar
+                            dataKey="frp"
+                            fill="var(--color-frp)"
+                            radius={[4, 4, 0, 0]}
+                            label={{ position: 'top', formatter: (v: any) => Number(v).toFixed(0), fontSize: 10 }}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartContainer>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -855,13 +855,15 @@ export default function FireHistoryPage() {
                     <YAxis tickLine={false} axisLine={false} />
                     <ChartTooltip
                       content={<ChartTooltipContent />}
-                      labelFormatter={(label: string, payload) => (payload?.[0]?.payload?.name as string) || label}
+                      labelFormatter={(label: any, payload: any) =>
+                        (payload?.[0]?.payload?.name as string) || (label as string)
+                      }
                     />
                     <Bar
                       dataKey="fires"
                       fill="var(--color-provinces)"
                       radius={[4, 4, 0, 0]}
-                      label={{ position: 'top', formatter: (v: number) => v.toFixed(0), fontSize: 11 }}
+                      label={{ position: 'top', formatter: (v: any) => Number(v).toFixed(0), fontSize: 11 }}
                     />
                   </BarChart>
                 </ChartContainer>
@@ -889,16 +891,16 @@ export default function FireHistoryPage() {
                       <YAxis tickLine={false} axisLine={false} />
                       <ChartTooltip
                         content={<ChartTooltipContent />}
-                        formatter={(val: number) => val.toFixed(1)}
-                        labelFormatter={(label: string, payload) =>
-                          (payload?.[0]?.payload?.fullName as string) || label
+                        formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
+                        labelFormatter={(label: any, payload: any) =>
+                          (payload?.[0]?.payload?.fullName as string) || (label as string)
                         }
                       />
                       <Bar
                         dataKey="frp"
                         fill="var(--color-frp)"
                         radius={[4, 4, 0, 0]}
-                        label={{ position: 'top', formatter: (v: number) => v.toFixed(0), fontSize: 11 }}
+                        label={{ position: 'top', formatter: (v: any) => Number(v).toFixed(0), fontSize: 11 }}
                       />
                     </BarChart>
                   </ResponsiveContainer>
@@ -910,13 +912,13 @@ export default function FireHistoryPage() {
 
         <div className="mb-6 space-y-4">
           <div className="hidden md:block">
-                  <FireFilters
-                    filters={filters}
-                    onFiltersChange={updateFilters}
-                    onExportCSV={handleExportCSV}
-                    isExporting={exportMutation.isPending}
-                    defaultStatusScope="historical"
-                  />
+            <FireFilters
+              filters={filters}
+              onFiltersChange={updateFilters}
+              onExportCSV={handleExportCSV}
+              isExporting={exportMutation.isPending}
+              defaultStatusScope="historical"
+            />
           </div>
           <div className="flex flex-wrap items-center gap-2 md:hidden">
             <Sheet>

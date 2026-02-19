@@ -1,0 +1,191 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - link "ForestGuard" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img [ref=e6]
+        - generic [ref=e9]: ForestGuard
+      - navigation [ref=e10]:
+        - link "Inicio" [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img [ref=e12]
+          - text: Inicio
+        - link "Históricos" [ref=e15] [cursor=pointer]:
+          - /url: /fires/history
+          - img [ref=e16]
+          - text: Históricos
+        - link "Mapa" [ref=e18] [cursor=pointer]:
+          - /url: /map
+          - img [ref=e19]
+          - text: Mapa
+        - link "Verificar terreno" [ref=e21] [cursor=pointer]:
+          - /url: /audit
+          - img [ref=e22]
+          - text: Verificar terreno
+        - link "Exploración satelital" [ref=e26] [cursor=pointer]:
+          - /url: /exploracion
+          - img [ref=e27]
+          - text: Exploración satelital
+      - generic [ref=e30]:
+        - button "Toggle language" [ref=e31] [cursor=pointer]:
+          - img
+          - generic [ref=e32]: Toggle language
+        - button "Toggle theme" [ref=e33] [cursor=pointer]:
+          - img
+          - generic [ref=e34]: Toggle theme
+        - button [ref=e35] [cursor=pointer]:
+          - img
+    - main [ref=e36]:
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]:
+            - img [ref=e42]
+            - generic [ref=e46]:
+              - heading "Verificar terreno" [level=1] [ref=e47]
+              - paragraph [ref=e48]: Investigá si una zona se incendió, cómo cambió la vegetación y qué señales quedan en el paisaje.
+          - paragraph [ref=e49]: Algunos incendios son accidentales; otros pueden tener intereses detrás. Acá podés mirar evidencia y sacar tus conclusiones.
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - generic [ref=e52]:
+              - heading "Mapa" [level=2] [ref=e53]
+              - button "Ocultar mapa" [ref=e54] [cursor=pointer]:
+                - img
+                - text: Ocultar mapa
+            - generic [ref=e57]:
+              - generic:
+                - generic:
+                  - generic [ref=e58]:
+                    - button "Zoom in" [ref=e59] [cursor=pointer]: +
+                    - button "Zoom out" [ref=e60] [cursor=pointer]: −
+                  - generic [ref=e61]:
+                    - link "Leaflet" [ref=e62] [cursor=pointer]:
+                      - /url: https://leafletjs.com
+                      - img [ref=e63]
+                      - text: Leaflet
+                    - text: "| ©"
+                    - link "CARTO" [ref=e67] [cursor=pointer]:
+                      - /url: https://carto.com/
+          - generic [ref=e68]:
+            - generic [ref=e69]:
+              - generic [ref=e70]: Verificar terreno
+              - generic [ref=e71]: Investigá si una zona se incendió, cómo cambió la vegetación y qué señales quedan en el paisaje.
+            - generic [ref=e73]:
+              - generic [ref=e74]:
+                - generic [ref=e75]: Buscar lugar
+                - textbox "Buscar lugar" [ref=e76]:
+                  - /placeholder: Dirección, localidad, parque nacional o provincia
+                  - text: Chubut
+              - generic [ref=e77]:
+                - generic [ref=e78]: Área de análisis
+                - generic [ref=e79]:
+                  - button "Alrededores (500 m)" [ref=e80] [cursor=pointer]
+                  - button "Zona (1 km)" [ref=e81] [cursor=pointer]
+                  - button "Amplio (3 km)" [ref=e82] [cursor=pointer]
+              - heading "Opciones avanzadas" [level=3] [ref=e85]:
+                - button "Opciones avanzadas" [ref=e86] [cursor=pointer]:
+                  - text: Opciones avanzadas
+                  - img
+              - button "Buscando ubicación…" [disabled]:
+                - img
+                - text: Buscando ubicación…
+              - paragraph [ref=e87]: Esto no demuestra intencionalidad por sí solo. Sirve para contrastar relatos con evidencia observable.
+        - generic [ref=e88]:
+          - generic [ref=e89]:
+            - generic [ref=e91]: Checklist de verificación
+            - list [ref=e93]:
+              - listitem [ref=e94]: • ¿Hubo incendios en los últimos años en esta zona?
+              - listitem [ref=e95]: • ¿La vegetación se recuperó o quedó degradada?
+              - listitem [ref=e96]: • ¿Persisten señales del incendio en el área?
+              - listitem [ref=e97]: • ¿Qué dicen fuentes públicas y registros locales?
+          - generic [ref=e98]:
+            - generic [ref=e100]: Resultados
+            - generic [ref=e101]:
+              - generic [ref=e103]:
+                - img [ref=e104]
+                - text: Buscando episodios históricos…
+              - generic [ref=e106]:
+                - paragraph [ref=e107]: Lo que vas a ver
+                - list [ref=e108]:
+                  - listitem [ref=e109]: • Línea de tiempo de incendios detectados
+                  - listitem [ref=e110]: • Evolución de la vegetación (indicadores)
+                  - listitem [ref=e111]: • Galería de evidencia (thumbnails)
+                  - listitem [ref=e112]: • Señales a favor/en contra de recuperación
+                - paragraph [ref=e113]: Marcá un punto en el mapa y presioná Verificá.
+    - contentinfo [ref=e114]:
+      - generic [ref=e115]:
+        - generic [ref=e116]:
+          - generic [ref=e117]:
+            - generic [ref=e118]:
+              - img [ref=e119]
+              - generic [ref=e122]: ForestGuard
+            - paragraph [ref=e123]: Plataforma de monitoreo y recuperación de incendios forestales de Argentina. Protegemos nuestros bosques con tecnología satelital.
+          - generic [ref=e124]:
+            - heading "Producto" [level=3] [ref=e125]
+            - list [ref=e126]:
+              - listitem [ref=e127]:
+                - link "Mapa de Incendios" [ref=e128] [cursor=pointer]:
+                  - /url: /
+                  - img [ref=e129]
+                  - text: Mapa de Incendios
+              - listitem [ref=e131]:
+                - link "Auditoría Legal" [ref=e132] [cursor=pointer]:
+                  - /url: /audit
+                  - img [ref=e133]
+                  - text: Auditoría Legal
+              - listitem [ref=e137]:
+                - link "Exploración satelital" [ref=e138] [cursor=pointer]:
+                  - /url: /exploracion
+                  - img [ref=e139]
+                  - text: Exploración satelital
+              - listitem [ref=e142]:
+                - link "Reporte Ciudadano" [ref=e143] [cursor=pointer]:
+                  - /url: /citizen-report
+                  - img [ref=e144]
+                  - text: Reporte Ciudadano
+          - generic [ref=e147]:
+            - heading "Soporte" [level=3] [ref=e148]
+            - list [ref=e149]:
+              - listitem [ref=e150]:
+                - link "Preguntas Frecuentes" [ref=e151] [cursor=pointer]:
+                  - /url: /faq
+                  - img [ref=e152]
+                  - text: Preguntas Frecuentes
+              - listitem [ref=e155]:
+                - link "Manual de Usuario" [ref=e156] [cursor=pointer]:
+                  - /url: /manual
+                  - img [ref=e157]
+                  - text: Manual de Usuario
+              - listitem [ref=e159]:
+                - link "Glosario" [ref=e160] [cursor=pointer]:
+                  - /url: /glossary
+                  - img [ref=e161]
+                  - text: Glosario
+          - generic [ref=e164]:
+            - heading "Compañía" [level=3] [ref=e165]
+            - list [ref=e166]:
+              - listitem [ref=e167]:
+                - link "Contacto" [ref=e168] [cursor=pointer]:
+                  - /url: /contact
+                  - img [ref=e169]
+                  - text: Contacto
+              - listitem [ref=e172]:
+                - link "API Docs" [ref=e173] [cursor=pointer]:
+                  - /url: https://forestguard.freedynamicdns.org/docs
+                  - img [ref=e174]
+                  - text: API Docs
+        - generic [ref=e179]:
+          - paragraph [ref=e180]: © 2026 ForestGuard Argentina. Todos los derechos reservados.
+          - generic [ref=e181]:
+            - generic [ref=e182]: Hecho con
+            - generic [ref=e183]: ❤
+            - generic [ref=e184]: para proteger nuestros bosques
+  - region "Notifications (F8)":
+    - list
+  - generic [ref=e185]:
+    - img [ref=e187]
+    - button "Open Tanstack query devtools" [ref=e235] [cursor=pointer]:
+      - img [ref=e236]
+```

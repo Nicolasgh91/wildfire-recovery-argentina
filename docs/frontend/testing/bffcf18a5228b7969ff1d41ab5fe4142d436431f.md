@@ -1,0 +1,140 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - link "ForestGuard" [ref=e5] [cursor=pointer]:
+        - /url: /
+        - img [ref=e6]
+        - generic [ref=e9]: ForestGuard
+      - navigation [ref=e10]:
+        - link "Inicio" [ref=e11] [cursor=pointer]:
+          - /url: /
+          - img [ref=e12]
+          - text: Inicio
+        - link "Históricos" [ref=e15] [cursor=pointer]:
+          - /url: /fires/history
+          - img [ref=e16]
+          - text: Históricos
+        - link "Mapa" [ref=e18] [cursor=pointer]:
+          - /url: /map
+          - img [ref=e19]
+          - text: Mapa
+        - link "Verificar terreno" [ref=e21] [cursor=pointer]:
+          - /url: /audit
+          - img [ref=e22]
+          - text: Verificar terreno
+        - link "Exploración satelital" [ref=e26] [cursor=pointer]:
+          - /url: /exploracion
+          - img [ref=e27]
+          - text: Exploración satelital
+      - generic [ref=e30]:
+        - button "Toggle language" [ref=e31] [cursor=pointer]:
+          - img
+          - generic [ref=e32]: Toggle language
+        - button "Toggle theme" [ref=e33] [cursor=pointer]:
+          - img
+          - generic [ref=e34]: Toggle theme
+        - button [ref=e35] [cursor=pointer]:
+          - img
+    - main [ref=e36]:
+      - generic [ref=e37]:
+        - generic [ref=e39]:
+          - generic:
+            - generic:
+              - generic [ref=e40]:
+                - button "Zoom in" [ref=e41] [cursor=pointer]: +
+                - button "Zoom out" [ref=e42] [cursor=pointer]: −
+              - generic [ref=e43]:
+                - link "Leaflet" [ref=e44] [cursor=pointer]:
+                  - /url: https://leafletjs.com
+                  - img [ref=e45]
+                  - text: Leaflet
+                - text: "| ©"
+                - link "CARTO" [ref=e49] [cursor=pointer]:
+                  - /url: https://carto.com/
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - generic [ref=e52]:
+              - img [ref=e53]
+              - text: Mapa Interactivo
+            - generic [ref=e55]:
+              - generic [ref=e56]: Activos
+              - generic [ref=e57]: Recientes (60 días)
+          - generic [ref=e63]: Cargando...
+    - contentinfo [ref=e64]:
+      - generic [ref=e65]:
+        - generic [ref=e66]:
+          - generic [ref=e67]:
+            - generic [ref=e68]:
+              - img [ref=e69]
+              - generic [ref=e72]: ForestGuard
+            - paragraph [ref=e73]: Plataforma de monitoreo y recuperación de incendios forestales de Argentina. Protegemos nuestros bosques con tecnología satelital.
+          - generic [ref=e74]:
+            - heading "Producto" [level=3] [ref=e75]
+            - list [ref=e76]:
+              - listitem [ref=e77]:
+                - link "Mapa de Incendios" [ref=e78] [cursor=pointer]:
+                  - /url: /
+                  - img [ref=e79]
+                  - text: Mapa de Incendios
+              - listitem [ref=e81]:
+                - link "Auditoría Legal" [ref=e82] [cursor=pointer]:
+                  - /url: /audit
+                  - img [ref=e83]
+                  - text: Auditoría Legal
+              - listitem [ref=e87]:
+                - link "Exploración satelital" [ref=e88] [cursor=pointer]:
+                  - /url: /exploracion
+                  - img [ref=e89]
+                  - text: Exploración satelital
+              - listitem [ref=e92]:
+                - link "Reporte Ciudadano" [ref=e93] [cursor=pointer]:
+                  - /url: /citizen-report
+                  - img [ref=e94]
+                  - text: Reporte Ciudadano
+          - generic [ref=e97]:
+            - heading "Soporte" [level=3] [ref=e98]
+            - list [ref=e99]:
+              - listitem [ref=e100]:
+                - link "Preguntas Frecuentes" [ref=e101] [cursor=pointer]:
+                  - /url: /faq
+                  - img [ref=e102]
+                  - text: Preguntas Frecuentes
+              - listitem [ref=e105]:
+                - link "Manual de Usuario" [ref=e106] [cursor=pointer]:
+                  - /url: /manual
+                  - img [ref=e107]
+                  - text: Manual de Usuario
+              - listitem [ref=e109]:
+                - link "Glosario" [ref=e110] [cursor=pointer]:
+                  - /url: /glossary
+                  - img [ref=e111]
+                  - text: Glosario
+          - generic [ref=e114]:
+            - heading "Compañía" [level=3] [ref=e115]
+            - list [ref=e116]:
+              - listitem [ref=e117]:
+                - link "Contacto" [ref=e118] [cursor=pointer]:
+                  - /url: /contact
+                  - img [ref=e119]
+                  - text: Contacto
+              - listitem [ref=e122]:
+                - link "API Docs" [ref=e123] [cursor=pointer]:
+                  - /url: https://forestguard.freedynamicdns.org/docs
+                  - img [ref=e124]
+                  - text: API Docs
+        - generic [ref=e129]:
+          - paragraph [ref=e130]: © 2026 ForestGuard Argentina. Todos los derechos reservados.
+          - generic [ref=e131]:
+            - generic [ref=e132]: Hecho con
+            - generic [ref=e133]: ❤
+            - generic [ref=e134]: para proteger nuestros bosques
+  - region "Notifications (F8)":
+    - list
+  - generic [ref=e135]:
+    - img [ref=e137]
+    - button "Open Tanstack query devtools" [ref=e185] [cursor=pointer]:
+      - img [ref=e186]
+```

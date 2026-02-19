@@ -14,6 +14,6 @@ export function useActiveEpisodes(limit: number = 20) {
       getActiveEpisodes(limit, signal),
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
-    cacheTime: 30 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   })
 }

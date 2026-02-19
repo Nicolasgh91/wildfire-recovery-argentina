@@ -6,6 +6,9 @@
 - Domain configured: forestguard.freedynamicdns.org
 - Ports 80, 443 open in firewall
 
+> SSL NOTE (IMPORTANT): For Docker deployments, the official SSL procedure is `docs/SSL_SETUP.md`.
+> The host-level Certbot steps in this file are legacy and apply only if you run host Nginx intentionally.
+
 ## Step 1: Install Dependencies
 
 ## Step 1: Install Dependencies (Oracle Linux)
@@ -134,7 +137,9 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## Step 7: Setup SSL Certificate
+## Step 7: Setup SSL Certificate (LEGACY HOST MODE)
+
+For Docker deployments, skip this section and follow `docs/SSL_SETUP.md`.
 
 ```bash
 # Obtain certificate
@@ -277,11 +282,12 @@ Métricas mínimas a revisar en degradación:
 
 ### SSL certificate issues
 ```bash
-# Renew manually
-sudo certbot renew --force-renewal
+# Docker official flow (see docs/SSL_SETUP.md)
+cd /opt/forestguard
+./scripts/renew-ssl.sh
 
 # Check certificate status
-sudo certbot certificates
+docker compose --profile ssl run --rm certbot certificates
 ```
 
 ### Database connection issues

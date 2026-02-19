@@ -1,5 +1,5 @@
 /**
- * Feature flags for ForestGuard MVP.
+ * Feature flags for Vestigia MVP.
  *
  * Reads from VITE_FF_* with fallback to legacy VITE_FEATURE_*.
  */
