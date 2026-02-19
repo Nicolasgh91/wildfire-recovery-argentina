@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:validate-env": "node scripts/validate-build-env.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
