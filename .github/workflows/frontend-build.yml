@@ -1,3 +1,23 @@
+name: Set up build secrets
+run: echo "Secrets mapped"
+
+name: Build and push (Multi-architecture)
+uses: docker/build-push-action@v6
+with:
+  context: ./frontend
+  file: ./frontend/Dockerfile
+  platforms: linux/amd64,linux/arm64
+  push: ${{ github.event_name != 'pull_request' }}
+  tags: ${{ steps.meta.outputs.tags }}
+  labels: ${{ steps.meta.outputs.labels }}
+  cache-from: type=gha
+  cache-to: type=gha,mode=max
+  build-args: |
+    VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+    VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+    VITE_API_KEY=${{ secrets.VITE_API_KEY }}
+    VITE_AUTH_REDIRECT_URL=${{ secrets.VITE_AUTH_REDIRECT_URL }}
+
 name: Frontend Build & Push (Multi-architecture)
 
 on:
