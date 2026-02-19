@@ -6,6 +6,7 @@
 # Uso:
 #   ./scripts/deploy.sh          # Deploy normal
 #   ./scripts/deploy.sh --build  # Rebuild de la imagen
+#   ./scripts/deploy.sh --build frontend  # Rebuild solo frontend + nginx
 #   ./scripts/deploy.sh --logs   # Ver logs
 #   ./scripts/deploy.sh --stop   # Detener servicios
 #
