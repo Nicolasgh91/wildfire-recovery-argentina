@@ -152,7 +152,7 @@ export function ReportRequestForm({
   )
 
   const form = useForm<ReportFormValues>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as any,
     defaultValues: {
       report_type: 'judicial',
       fire_event_id: '',

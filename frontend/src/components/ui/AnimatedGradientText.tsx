@@ -16,7 +16,7 @@
  */
 
 import { motion, useReducedMotion } from 'framer-motion'
-import { ElementType, ComponentPropsWithoutRef } from 'react'
+import type { ElementType, ComponentPropsWithoutRef } from 'react'
 import { cn } from '@/lib/utils'
 
 interface AnimatedGradientTextProps<T extends ElementType = 'span'> {

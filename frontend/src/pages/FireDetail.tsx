@@ -5,7 +5,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Calendar,
-  Download,
+
   FileText,
   Flame,
   MapPin,
@@ -13,11 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
+
 } from '@/components/ui/carousel'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QualityIndicator } from '@/components/fires/QualityIndicator'
@@ -225,7 +221,7 @@ export default function FireDetailPage() {
     )
   }
 
-  const slides = fire.slides_data?.filter((slide) => slide.url) ?? []
+
   const protectedAreas = fire.protected_areas ?? []
   const uniqueProtectedAreas = (() => {
     const seen = new Set<string>()

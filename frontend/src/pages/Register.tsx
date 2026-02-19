@@ -12,6 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import bosqueLanding from '@/assets/bosque_landing.webp'
+import { BRAND } from '@/config/brand'
 
 type RegisterValues = {
   firstName: string
@@ -64,7 +65,7 @@ export default function RegisterPage() {
     <div className="relative min-h-screen bg-background p-6 md:p-8">
       <Link to="/" className="absolute left-6 top-6 flex items-center gap-2 md:left-8 md:top-8">
         <Trees className="h-8 w-8 text-primary" />
-        <span className="text-xl font-bold text-foreground">ForestGuard</span>
+        <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
       </Link>
 
       <div className="grid min-h-[calc(100vh-3rem)] grid-cols-1 items-center gap-10 lg:grid-cols-2">
@@ -154,7 +155,7 @@ export default function RegisterPage() {
           <div className="h-[calc(100vh-4rem)] w-full overflow-hidden rounded-3xl">
             <img
               src={bosqueLanding}
-              alt="Bosque ForestGuard"
+              alt={`Bosque ${BRAND.name}`}
               className="h-full w-full object-cover"
               loading="lazy"
             />
