@@ -26,6 +26,7 @@ import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { isFeatureEnabled } from '@/lib/featureFlags'
 import { BRAND } from '@/config/brand'
+import { HOME_PATH } from '@/lib/routing'
 
 export function Navbar() {
   const { pathname } = useLocation()
@@ -34,7 +35,7 @@ export function Navbar() {
   const { theme, setTheme } = useTheme()
 
   const navItems = [
-    { href: '/', label: t('home'), icon: Trees },
+    { href: HOME_PATH, label: t('home'), icon: Trees },
     { href: '/fires/history', label: t('fireHistory'), icon: Flame },
     { href: '/map', label: t('map'), icon: Map },
     { href: '/audit', label: t('audit'), icon: ClipboardCheck },
@@ -45,7 +46,7 @@ export function Navbar() {
     <>
       {/* Desktop Navigation */}
       <header className="hidden md:flex fixed top-0 left-0 right-0 z-50 h-24 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <Link to="/" className="flex items-center gap-2">
+        <Link to={HOME_PATH} className="flex items-center gap-2">
           <Trees className="h-8 w-8 text-primary" />
           <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
         </Link>

@@ -3,6 +3,7 @@ import { AlertTriangle, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useI18n } from '@/context/LanguageContext'
+import { HOME_PATH } from '@/lib/routing'
 
 export default function NotFoundPage() {
   const { t } = useI18n()
@@ -22,7 +23,7 @@ export default function NotFoundPage() {
               </p>
             </div>
             <Button asChild className="gap-2">
-              <Link to="/">
+              <Link to={HOME_PATH}>
                 <Home className="h-4 w-4" />
                 {t('notFoundBackHome')}
               </Link>

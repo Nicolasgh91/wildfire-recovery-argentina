@@ -81,6 +81,9 @@ docs/
 
 | Document | Path | Description |
 |----------|------|-------------|
+| **Routing Access Matrix (RUC)** | [`frontend/routing_access_ruc.md`](frontend/routing_access_ruc.md) | Route access rules for guest/authenticated users |
+| **RUC Execution Log** | [`frontend/ruc_home_landing_execution_log.md`](frontend/ruc_home_landing_execution_log.md) | Task-by-task implementation and validation log |
+| **Frontend Technical Debt** | [`frontend/technical_debt.md`](frontend/technical_debt.md) | Open frontend debt and follow-up actions |
 | **Frontend Build Audit** | [`frontend/build/frontend_build_audit.md`](frontend/build/frontend_build_audit.md) | Build process audit |
 | **Playwright Test Reports** | [`frontend/testing/`](frontend/testing/) | Automated test reports |
 

@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { HOME_PATH } from '@/lib/routing'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -24,7 +25,7 @@ export function ProtectedRoute({ children, requiredRole }: ProtectedRouteProps) 
   }
 
   if (requiredRole && role !== requiredRole && role !== 'admin') {
-    return <Navigate to="/" replace />
+    return <Navigate to={HOME_PATH} replace />
   }
 
   return <>{children}</>

@@ -29,3 +29,15 @@
   - Impacto: cambios en `system_parameters` no se reflejan en instancias ya creadas hasta recrear el service/worker.
   - Propuesta de solución: agregar TTL de cache o invalidación explícita basada en `updated_at` si se requiere hot-reload de parámetros.
   - Prioridad: baja.
+- [2026-02-19T17:41:00Z] Tarea: fix/supabase-postgrespostgres-auth — Tests pre-existentes fallando.
+  - Síntomas/logs: `test_workers_without_key_returns_403` → 404 (esperaba 403); `test_get_report_by_id_no_token_returns_401` → 404 (esperaba 401). Ambos fallan en `main` antes de este fix.
+  - Causa raíz: endpoints `POST /api/v1/workers/detect-land-use` y `GET /api/v1/reports/{id}` fueron eliminados o renombrados sin actualizar los tests correspondientes.
+  - Impacto: falsos negativos en la suite de tests unitarios; no bloquean producción pero degradan la confianza en la suite.
+  - Propuesta de solución: actualizar `test_auth_matrix.py::test_workers_without_key_returns_403` y `test_reports_auth.py::test_get_report_by_id_no_token_returns_401` para apuntar a los endpoints actuales o eliminar si el feature fue removido.
+  - Prioridad: media.
+- [2026-02-19T17:41:00Z] Tarea: fix/supabase-postgrespostgres-auth — Duplicación histórica de URL assembly en `database.py`.
+  - Síntomas/logs: `psycopg2.OperationalError: There is no user 'postgrespostgres'` en producción. `database.py` construía `DATABASE_URL` con `os.getenv()` directo, sin URL-encoding del password y sin respetar el formato de usuario del pooler de Supabase.
+  - Causa raíz: `app/db/database.py` ensamblaba su propia URL ignorando `Settings.assemble_db_connection` en `config.py`, que sí aplica `quote_plus` al password y centraliza la lógica.
+  - Workaround aplicado: `database.py` ahora delega a `app.db.session` (que usa `settings.DATABASE_URL`), eliminando la duplicación.
+  - Propuesta de fix: consolidada. Si en el futuro se agrega lógica de conexión, hacerlo únicamente en `app/core/config.py::assemble_db_connection`.
+  - Prioridad: resuelta.

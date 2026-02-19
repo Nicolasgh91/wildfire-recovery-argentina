@@ -10,58 +10,26 @@ Cuando usamos connection pooling (que está habilitado por defecto en SQLAlchemy
 la librería mantiene un grupo de conexiones abiertas a la BD. Cuando necesitamos
 consultar, tomamos una conexión del pool en lugar de abrir una nueva cada vez.
 Esto es mucho más rápido, especialmente cuando hay muchas consultas simultáneas.
+
+NOTA: La URL de conexión se ensambla en app.core.config (Settings.assemble_db_connection)
+para garantizar una única fuente de verdad y el correcto URL-encoding del password.
+Este módulo delega al engine/session de app.db.session para evitar duplicación.
 """
 
-import os
 from typing import Generator
 
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import QueuePool
+from sqlalchemy import event, text
+from sqlalchemy.orm import Session
 
-# Variables de entorno para conexión a Supabase
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-
-# Construir URL de conexión
-# Formato: postgresql://usuario:contraseña@host:puerto/basedatos
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
-# Validar que tenemos credenciales configuradas
-if not all([DB_HOST, DB_NAME, DB_USER, DB_PASSWORD]):
-    raise ValueError(
-        "Credenciales de base de datos no configuradas. "
-        "Asegúrate que .env tiene: DB_HOST, DB_NAME, DB_USER, DB_PASSWORD"
-    )
+from app.db.session import SessionLocal as _SessionLocal
+from app.db.session import get_db as _get_db
+from app.db.session import get_engine
 
 
-# Crear engine de SQLAlchemy
-# El engine es la "fábrica" que crea conexiones a la BD.
-# Configuramos varios parámetros importantes:
+# Re-export engine y SessionLocal para compatibilidad con importaciones existentes
+engine = get_engine()
 
-engine = create_engine(
-    DATABASE_URL,
-    # poolclass=QueuePool proporciona un grupo de conexiones thread-safe.
-    # Múltiples requests HTTP pueden acceder al pool simultáneamente sin conflictos.
-    # La librería automáticamente devuelve conexiones al pool cuando termina.
-    poolclass=QueuePool,
-    # pool_size=5 significa mantener 5 conexiones abiertas permanentemente.
-    # En desarrollo es suficiente. En producción podría aumentarse.
-    pool_size=5,
-    # max_overflow=10 significa que si se necesitan más de 5, puede abrir hasta 10
-    # más (para picos de demanda). Después de usarlas se descartan.
-    max_overflow=10,
-    # pool_recycle=3600 recicla conexiones cada hora porque Supabase puede cerrar
-    # conexiones inactivas. Esto previene errores "connection closed" después de
-    # largos períodos sin actividad.
-    pool_recycle=3600,
-    # echo=False muestra queries SQL en los logs. Útil para debugging pero baja performance.
-    # En producción dejar en False. En desarrollo puedes cambiar a True temporalmente.
-    echo=False,
-)
+SessionLocal = _SessionLocal
 
 
 # Event listener para habilitar PostGIS en cada conexión
@@ -78,17 +46,6 @@ def setup_postgis(dbapi_conn, connection_record):
     with dbapi_conn.cursor() as cursor:
         cursor.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
         dbapi_conn.commit()
-
-
-# Session factory
-# Esto crea un "fabricador de sesiones" que genera nuevas sesiones con configuración correcta.
-# Una Session es un objeto que representa una "conversación" con la BD.
-# Típicamente creas una Session por request HTTP, ejecutas tus queries, y luego la cierras.
-SessionLocal = sessionmaker(
-    autocommit=False,  # Las queries no se confirman automáticamente
-    autoflush=False,  # Los cambios no se flush automáticamente (más control)
-    bind=engine,  # Usar el engine que creamos arriba
-)
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -108,13 +65,7 @@ def get_db() -> Generator[Session, None, None]:
 
     El parámetro "db" es inyectado automáticamente por FastAPI.
     """
-    db = SessionLocal()
-    try:
-        # Yield la sesión para que el endpoint la use
-        yield db
-    finally:
-        # Asegurar que se cierra la sesión aunque haya error
-        db.close()
+    yield from _get_db()
 
 
 def get_db_sync() -> Session:
@@ -139,7 +90,7 @@ def get_db_sync() -> Session:
     IMPORTANTE: Debes llamar a close() cuando termines para devolver
     la conexión al pool.
     """
-    return SessionLocal()
+    return _SessionLocal()
 
 
 # Health check para validar que la BD está disponible
@@ -161,9 +112,9 @@ def test_connection():
     en el health check.
     """
     try:
-        db = SessionLocal()
+        db = _SessionLocal()
         # Ejecutar una query simple para verificar conexión
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db.close()
         return True
     except Exception as e:

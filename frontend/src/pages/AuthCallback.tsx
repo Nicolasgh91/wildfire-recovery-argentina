@@ -4,6 +4,7 @@ import { Loader2, AlertTriangle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { setAuthToken } from '@/services/api'
 import { Button } from '@/components/ui/button'
+import { resolveReturnToPath } from '@/lib/routing'
 
 export default function AuthCallbackPage() {
   const navigate = useNavigate()
@@ -26,7 +27,7 @@ export default function AuthCallbackPage() {
           setAuthToken(existing.session?.access_token ?? null)
         }
 
-        const returnTo = sessionStorage.getItem('auth:returnTo') || '/'
+        const returnTo = resolveReturnToPath(sessionStorage.getItem('auth:returnTo'))
         sessionStorage.removeItem('auth:returnTo')
 
         if (active) {

@@ -29,6 +29,7 @@ import {
 import type { FireMapItem } from '@/types/map'
 import type { ReturnContext } from '@/types/navigation'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
+import { HOME_PATH } from '@/lib/routing'
 
 const FireMap = lazy(() =>
   import('@/components/fire-map').then((mod) => ({ default: mod.FireMap })),
@@ -103,11 +104,11 @@ export default function FireDetailPage() {
     }
 
     if (ctx?.returnTo === 'home') {
-      navigate('/', { state: { restore: { scrollY: ctx.home?.scrollY ?? 0 } } })
+      navigate(HOME_PATH, { state: { restore: { scrollY: ctx.home?.scrollY ?? 0 } } })
     } else if (ctx?.returnTo === 'map') {
       navigate('/map', { state: { restore: { selectedFireId: ctx.map?.selectedFireId } } })
     } else {
-      navigate('/')
+      navigate(HOME_PATH)
     }
 
     if (fromStorage) {

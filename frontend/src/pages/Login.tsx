@@ -12,6 +12,7 @@ import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import bosqueLanding from '@/assets/bosque_landing.webp'
 import { BRAND } from '@/config/brand'
+import { HOME_PATH, LOGIN_PATH, resolveReturnToPath } from '@/lib/routing'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -26,7 +27,9 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
 
-  const from = (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname || '/'
+  const from = resolveReturnToPath(
+    (location.state as { from?: { pathname?: string } } | undefined)?.from?.pathname,
+  )
 
   useEffect(() => {
     const reason = (location.state as { reason?: string } | undefined)?.reason
@@ -75,7 +78,7 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen bg-background p-6 md:p-8">
-      <Link to="/" className="absolute left-6 top-6 flex items-center gap-2 md:left-8 md:top-8">
+      <Link to={LOGIN_PATH} className="absolute left-6 top-6 flex items-center gap-2 md:left-8 md:top-8">
         <Trees className="h-8 w-8 text-primary" />
         <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
       </Link>
@@ -197,7 +200,7 @@ export default function LoginPage() {
                 </span>
               </div>
               <Button asChild variant="secondary" className="mt-4 w-full" data-testid="login-guest">
-                <Link to="/">{t('loginGuestAction')}</Link>
+                <Link to={HOME_PATH}>{t('loginGuestAction')}</Link>
               </Button>
               <p className="mt-4 text-sm text-muted-foreground">
                 {t('noAccount')}{' '}
