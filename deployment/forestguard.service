@@ -1,5 +1,5 @@
 [Unit]
-Description=ForestGuard API - Wildfire Recovery System
+Description=Vestigia API - Wildfire Recovery System
 After=network.target
 
 [Service]

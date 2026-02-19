@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# ForestGuard SSL Certificate Setup Script
-# This script generates initial SSL certificates using Certbot (Docker mode).
+# Vestigia SSL Certificate Setup Script
+# This script generates initial SSL certificates using Certbot (Docker mode) for Vestigia.
 
 set -euo pipefail
 

@@ -25,6 +25,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
 import { isFeatureEnabled } from '@/lib/featureFlags'
+import { BRAND } from '@/config/brand'
 
 export function Navbar() {
   const { pathname } = useLocation()
@@ -46,7 +47,7 @@ export function Navbar() {
       <header className="hidden md:flex fixed top-0 left-0 right-0 z-50 h-24 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <Link to="/" className="flex items-center gap-2">
           <Trees className="h-8 w-8 text-primary" />
-          <span className="text-xl font-bold text-foreground">ForestGuard</span>
+          <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
         </Link>
 
         <nav className="flex items-center gap-1">

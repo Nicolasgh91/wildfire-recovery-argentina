@@ -11,6 +11,7 @@ import { AnimatedGradientText } from '@/components/ui/AnimatedGradientText'
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import bosqueLanding from '@/assets/bosque_landing.webp'
+import { BRAND } from '@/config/brand'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -76,7 +77,7 @@ export default function LoginPage() {
     <div className="relative min-h-screen bg-background p-6 md:p-8">
       <Link to="/" className="absolute left-6 top-6 flex items-center gap-2 md:left-8 md:top-8">
         <Trees className="h-8 w-8 text-primary" />
-        <span className="text-xl font-bold text-foreground">ForestGuard</span>
+        <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
       </Link>
 
       <div className="grid min-h-[calc(100vh-3rem)] grid-cols-1 items-center gap-10 lg:grid-cols-2">

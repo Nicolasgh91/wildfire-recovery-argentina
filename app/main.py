@@ -143,7 +143,7 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="""
-## ForestGuard API
+## Vestigia API
 
 REST API for **legal oversight of wildfires** in protected areas of Argentina, implementing Law 26.815 (Fire Management Law).
 
@@ -155,7 +155,7 @@ REST API for **legal oversight of wildfires** in protected areas of Argentina, i
     redoc_url="/redoc",
     openapi_url=f"{settings.API_V1_PREFIX}/openapi.json",
     contact={
-        "name": "ForestGuard Team",
+        "name": "Vestigia Team",
         "url": "https://github.com/forestguard/api",
         "email": "contact@forestguard.ar",
     },
