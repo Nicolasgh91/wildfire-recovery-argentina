@@ -1,0 +1,254 @@
+name: Deploy to Production VM
+
+# Deploys ForestGuard to the production Oracle Cloud VM via SSH.
+#
+# ─── SEPARATION OF CONCERNS ────────────────────────────────────────────────
+# This workflow handles INFRA-level secrets only (SSH, host, user).
+# Runtime app secrets (DATABASE_URL, SUPABASE_*, API_KEY, etc.) live
+# exclusively in /home/opc/.env on the VM and are NEVER injected here.
+#
+# ─── ORDERING GUARANTEE ─────────────────────────────────────────────────────
+# GitHub Actions does NOT support cross-workflow `needs:`. Ordering is
+# enforced via branch protection:
+#   Settings → Branches → main → Require status checks:
+#     ✓ auth-jwt-ci / Auth JWT Integration
+#     ✓ security / Auth Contract Tests
+#   Pushes can only reach main after those checks pass (squash/merge from PR).
+#
+# The environment: production gate provides an additional human approval step.
+# The reviewer MUST confirm that CI checks passed before approving.
+#
+# ─── FIRST DEPLOY NOTE ──────────────────────────────────────────────────────
+# SSL certificate bootstrap (Let's Encrypt) requires manual execution on the
+# VM before the first automated deploy:
+#   ssh opc@<host> 'cd /home/opc && ./scripts/setup-ssl.sh'
+# Subsequent deploys are fully automated.
+#
+# ─── GENERATING PROD_VM_KNOWN_HOSTS ─────────────────────────────────────────
+# Run once from a trusted machine and paste the output into the GitHub
+# Environment secret PROD_VM_KNOWN_HOSTS:
+#   ssh-keyscan -p <PORT> <PROD_VM_HOST>
+#
+# ─── REQUIRED GITHUB ENVIRONMENT SECRETS (production) ───────────────────────
+#   PROD_VM_HOST        — VM IP or hostname
+#   PROD_VM_USER        — SSH user (e.g. opc)
+#   PROD_VM_SSH_KEY     — PEM private key (no passphrase)
+#   PROD_VM_KNOWN_HOSTS — Output of: ssh-keyscan -p <PORT> <HOST>
+#
+# ─── OPTIONAL GITHUB ENVIRONMENT SECRETS (production) ───────────────────────
+#   PROD_VM_PORT        — SSH port (defaults to 22 if not set)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+# Queue deploys; never interrupt a deploy in progress.
+concurrency:
+  group: prod-vm-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Production VM
+    runs-on: ubuntu-latest
+    environment: production   # Requires human approval + holds infra secrets
+    timeout-minutes: 45       # Allow extra time for Docker image pulls on slow connections
+
+    steps:
+      # ── 0. Checkout ────────────────────────────────────────────────────────
+      # Provides commit SHA in logs for traceability; repo files not used here.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 1. Preflight: validate required secrets ────────────────────────────
+      - name: Preflight — validate required secrets
+        env:
+          PROD_VM_HOST:        ${{ secrets.PROD_VM_HOST }}
+          PROD_VM_USER:        ${{ secrets.PROD_VM_USER }}
+          PROD_VM_SSH_KEY:     ${{ secrets.PROD_VM_SSH_KEY }}
+          PROD_VM_KNOWN_HOSTS: ${{ secrets.PROD_VM_KNOWN_HOSTS }}
+        run: |
+          missing=()
+          [[ -z "$PROD_VM_HOST"        ]] && missing+=("PROD_VM_HOST")
+          [[ -z "$PROD_VM_USER"        ]] && missing+=("PROD_VM_USER")
+          [[ -z "$PROD_VM_SSH_KEY"     ]] && missing+=("PROD_VM_SSH_KEY")
+          [[ -z "$PROD_VM_KNOWN_HOSTS" ]] && missing+=("PROD_VM_KNOWN_HOSTS")
+
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "ERROR: Missing required secrets in GitHub Environment 'production':"
+            printf '  - %s\n' "${missing[@]}"
+            echo ""
+            echo "Configure them at:"
+            echo "  GitHub → Settings → Environments → production → Environment secrets"
+            exit 1
+          fi
+
+          echo "Preflight passed."
+          echo "  Commit : ${{ github.sha }}"
+          echo "  Host   : $PROD_VM_HOST"
+          echo "  User   : $PROD_VM_USER"
+          echo "  Trigger: ${{ github.event_name }}"
+
+      # ── 2. Set up SSH agent ────────────────────────────────────────────────
+      - name: Set up SSH
+        env:
+          PROD_VM_SSH_KEY:     ${{ secrets.PROD_VM_SSH_KEY }}
+          PROD_VM_KNOWN_HOSTS: ${{ secrets.PROD_VM_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+
+          # Write private key (must be passphrase-free for non-interactive use)
+          printf '%s\n' "$PROD_VM_SSH_KEY" > ~/.ssh/prod_vm_key
+          chmod 600 ~/.ssh/prod_vm_key
+
+          # Pin known hosts — prevents MITM (StrictHostKeyChecking=yes enforced below)
+          printf '%s\n' "$PROD_VM_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      # ── 3. Deploy ──────────────────────────────────────────────────────────
+      - name: Deploy via SSH
+        env:
+          VM_HOST: ${{ secrets.PROD_VM_HOST }}
+          VM_USER: ${{ secrets.PROD_VM_USER }}
+          VM_PORT: ${{ secrets.PROD_VM_PORT }}
+        run: |
+          PORT="${VM_PORT:-22}"
+          echo "Connecting to ${VM_USER}@${VM_HOST}:${PORT}"
+
+          ssh \
+            -i ~/.ssh/prod_vm_key \
+            -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${VM_USER}@${VM_HOST}" \
+            bash -s << 'REMOTE_SCRIPT'
+          set -euo pipefail
+          APP_DIR="/home/opc"
+
+          echo "=== Deploy started at $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+
+          # ── Validate repo and entry script ──────────────────────────────
+          if [[ ! -d "${APP_DIR}/.git" ]]; then
+            echo "ERROR: ${APP_DIR} is not a git repository."
+            echo "Clone the repo to ${APP_DIR} before running automated deploys."
+            exit 1
+          fi
+          if [[ ! -f "${APP_DIR}/scripts/deploy.sh" ]]; then
+            echo "ERROR: ${APP_DIR}/scripts/deploy.sh not found."
+            exit 1
+          fi
+
+          cd "$APP_DIR"
+
+          # ── Block uncommitted local changes (would break ff-only pull) ──
+          if ! git diff --quiet HEAD 2>/dev/null; then
+            echo "ERROR: Uncommitted changes detected on VM. Resolve manually."
+            git diff --name-only HEAD
+            exit 1
+          fi
+
+          # ── Block docker-compose.override.yml in production ─────────────
+          # compose v2 auto-loads this file, which enables local frontend
+          # builds and can exhaust RAM on small VMs.
+          if [[ -f docker-compose.override.yml ]]; then
+            echo "ERROR: docker-compose.override.yml found."
+            echo "Rename it to prevent accidental auto-load in production:"
+            echo "  mv docker-compose.override.yml docker-compose.override.yml.disabled"
+            exit 1
+          fi
+
+          # ── Sync repository to main ──────────────────────────────────────
+          git fetch --prune origin
+          git checkout main
+          git pull --ff-only origin main
+          echo "Repo updated: $(git log -1 --pretty='%H %s')"
+
+          # ── Ensure deploy scripts are executable ─────────────────────────
+          chmod +x \
+            scripts/deploy.sh \
+            scripts/setup-ssl.sh \
+            scripts/renew-ssl.sh \
+            scripts/renew-ssl-cron.sh \
+            scripts/verify-ssl.sh
+
+          # ── Run deploy ───────────────────────────────────────────────────
+          echo "=== Executing deploy.sh ==="
+          ./scripts/deploy.sh
+
+          echo "=== Deploy completed at $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+          REMOTE_SCRIPT
+
+      # ── 4. Post-deploy health check ────────────────────────────────────────
+      - name: Post-deploy health check
+        env:
+          VM_HOST: ${{ secrets.PROD_VM_HOST }}
+          VM_USER: ${{ secrets.PROD_VM_USER }}
+          VM_PORT: ${{ secrets.PROD_VM_PORT }}
+        run: |
+          PORT="${VM_PORT:-22}"
+
+          ssh \
+            -i ~/.ssh/prod_vm_key \
+            -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${VM_USER}@${VM_HOST}" \
+            bash -s << 'REMOTE_SCRIPT'
+          set -euo pipefail
+          cd /home/opc
+
+          echo "=== Container status ==="
+          docker compose ps
+
+          echo "=== Health check ==="
+          # Use -L to follow HTTP→HTTPS redirect if nginx enforces HTTPS.
+          # --insecure on localhost is safe: we're not validating a remote cert.
+          if curl -fsS -L --max-time 15 http://localhost/health; then
+            echo "Health check passed (HTTP)"
+          else
+            echo "HTTP redirect detected or failed — trying HTTPS directly..."
+            curl -fsS --insecure --max-time 15 https://localhost/health || {
+              echo "ERROR: Health check failed on both HTTP and HTTPS."
+              docker compose logs --tail=50 api nginx 2>/dev/null || true
+              exit 1
+            }
+            echo "Health check passed (HTTPS)"
+          fi
+          REMOTE_SCRIPT
+
+      # ── 5. Diagnostic logs on failure (read-only, no state mutation) ───────
+      - name: Diagnostic logs on failure
+        if: failure()
+        env:
+          VM_HOST: ${{ secrets.PROD_VM_HOST }}
+          VM_USER: ${{ secrets.PROD_VM_USER }}
+          VM_PORT: ${{ secrets.PROD_VM_PORT }}
+        run: |
+          PORT="${VM_PORT:-22}"
+
+          # Use || true so the diagnostic step itself never masks the original failure.
+          ssh \
+            -i ~/.ssh/prod_vm_key \
+            -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${VM_USER}@${VM_HOST}" \
+            bash -s << 'REMOTE_SCRIPT' || true
+          set -uo pipefail
+
+          echo "=== DIAGNOSTIC: Container status ==="
+          docker compose -f /home/opc/docker-compose.yml ps 2>/dev/null || true
+
+          echo "=== DIAGNOSTIC: API + Nginx logs (last 120 lines) ==="
+          docker compose -f /home/opc/docker-compose.yml logs --tail=120 api nginx 2>/dev/null || true
+
+          echo "=== DIAGNOSTIC: Docker daemon status ==="
+          systemctl status docker --no-pager -l 2>/dev/null || true
+          REMOTE_SCRIPT

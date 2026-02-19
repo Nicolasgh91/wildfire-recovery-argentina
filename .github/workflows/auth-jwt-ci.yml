@@ -1,4 +1,15 @@
-name: Auth JWT Tests
+name: Auth JWT CI
+
+# Gate CI — runs on every PR and push to main/develop.
+# This workflow is a required check for branch protection on main.
+#
+# Responsibilities:
+#   - Spin up a local PostgreSQL instance (no external dependencies).
+#   - Apply the users table migration.
+#   - Run integration tests that verify auth behavior with a real DB session.
+#
+# Unit-level auth matrix tests (BL-007) live in security.yml (auth-contracts
+# job) to avoid duplication. Both workflows are required checks on main.
 
 on:
   push:
@@ -9,7 +20,9 @@ on:
 
 jobs:
   auth-jwt:
+    name: Auth JWT Integration
     runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:15
@@ -24,8 +37,28 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+
     env:
+      # -------------------------------------------------------------------------
+      # CI smoke local values — do not replace with production values.
+      # These are intentionally dummy/insecure values safe for ephemeral CI use.
+      # Production secrets live in the VM .env file and are never in GitHub Actions.
+      # -------------------------------------------------------------------------
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      ENVIRONMENT: local
+      # Supabase — dummy URL. JWT validation will fail with 401 (expected in tests).
+      SUPABASE_URL: https://ci-placeholder.supabase.co
+      SUPABASE_JWT_SECRET: ci-placeholder-secret-not-for-production
+      SUPABASE_JWT_AUDIENCE: authenticated
+      # API keys — CI-only values, never used in production.
+      API_KEY: ci-test-api-key-not-for-production
+      ADMIN_API_KEY: ci-test-admin-key-not-for-production
+      # SECRET_KEY — only required for non-local ENVIRONMENT; set to dummy for safety.
+      SECRET_KEY: ci-placeholder-secret-key-for-testing-only-32x
+      # Redis — not used by tests; set to prevent Settings validation noise.
+      REDIS_URL: redis://localhost:6379/0
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,23 +67,24 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio httpx
 
-      - name: Install postgres client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
       - name: Prepare test database
         run: |
+          # pgcrypto is required by the migration; the migration itself also runs CREATE EXTENSION.
           psql "$TEST_DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";'
           psql "$TEST_DATABASE_URL" -f database/migrations/create_users.sql
 
-      - name: Run auth JWT tests
+      - name: Run auth integration tests
+        # Tests: DB smoke (SELECT 1, table presence) + HTTP auth smoke
+        # (GET /health → 200, GET /api/v1/audit/geocode without/with invalid token → 401)
         run: pytest tests/integration/test_auth_supabase_jwt.py -v
-
-      - name: Run auth matrix contract tests (BL-007)
-        run: pytest tests/unit/test_auth_matrix.py tests/unit/test_reports_auth.py -v
