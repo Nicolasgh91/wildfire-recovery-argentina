@@ -73,6 +73,8 @@ export const translations = {
     extinguished: 'Extinguido',
     loading: 'Cargando...',
     authRequired: 'Inicia sesion para continuar.',
+    protectedPageTitle: 'Acceso restringido',
+    protectedPageMessage: 'Esta página es exclusiva para usuarios registrados. Por favor, iniciá sesión para continuar.',
 
     // Fire Feed
     fireFeed: 'Incendios forestales',
@@ -721,6 +723,8 @@ export const translations = {
     extinguished: 'Extinguished',
     loading: 'Loading...',
     authRequired: 'Log in to continue.',
+    protectedPageTitle: 'Restricted access',
+    protectedPageMessage: 'This page is exclusive for registered users. Please log in to continue.',
 
     // Fire Feed
     fireFeed: 'Wildfire Feed',
