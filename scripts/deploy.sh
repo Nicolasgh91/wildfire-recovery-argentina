@@ -128,10 +128,15 @@ case "${1:-}" in
             exit 1
         fi
 
-        # Esperar a que la API este lista
+       # Esperar a que la API este lista
         echo "Esperando a que la API inicie..."
-        sleep 10
-
+        for i in $(seq 1 12); do
+            sleep 5
+            if curl -s http://localhost/health > /dev/null; then
+                break
+            fi
+            echo "  Intento $i/12..."
+        done
         # Health check
         if curl -s http://localhost/health > /dev/null; then
             echo "Deploy completado exitosamente"
