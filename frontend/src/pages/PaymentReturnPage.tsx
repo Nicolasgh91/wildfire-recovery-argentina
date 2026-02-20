@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { usePaymentStatus } from '@/hooks/queries/usePaymentStatus'
 import { useAuth } from '@/context/AuthContext'
 import { useI18n } from '@/context/LanguageContext'
-import { HOME_PATH } from '@/lib/routing'
+import { HOME_PATH, setAuthReturnTo } from '@/lib/routing'
 
 const POLLING_TIMEOUT_MS = 5 * 60 * 1000
 
@@ -61,7 +61,7 @@ export default function PaymentReturnPage() {
         </p>
         <Button
           onClick={() => {
-            sessionStorage.setItem('auth:returnTo', window.location.pathname + window.location.search)
+            setAuthReturnTo(window.location.pathname + window.location.search)
             navigate('/login')
           }}
         >

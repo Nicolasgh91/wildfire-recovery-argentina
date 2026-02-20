@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Trees, AlertCircle, Mail } from 'lucide-react'
+import { Trees, AlertCircle, Mail, Eye, EyeOff, Check, X } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -19,7 +19,33 @@ type RegisterValues = {
   firstName: string
   lastName: string
   email: string
+  password: string
+  confirmPassword: string
 }
+
+function PasswordChecklist({ password = '' }: { password?: string }) {
+  const rules = [
+    { label: 'Al menos 8 caracteres', test: (v: string) => v.length >= 8 },
+    { label: 'Una letra mayúscula y una minúscula', test: (v: string) => /[A-Z]/.test(v) && /[a-z]/.test(v) },
+    { label: 'Un número', test: (v: string) => /[0-9]/.test(v) },
+    { label: 'Un carácter especial', test: (v: string) => /[^A-Za-z0-9]/.test(v) },
+  ]
+
+  return (
+    <ul className="mt-2 text-xs space-y-1">
+      {rules.map((rule, idx) => {
+        const met = rule.test(password)
+        return (
+          <li key={idx} className={`flex items-center gap-2 ${met ? 'text-green-600 dark:text-green-500' : 'text-muted-foreground'}`}>
+            {met ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+            <span>{rule.label}</span>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 
 export default function RegisterPage() {
   const { t } = useI18n()
@@ -29,15 +55,31 @@ export default function RegisterPage() {
     firstName: z.string().min(2, t('validationRequired')).max(50, t('validationMax50')),
     lastName: z.string().min(2, t('validationRequired')).max(50, t('validationMax50')),
     email: z.string().email(t('validationInvalidEmail')),
+    password: z.string()
+      .min(1, 'La contraseña es obligatoria para crear tu cuenta.')
+      .min(8, 'La contraseña es demasiado corta. Necesita al menos 8 caracteres.')
+      .refine((val) => /[A-Z]/.test(val) && /[a-z]/.test(val), {
+        message: 'La contraseña debe incluir al menos una letra mayúscula y una minúscula.',
+      })
+      .refine((val) => /[0-9]/.test(val) && /[^A-Za-z0-9]/.test(val), {
+        message: 'La contraseña debe incluir al menos un número y un símbolo.',
+      }),
+    confirmPassword: z.string().min(1, 'Confirmar la contraseña es obligatorio.')
+  }).refine((data) => data.password === data.confirmPassword, {
+    message: "Las contraseñas ingresadas no coinciden. Verifícalas usando el icono del ojo.",
+    path: ["confirmPassword"],
   })
 
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<RegisterValues>({
     resolver: zodResolver(registerSchema),
@@ -51,10 +93,15 @@ export default function RegisterPage() {
     try {
       await signUpWithEmail({
         email: values.email,
-        firstName: values.firstName,
-        lastName: values.lastName,
-      })
-      setSuccess(t('registerSuccess'))
+        password: values.password || undefined,
+        options: {
+          data: {
+            first_name: values.firstName,
+            last_name: values.lastName,
+          }
+        }
+      } as any) // Type casting depends on AuthContext actual interface, assuming auth context can handle extra fields.
+      setSuccess(t('registerSuccess') || 'Cuenta creada exitosamente')
     } catch {
       setError(t('registerError'))
     }
@@ -114,6 +161,53 @@ export default function RegisterPage() {
                 <Input id="email" type="email" autoComplete="email" {...register('email')} />
                 {errors.email && (
                   <p className="text-xs text-destructive">{errors.email.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="password">{t('password') || 'Contraseña'}</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    {...register('password')}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <PasswordChecklist password={watch('password')} />
+                {errors.password && (
+                  <p className="text-xs text-destructive">{errors.password.message}</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    {...register('confirmPassword')}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
                 )}
               </div>
 

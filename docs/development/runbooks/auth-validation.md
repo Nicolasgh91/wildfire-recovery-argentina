@@ -32,6 +32,29 @@ Backend:
 - Click "Login con Google".
 - Ensure redirect returns to /auth/callback and then to the original page.
 
+### Google OAuth redirect troubleshooting (localhost -> production fallback)
+- Symptom: login started on `http://localhost:5173` returns to `https://forestguard.freedynamicdns.org/#access_token=...`.
+- Root cause: Supabase does not accept the requested `redirect_to`, so it falls back to Site URL.
+- Required Supabase Auth settings:
+  - Site URL: `https://forestguard.freedynamicdns.org`
+  - Redirect URLs:
+    - `https://forestguard.freedynamicdns.org/auth/callback`
+    - `http://localhost:5173/auth/callback`
+    - `http://127.0.0.1:5173/auth/callback`
+- Local frontend env:
+  - `VITE_AUTH_REDIRECT_URL=http://localhost:5173/auth/callback`
+- Network verification:
+  - Inspect `/auth/v1/authorize` and confirm query param `redirect_to=http://localhost:5173/auth/callback`.
+- Production `502` diagnosis (if fallback still reaches production host):
+  - `docker compose ps frontend nginx`
+  - `docker compose logs frontend --tail=50 | grep -i error`
+  - `docker compose logs nginx --tail=50 | grep -Ei "502|upstream"`
+  - `cat /home/opc/nginx/conf.d/default.conf | grep -A5 "location /"`
+- Recovery (after diagnosis):
+  - `docker compose logs nginx --tail=120`
+  - `docker compose restart frontend nginx`
+  - `curl -I https://forestguard.freedynamicdns.org/`
+
 3) Audit flow
 - Open /audit.
 - Run an audit; confirm request succeeds with JWT only (no API key required).
@@ -59,4 +82,3 @@ Backend:
 - No native auth endpoints accessible (/api/v1/auth/* removed).
 - All user-protected endpoints accept Supabase JWT only.
 - Payment return works after external redirects without losing session.
-

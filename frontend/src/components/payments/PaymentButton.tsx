@@ -6,6 +6,7 @@ import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import { cn } from '@/lib/utils'
 import { useCreateCheckout } from '@/hooks/mutations/useCreateCheckout'
+import { setAuthReturnTo } from '@/lib/routing'
 
 interface PaymentButtonProps {
   purpose: 'report' | 'credits'
@@ -48,7 +49,7 @@ export function PaymentButton({
     }
     if (!isAuthenticated) {
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem('auth:returnTo', window.location.pathname + window.location.search)
+        setAuthReturnTo(window.location.pathname + window.location.search)
       }
       toast.error(t('authRequired'))
       navigate('/login')

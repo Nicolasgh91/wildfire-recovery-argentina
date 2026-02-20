@@ -17,7 +17,8 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   signIn: (email: string, password: string) => Promise<void>
   signInWithGoogle: () => Promise<void>
-  signUpWithEmail: (payload: { email: string; firstName: string; lastName: string }) => Promise<void>
+  signInWithOtp: (email: string) => Promise<void>
+  signUpWithEmail: (payload: { email: string; firstName: string; lastName: string; password?: string }) => Promise<void>
   signOut: () => Promise<void>
   isAuthenticated: boolean
 }
@@ -39,12 +40,34 @@ function buildState(session: Session | null): AuthState {
   }
 }
 
+let didWarnInvalidAuthRedirect = false
+
+function warnInvalidAuthRedirect(message: string, value: string) {
+  if (!import.meta.env.DEV || didWarnInvalidAuthRedirect) return
+  didWarnInvalidAuthRedirect = true
+  console.warn(`[auth] ${message}: "${value}"`)
+}
+
 function resolveAuthRedirectUrl() {
   if (typeof window === 'undefined') return undefined
-  return (
-    import.meta.env.VITE_AUTH_REDIRECT_URL ||
-    `${window.location.origin}/auth/callback`
-  )
+
+  const fallback = `${window.location.origin}/auth/callback`
+  const configuredValue = import.meta.env.VITE_AUTH_REDIRECT_URL?.trim()
+  if (!configuredValue) return fallback
+
+  try {
+    const url = new URL(configuredValue)
+    if (url.pathname !== '/auth/callback') {
+      warnInvalidAuthRedirect('VITE_AUTH_REDIRECT_URL should end in /auth/callback', configuredValue)
+    }
+    if (url.host !== window.location.host) {
+      warnInvalidAuthRedirect('VITE_AUTH_REDIRECT_URL host differs from current web host', configuredValue)
+    }
+    return url.toString()
+  } catch {
+    warnInvalidAuthRedirect('VITE_AUTH_REDIRECT_URL is not a valid URL, using fallback', configuredValue)
+    return fallback
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -105,6 +128,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error
   }, [])
 
+  const signInWithOtp = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: resolveAuthRedirectUrl(),
+      },
+    })
+    if (error) throw error
+  }, [])
+
   const signUpWithEmail = useCallback(
     async (payload: { email: string; firstName: string; lastName: string }) => {
       const { error } = await supabase.auth.signInWithOtp({
@@ -130,11 +163,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...state,
       signIn,
       signInWithGoogle,
+      signInWithOtp,
       signUpWithEmail,
       signOut,
       isAuthenticated,
     }),
-    [isAuthenticated, signIn, signInWithGoogle, signOut, signUpWithEmail, state]
+    [isAuthenticated, signIn, signInWithGoogle, signInWithOtp, signOut, signUpWithEmail, state]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
