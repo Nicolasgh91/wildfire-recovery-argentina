@@ -375,12 +375,14 @@ export const translations = {
     checkInSuccess: 'Registro exitoso',
 
     // Login
-    email: 'Correo Electrónico',
+    email: 'Correo electrónico',
     password: 'Contraseña',
     loginButton: 'Iniciar Sesión',
     noAccount: '¿No tienes cuenta?',
     loginError: 'Por favor complete todos los campos',
     loginInvalid: 'Credenciales invalidas',
+    loginSuccess: 'Inicio de sesión exitoso',
+
 
     // Footer
     legal: 'Legal',
@@ -664,6 +666,7 @@ export const translations = {
     loginGuestAction: 'Continue as guest',
     logout: 'Logout',
     register: 'Register',
+    loginSuccess: 'Login successful',
     registerTitle: 'Create your ForestGuard account',
     registerSubtitle: 'Sign up to access satellite data and specialized\\nfire reports.',
     registerAction: 'Register with email',

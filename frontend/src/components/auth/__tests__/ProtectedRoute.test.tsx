@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { ProtectedRoute } from '../ProtectedRoute'
-import { AuthStatus } from '@/context/AuthContext'
-import React from 'react'
+import { type AuthStatus } from '@/context/AuthContext'
 
 const mockNavigate = vi.fn()
 const mockLocation = { pathname: '/protected' }
