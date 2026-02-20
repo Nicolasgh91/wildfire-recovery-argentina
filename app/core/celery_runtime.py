@@ -5,7 +5,7 @@ from typing import Mapping, Optional
 
 from app.core.config import settings
 
-DEFAULT_REDIS_URL = "redis://localhost:6379/0"
+DEFAULT_REDIS_URL = "redis://redis:6379/0"
 
 
 def _clean_url(value: Optional[str]) -> Optional[str]:
