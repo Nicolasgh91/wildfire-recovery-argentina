@@ -41,6 +41,8 @@ name: Deploy to Production VM
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [main, develop]
   workflow_dispatch:
 
 # Queue deploys; never interrupt a deploy in progress.
@@ -56,7 +58,7 @@ jobs:
     name: Deploy to Production VM
     runs-on: ubuntu-latest
     environment: production   # Requires human approval + holds infra secrets
-    timeout-minutes: 45       # Allow extra time for Docker image pulls on slow connections
+    timeout-minutes: 60       # Allow extra time for Docker image pulls on slow connections
 
     steps:
       # ── 0. Checkout ────────────────────────────────────────────────────────
