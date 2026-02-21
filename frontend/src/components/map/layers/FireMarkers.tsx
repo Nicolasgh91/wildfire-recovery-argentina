@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Marker, Popup, useMap } from 'react-leaflet'
+import { useEffect, useRef } from 'react'
+import { Marker, Popup } from 'react-leaflet'
 import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { useI18n } from '@/context/LanguageContext'
 import type { FireMapItem } from '@/types/map'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
-import { FirePopupCard } from '@/components/map/FirePopupCard'
+
 export type FireMarkersPopupVariant = 'default' | 'fire_detail'
 
 interface FireMarkersProps {
@@ -12,7 +15,6 @@ interface FireMarkersProps {
   selectedFireId?: string | null
   onFireSelect?: (fire: FireMapItem) => void
   popupVariant?: FireMarkersPopupVariant
-  popupMaxHeight?: number
 }
 
 const markerColors: Record<NonNullable<FireMapItem['severity']>, string> = {
@@ -55,59 +57,10 @@ export function FireMarkers({
   selectedFireId = null,
   onFireSelect,
   popupVariant = 'default',
-  popupMaxHeight = 250,
 }: FireMarkersProps) {
+  const { t } = useI18n()
   const navigate = useNavigate()
-  const map = useMap()
   const markerRefs = useRef<Record<string, L.Marker>>({})
-  
-  const rafRef = useRef<number | null>(null)
-  const [popupLayout, setPopupLayout] = useState({ maxHeight: 240, maxWidth: 320, compact: false })
-
-  const updatePopupLayout = useCallback(() => {
-    const container = map.getContainer()
-    const mapHeight = container.clientHeight
-    const mapWidth = container.clientWidth
-
-    const next = {
-      maxHeight: Math.max(140, Math.floor(mapHeight - 80)),
-      maxWidth: Math.max(220, Math.min(360, Math.floor(mapWidth - 24))),
-      compact: mapWidth <= 1024,
-    }
-
-    setPopupLayout((prev) =>
-      prev.maxHeight === next.maxHeight && prev.maxWidth === next.maxWidth && prev.compact === next.compact
-        ? prev
-        : next,
-    )
-  }, [map])
-
-  useEffect(() => {
-    const scheduleUpdate = () => {
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current)
-      }
-      rafRef.current = requestAnimationFrame(() => {
-        updatePopupLayout()
-        rafRef.current = null
-      })
-    }
-
-    scheduleUpdate()
-    map.on('resize moveend zoomend popupopen', scheduleUpdate)
-    window.addEventListener('resize', scheduleUpdate)
-    window.addEventListener('orientationchange', scheduleUpdate)
-
-    return () => {
-      map.off('resize moveend zoomend popupopen', scheduleUpdate)
-      window.removeEventListener('resize', scheduleUpdate)
-      window.removeEventListener('orientationchange', scheduleUpdate)
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current)
-      }
-    }
-  }, [map, updatePopupLayout])
-
 
   useEffect(() => {
     if (!selectedFireId) return
@@ -137,17 +90,10 @@ export function FireMarkers({
               click: () => onFireSelect?.(fire),
             }}
           >
-            <Popup
-              autoPan
-              autoPanPadding={[40, 40] as L.PointExpression}
-              keepInView
-              maxWidth={320}
-              maxHeight={popupMaxHeight}
-              className="fire-popup"
-            >
+            <Popup>
               {popupVariant === 'fire_detail' ? (
-                <div className="min-w-[180px] max-w-[260px] p-2">
-                  <h3 className="mb-1 font-semibold text-sm">
+                <div className="min-w-[220px] p-2">
+                  <h3 className="mb-2 font-semibold">
                     {fire.status === 'monitoring'
                       ? t('firePopupTitleMonitoring')
                       : fire.status === 'controlled'
@@ -156,7 +102,7 @@ export function FireMarkers({
                           ? t('firePopupTitleExtinguished')
                           : t('firePopupTitleActive')}
                   </h3>
-                  <div className="mb-2 flex flex-wrap gap-1.5">
+                  <div className="mb-3 flex flex-wrap gap-2">
                     <Badge
                       variant={fire.severity === 'high' ? 'destructive' : 'secondary'}
                       className="text-xs"
@@ -173,7 +119,7 @@ export function FireMarkers({
                       </Badge>
                     )}
                   </div>
-                  <div className="space-y-0.5 text-xs text-muted-foreground [&>p]:m-0">
+                  <div className="space-y-0 text-sm text-muted-foreground [&>p]:m-0">
                     <p>
                       {t('province')}: {fire.province || 'N/A'}
                     </p>
