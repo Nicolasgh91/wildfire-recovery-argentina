@@ -85,3 +85,15 @@
     @apply bg-background text-foreground font-sans;
   }
 }
+
+@layer components {
+  .fire-detail-popup .leaflet-popup-content {
+    margin: 0.5rem;
+    min-width: 200px;
+  }
+
+  .fire-detail-popup .leaflet-popup-content-wrapper {
+    border-radius: 0.75rem;
+    padding: 0;
+  }
+}

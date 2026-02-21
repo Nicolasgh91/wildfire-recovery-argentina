@@ -1,12 +1,10 @@
-import { useEffect, useRef } from 'react'
-import { Marker, Popup } from 'react-leaflet'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Marker, Popup, useMap } from 'react-leaflet'
 import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { useI18n } from '@/context/LanguageContext'
 import type { FireMapItem } from '@/types/map'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
+import { FirePopupCard } from '@/components/map/FirePopupCard'
 
 export type FireMarkersPopupVariant = 'default' | 'fire_detail'
 
@@ -58,9 +56,55 @@ export function FireMarkers({
   onFireSelect,
   popupVariant = 'default',
 }: FireMarkersProps) {
-  const { t } = useI18n()
   const navigate = useNavigate()
+  const map = useMap()
   const markerRefs = useRef<Record<string, L.Marker>>({})
+  const rafRef = useRef<number | null>(null)
+  const [popupLayout, setPopupLayout] = useState({ maxHeight: 240, maxWidth: 320, compact: false })
+
+  const updatePopupLayout = useCallback(() => {
+    const container = map.getContainer()
+    const mapHeight = container.clientHeight
+    const mapWidth = container.clientWidth
+
+    const next = {
+      maxHeight: Math.max(140, Math.floor(mapHeight - 80)),
+      maxWidth: Math.max(220, Math.min(360, Math.floor(mapWidth - 24))),
+      compact: mapWidth <= 1024,
+    }
+
+    setPopupLayout((prev) =>
+      prev.maxHeight === next.maxHeight && prev.maxWidth === next.maxWidth && prev.compact === next.compact
+        ? prev
+        : next,
+    )
+  }, [map])
+
+  useEffect(() => {
+    const scheduleUpdate = () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+      }
+      rafRef.current = requestAnimationFrame(() => {
+        updatePopupLayout()
+        rafRef.current = null
+      })
+    }
+
+    scheduleUpdate()
+    map.on('resize moveend zoomend popupopen', scheduleUpdate)
+    window.addEventListener('resize', scheduleUpdate)
+    window.addEventListener('orientationchange', scheduleUpdate)
+
+    return () => {
+      map.off('resize moveend zoomend popupopen', scheduleUpdate)
+      window.removeEventListener('resize', scheduleUpdate)
+      window.removeEventListener('orientationchange', scheduleUpdate)
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+      }
+    }
+  }, [map, updatePopupLayout])
 
   useEffect(() => {
     if (!selectedFireId) return
@@ -90,113 +134,32 @@ export function FireMarkers({
               click: () => onFireSelect?.(fire),
             }}
           >
-            <Popup>
-              {popupVariant === 'fire_detail' ? (
-                <div className="min-w-[220px] p-2">
-                  <h3 className="mb-2 font-semibold">
-                    {fire.status === 'monitoring'
-                      ? t('firePopupTitleMonitoring')
-                      : fire.status === 'controlled'
-                        ? t('firePopupTitleControlled')
-                        : fire.status === 'extinguished'
-                          ? t('firePopupTitleExtinguished')
-                          : t('firePopupTitleActive')}
-                  </h3>
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    <Badge
-                      variant={fire.severity === 'high' ? 'destructive' : 'secondary'}
-                      className="text-xs"
-                    >
-                      {fire.severity === 'high'
-                        ? t('severityHigh')
-                        : fire.severity === 'medium'
-                          ? t('severityMedium')
-                          : t('severityLow')}
-                    </Badge>
-                    {fire.in_protected_area && (
-                      <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-700">
-                        {t('protectedAreaLabel')}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="space-y-0 text-sm text-muted-foreground [&>p]:m-0">
-                    <p>
-                      {t('province')}: {fire.province || 'N/A'}
-                    </p>
-                    <p>
-                      {t('popupProtectedAreaPercentage')}:{' '}
-                      {fire.in_protected_area &&
-                        fire.overlap_percentage !== null &&
-                        fire.overlap_percentage !== undefined
-                        ? `${fire.overlap_percentage.toFixed(1)}%`
-                        : 'N/A'}
-                    </p>
-                    <p>
-                      {t('popupProtectedAreas')}:{' '}
-                      {fire.in_protected_area && fire.protected_area_name ? fire.protected_area_name : 'N/A'}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="min-w-[200px] p-2">
-                  <h3 className="mb-2 font-semibold">{fire.title}</h3>
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    <Badge
-                      variant={fire.severity === 'high' ? 'destructive' : 'secondary'}
-                      className="text-xs"
-                    >
-                      {fire.severity === 'high'
-                        ? t('highSeverity')
-                        : fire.severity === 'medium'
-                          ? t('mediumSeverity')
-                          : t('lowSeverity')}
-                    </Badge>
-                    {fire.in_protected_area && (
-                      <Badge variant="outline" className="border-emerald-200 bg-emerald-100 text-emerald-700">
-                        {t('protectedArea')}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="mb-3 space-y-1 text-sm text-muted-foreground">
-                    <p>
-                      {t('area')}:{' '}
-                      {fire.hectares !== null && fire.hectares !== undefined
-                        ? fire.hectares.toLocaleString()
-                        : 'N/A'}{' '}
-                      ha
-                    </p>
-                    <p>
-                      {t('province')}: {fire.province || 'N/A'}
-                    </p>
-                    {fire.overlap_percentage !== null &&
-                      fire.overlap_percentage !== undefined &&
-                      fire.in_protected_area && (
-                        <p>
-                          {t('protectedArea')}: {fire.overlap_percentage.toFixed(1)}%
-                        </p>
-                      )}
-                    {fire.in_protected_area && fire.protected_area_name && (
-                      <p>
-                        {t('protectedArea')}: {fire.protected_area_name}
-                      </p>
-                    )}
-                    {fire.in_protected_area &&
-                      fire.count_protected_areas !== null &&
-                      fire.count_protected_areas !== undefined && (
-                        <p>
-                          {t('protectedArea')}: {fire.count_protected_areas}
-                        </p>
-                      )}
-                  </div>
-                  <Button size="sm" className="w-full" onClick={() => {
-                    const ctx = { returnTo: 'map' as const, map: { selectedFireId: fire.id } }
-                    sessionStorage.setItem(RETURN_CONTEXT_KEY, JSON.stringify(ctx))
-                    navigate(`/fires/${detailId}`, { state: ctx })
-                  }}>
-                    {t('viewDetails')}
-                  </Button>
-                </div>
-              )}
+            <Popup
+              className="fire-detail-popup"
+              autoPan
+              keepInView
+              closeButton
+              autoPanPaddingTopLeft={L.point(20, 20)}
+              autoPanPaddingBottomRight={L.point(20, 20)}
+              maxWidth={popupLayout.maxWidth}
+              minWidth={220}
+              maxHeight={popupLayout.maxHeight}
+            >
+              <FirePopupCard
+                fire={fire}
+                variant={popupVariant}
+                compact={popupLayout.compact}
+                maxBodyHeight={popupLayout.maxHeight}
+                onViewDetails={
+                  popupVariant === 'default'
+                    ? () => {
+                      const ctx = { returnTo: 'map' as const, map: { selectedFireId: fire.id } }
+                      sessionStorage.setItem(RETURN_CONTEXT_KEY, JSON.stringify(ctx))
+                      navigate(`/fires/${detailId}`, { state: ctx })
+                    }
+                    : undefined
+                }
+              />
             </Popup>
           </Marker>
         )

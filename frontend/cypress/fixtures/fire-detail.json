@@ -1,0 +1,21 @@
+{
+  "fire": {
+    "id": "test-fire-id",
+    "province": "Córdoba",
+    "department": "Punilla",
+    "status": "active",
+    "start_date": "2026-01-01T10:00:00Z",
+    "end_date": null,
+    "estimated_area_hectares": 1234,
+    "max_frp": 65,
+    "total_detections": 42,
+    "in_protected_area": true,
+    "overlap_percentage": 20.1,
+    "protected_areas": [{ "id": "pa-1", "name": "Reserva X" }],
+    "count_protected_areas": 1,
+    "centroid": { "latitude": -31.42, "longitude": -64.19 }
+  },
+  "source_type": "event",
+  "event_count": 1,
+  "last_seen_at": "2026-01-02T10:00:00Z"
+}
