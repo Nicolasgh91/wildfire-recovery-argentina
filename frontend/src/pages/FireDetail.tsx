@@ -62,7 +62,7 @@ function resolveSeverityLevel(maxFrp?: number | null): 'high' | 'medium' | 'low'
 function FireDetailSkeleton() {
   return (
     <div className="min-h-screen bg-background">
-      <div className="h-64 md:h-80">
+      <div className="h-72 md:h-96">
         <Skeleton className="h-full w-full rounded-none" />
       </div>
       <div className="container mx-auto space-y-6 px-4 py-6">
@@ -306,7 +306,7 @@ export default function FireDetailPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="relative">
-        <div className="h-64 md:h-80">
+        <div className="h-72 md:h-96">
           {mapFire ? (
             <Suspense fallback={mapFallback}>
               <FireMap
@@ -315,6 +315,7 @@ export default function FireDetailPage() {
                 height="h-full"
                 interactive={false}
                 popupVariant="fire_detail"
+                popupMaxHeight={180}
               />
             </Suspense>
           ) : (

@@ -10,15 +10,17 @@ interface FireMapProps {
   height?: string
   interactive?: boolean
   popupVariant?: FireMarkersPopupVariant
+  popupMaxHeight?: number
 }
 
-export function FireMap({ 
-  fires, 
-  selectedFire, 
-  onFireSelect, 
+export function FireMap({
+  fires,
+  selectedFire,
+  onFireSelect,
   height = 'h-[calc(100vh-8rem)]',
   interactive = true,
   popupVariant = 'default',
+  popupMaxHeight,
 }: FireMapProps) {
   const safeCenter = useMemo(() => {
     if (!selectedFire) return undefined
@@ -36,6 +38,7 @@ export function FireMap({
         className="h-full w-full"
         onFireSelect={onFireSelect}
         popupVariant={popupVariant}
+        popupMaxHeight={popupMaxHeight}
       />
     </div>
   )

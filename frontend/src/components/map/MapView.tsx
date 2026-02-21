@@ -26,6 +26,7 @@ interface MapViewProps {
   onEpisodeSelect?: (episode: Episode) => void
   onProtectedAreaSelect?: (props: ProtectedAreaProperties) => void
   popupVariant?: FireMarkersPopupVariant
+  popupMaxHeight?: number
 }
 
 function MapCenterUpdater({ center }: { center?: [number, number] }) {
@@ -56,6 +57,7 @@ export function MapView({
   onEpisodeSelect,
   onProtectedAreaSelect,
   popupVariant = 'default',
+  popupMaxHeight,
 }: MapViewProps) {
   return (
     <BaseMap className={className} tileLayer={tileLayer} center={center} zoom={zoom} interactive={interactive}>
@@ -65,6 +67,7 @@ export function MapView({
         selectedFireId={selectedFireId}
         onFireSelect={onFireSelect}
         popupVariant={popupVariant}
+        popupMaxHeight={popupMaxHeight}
       />
       <EpisodeLayer episodes={episodes} onEpisodeClick={onEpisodeSelect} />
       {showHeatmap && <H3HeatmapLayer cells={heatmapCells} visible={showHeatmap} />}

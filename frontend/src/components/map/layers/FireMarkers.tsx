@@ -15,6 +15,7 @@ interface FireMarkersProps {
   selectedFireId?: string | null
   onFireSelect?: (fire: FireMapItem) => void
   popupVariant?: FireMarkersPopupVariant
+  popupMaxHeight?: number
 }
 
 const markerColors: Record<NonNullable<FireMapItem['severity']>, string> = {
@@ -57,6 +58,7 @@ export function FireMarkers({
   selectedFireId = null,
   onFireSelect,
   popupVariant = 'default',
+  popupMaxHeight = 250,
 }: FireMarkersProps) {
   const { t } = useI18n()
   const navigate = useNavigate()
@@ -90,10 +92,17 @@ export function FireMarkers({
               click: () => onFireSelect?.(fire),
             }}
           >
-            <Popup>
+            <Popup
+              autoPan
+              autoPanPadding={[40, 40] as L.PointExpression}
+              keepInView
+              maxWidth={320}
+              maxHeight={popupMaxHeight}
+              className="fire-popup"
+            >
               {popupVariant === 'fire_detail' ? (
-                <div className="min-w-[220px] p-2">
-                  <h3 className="mb-2 font-semibold">
+                <div className="min-w-[180px] max-w-[260px] p-2">
+                  <h3 className="mb-1 font-semibold text-sm">
                     {fire.status === 'monitoring'
                       ? t('firePopupTitleMonitoring')
                       : fire.status === 'controlled'
@@ -102,7 +111,7 @@ export function FireMarkers({
                           ? t('firePopupTitleExtinguished')
                           : t('firePopupTitleActive')}
                   </h3>
-                  <div className="mb-3 flex flex-wrap gap-2">
+                  <div className="mb-2 flex flex-wrap gap-1.5">
                     <Badge
                       variant={fire.severity === 'high' ? 'destructive' : 'secondary'}
                       className="text-xs"
@@ -119,7 +128,7 @@ export function FireMarkers({
                       </Badge>
                     )}
                   </div>
-                  <div className="space-y-0 text-sm text-muted-foreground [&>p]:m-0">
+                  <div className="space-y-0.5 text-xs text-muted-foreground [&>p]:m-0">
                     <p>
                       {t('province')}: {fire.province || 'N/A'}
                     </p>
