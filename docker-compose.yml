@@ -32,13 +32,16 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       
       # GCS (con ADC)
-      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      # /home/user/.config/gcloud/application_default_credentials.json
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
+      GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
       GCS_PROJECT_ID: ${GCS_PROJECT_ID}
       STORAGE_BACKEND: gcs
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
       STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
-      
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
+
       # Celery/Redis
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
@@ -50,6 +53,7 @@ services:
     
     # Monta credenciales de GCS (ADC local)
     volumes:
+      - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
       - ~/.config/gcloud:/home/user/.config/gcloud:ro
     
     ports:
@@ -85,9 +89,14 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       
       # GCS
-      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
+      GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
       GCS_PROJECT_ID: ${GCS_PROJECT_ID}
       STORAGE_BACKEND: gcs
+      STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
+      STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
+      STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
       
       # Celery
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -100,6 +109,7 @@ services:
       ENVIRONMENT: development
     
     volumes:
+      - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
       - ~/.config/gcloud:/home/user/.config/gcloud:ro
     
     depends_on:
@@ -124,8 +134,14 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
+      GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
       GCS_PROJECT_ID: ${GCS_PROJECT_ID}
+      STORAGE_BACKEND: gcs
+      STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
+      STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
+      STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
       
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
@@ -133,6 +149,7 @@ services:
       ENVIRONMENT: development
     
     volumes:
+      - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
       - ~/.config/gcloud:/home/user/.config/gcloud:ro
     
     depends_on:
@@ -157,8 +174,14 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      GOOGLE_APPLICATION_CREDENTIALS: /home/user/.config/gcloud/application_default_credentials.json
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
+      GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
       GCS_PROJECT_ID: ${GCS_PROJECT_ID}
+      STORAGE_BACKEND: gcs
+      STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
+      STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
+      STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
       #GEE_SERVICE_ACCOUNT_JSON: ${GEE_SERVICE_ACCOUNT_JSON}
       
       CELERY_BROKER_URL: redis://redis:6379/0
@@ -167,6 +190,7 @@ services:
       ENVIRONMENT: development
     
     volumes:
+      - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
       - ~/.config/gcloud:/home/user/.config/gcloud:ro
     
     depends_on:
