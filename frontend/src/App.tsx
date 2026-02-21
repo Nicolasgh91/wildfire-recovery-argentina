@@ -10,6 +10,7 @@ import { I18nProvider } from '@/context/LanguageContext'
 import { isFeatureEnabled } from '@/lib/featureFlags'
 import { useIdleTimer } from '@/hooks/useIdleTimer'
 import { HOME_PATH, resolveRootDestination } from '@/lib/routing'
+import { NavigationErrorBoundary } from '@/features/navigation/components/navigation-error-boundary'
 
 const HomePage = lazy(() => import('@/pages/Home'))
 const MapPage = lazy(() => import('@/pages/MapPage'))
@@ -75,7 +76,11 @@ function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className={shellClass}>
-      {!hideChrome && <Navbar />}
+      {!hideChrome && (
+        <NavigationErrorBoundary>
+          <Navbar />
+        </NavigationErrorBoundary>
+      )}
       <main className={mainClass}>{children}</main>
       {!hideChrome && <Footer />}
     </div>
