@@ -1,13 +1,10 @@
-import { useEffect, useRef } from 'react'
-import { Marker, Popup } from 'react-leaflet'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Marker, Popup, useMap } from 'react-leaflet'
 import { useNavigate } from 'react-router-dom'
 import L from 'leaflet'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { useI18n } from '@/context/LanguageContext'
 import type { FireMapItem } from '@/types/map'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
-
+import { FirePopupCard } from '@/components/map/FirePopupCard'
 export type FireMarkersPopupVariant = 'default' | 'fire_detail'
 
 interface FireMarkersProps {
@@ -58,9 +55,57 @@ export function FireMarkers({
   onFireSelect,
   popupVariant = 'default',
 }: FireMarkersProps) {
-  const { t } = useI18n()
   const navigate = useNavigate()
+  const map = useMap()
   const markerRefs = useRef<Record<string, L.Marker>>({})
+  
+  const rafRef = useRef<number | null>(null)
+  const [popupLayout, setPopupLayout] = useState({ maxHeight: 240, maxWidth: 320, compact: false })
+
+  const updatePopupLayout = useCallback(() => {
+    const container = map.getContainer()
+    const mapHeight = container.clientHeight
+    const mapWidth = container.clientWidth
+
+    const next = {
+      maxHeight: Math.max(140, Math.floor(mapHeight - 80)),
+      maxWidth: Math.max(220, Math.min(360, Math.floor(mapWidth - 24))),
+      compact: mapWidth <= 1024,
+    }
+
+    setPopupLayout((prev) =>
+      prev.maxHeight === next.maxHeight && prev.maxWidth === next.maxWidth && prev.compact === next.compact
+        ? prev
+        : next,
+    )
+  }, [map])
+
+  useEffect(() => {
+    const scheduleUpdate = () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+      }
+      rafRef.current = requestAnimationFrame(() => {
+        updatePopupLayout()
+        rafRef.current = null
+      })
+    }
+
+    scheduleUpdate()
+    map.on('resize moveend zoomend popupopen', scheduleUpdate)
+    window.addEventListener('resize', scheduleUpdate)
+    window.addEventListener('orientationchange', scheduleUpdate)
+
+    return () => {
+      map.off('resize moveend zoomend popupopen', scheduleUpdate)
+      window.removeEventListener('resize', scheduleUpdate)
+      window.removeEventListener('orientationchange', scheduleUpdate)
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+      }
+    }
+  }, [map, updatePopupLayout])
+
 
   useEffect(() => {
     if (!selectedFireId) return
