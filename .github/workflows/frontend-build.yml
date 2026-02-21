@@ -2,15 +2,24 @@ name: Frontend Build & Push (Multi-architecture)
 
 on:
   pull_request:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'frontend/**'
   push:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-build.yml'
   workflow_dispatch:
+    inputs:
+      clean_rebuild:
+        description: 'Run a one-off clean multi-arch build without cache'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 env:
   REGISTRY: ghcr.io
@@ -27,6 +36,27 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Print ref and SHA
+        run: |
+          echo "github.ref=${GITHUB_REF}"
+          echo "github.sha=${GITHUB_SHA}"
+          git rev-parse --short HEAD
+
+      - name: Guardrail - block forbidden FirePopupCard import
+        working-directory: ./frontend
+        run: |
+          if grep -R -nE \
+            --exclude-dir=__tests__ \
+            --exclude='*.test.*' \
+            --exclude='*.spec.*' \
+            "@/components/map/FirePopupCard" \
+            src; then
+            echo "::error::Forbidden FirePopupCard import found under frontend/src"
+            exit 1
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -54,7 +84,8 @@ jobs:
             type=ref,event=branch
             type=raw,value=latest,enable={{is_default_branch}}
 
-      - name: Build and push (Multi-architecture)
+      - name: Build and push (Multi-architecture, cached)
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.clean_rebuild == 'true') }}
         uses: docker/build-push-action@v6
         with:
           context: ./frontend
@@ -65,6 +96,23 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
+            VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
+            VITE_API_KEY=${{ secrets.VITE_API_KEY }}
+            VITE_AUTH_REDIRECT_URL=${{ secrets.VITE_AUTH_REDIRECT_URL }}
+
+      - name: Build and push (Multi-architecture, clean rebuild)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.clean_rebuild == 'true' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          no-cache: true
           build-args: |
             VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL }}
             VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}
