@@ -5,7 +5,7 @@ export const translations = {
     map: 'Mapa',
     audit: 'Verificar terreno',
     profile: 'Perfil',
-    login: 'Iniciar Sesión',
+    login: 'Iniciar sesión',
     loginWelcome: 'Bienvenido a ForestGuard',
     loginSubtitle: 'Accedé a datos satelitales y reportes especializados\\npara proteger nuestros bosques.',
     loginGoogle: 'Continuar con Google',
