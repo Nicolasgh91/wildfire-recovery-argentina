@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import (
+    account,
     alerts,
     certificates,
     citizen,
@@ -268,6 +269,11 @@ app.include_router(
 
 # UC-F01: Contact and support (public)
 app.include_router(contact.router, prefix=f"{settings.API_V1_PREFIX}", tags=["contact"])
+
+# Account lifecycle operations
+app.include_router(
+    account.router, prefix=f"{settings.API_V1_PREFIX}/account", tags=["account"]
+)
 
 # UC-10: Data Quality Metrics
 app.include_router(

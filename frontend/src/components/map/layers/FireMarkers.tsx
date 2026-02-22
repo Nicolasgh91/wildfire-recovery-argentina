@@ -15,6 +15,7 @@ interface FireMarkersProps {
   selectedFireId?: string | null
   onFireSelect?: (fire: FireMapItem) => void
   popupVariant?: FireMarkersPopupVariant
+  popupMaxHeight?: number
 }
 
 const markerColors: Record<NonNullable<FireMapItem['severity']>, string> = {
@@ -57,6 +58,7 @@ export function FireMarkers({
   selectedFireId = null,
   onFireSelect,
   popupVariant = 'default',
+  popupMaxHeight,
 }: FireMarkersProps) {
   const { t } = useI18n()
   const navigate = useNavigate()
@@ -92,7 +94,10 @@ export function FireMarkers({
           >
             <Popup>
               {popupVariant === 'fire_detail' ? (
-                <div className="min-w-[220px] p-2">
+                <div
+                  className="min-w-[220px] overflow-y-auto p-2"
+                  style={popupMaxHeight ? { maxHeight: popupMaxHeight } : undefined}
+                >
                   <h3 className="mb-2 font-semibold">
                     {fire.status === 'monitoring'
                       ? t('firePopupTitleMonitoring')
@@ -138,7 +143,10 @@ export function FireMarkers({
                   </div>
                 </div>
               ) : (
-                <div className="min-w-[200px] p-2">
+                <div
+                  className="min-w-[200px] overflow-y-auto p-2"
+                  style={popupMaxHeight ? { maxHeight: popupMaxHeight } : undefined}
+                >
                   <h3 className="mb-2 font-semibold">{fire.title}</h3>
                   <div className="mb-3 flex flex-wrap gap-2">
                     <Badge

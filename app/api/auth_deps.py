@@ -52,7 +52,13 @@ async def get_current_user(
     token = credentials.credentials
     try:
         payload = decode_supabase_token(token)
-        return get_or_create_supabase_user(db, payload)
+        user = get_or_create_supabase_user(db, payload)
+        if getattr(user, "is_deleted", False):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cuenta eliminada",
+            )
+        return user
     except AuthError as exc:
         logger.warning(
             "Auth failed | id=%s | method=%s | path=%s | error_type=%s | error=%s | traceback=%s",
@@ -68,6 +74,8 @@ async def get_current_user(
             detail=exc.message,
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning(
             "Auth failed | id=%s | method=%s | path=%s | error_type=%s | error=%s | traceback=%s",

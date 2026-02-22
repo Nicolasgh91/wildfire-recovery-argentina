@@ -10,6 +10,7 @@ import type { FireMapItem } from '@/types/map'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 import type { RestoreContext } from '@/types/navigation'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { Z_INDEX } from '@/features/navigation/config/z-index'
 
 const FireMap = lazy(() =>
   import('@/components/fire-map').then((mod) => ({ default: mod.FireMap })),
@@ -140,14 +141,18 @@ export default function MapPage() {
       <Button
         variant="secondary"
         size="icon"
-        className="absolute left-4 top-4 z-[400] md:hidden"
+        className="absolute left-4 top-4 md:hidden"
+        style={{ zIndex: Z_INDEX.MAP_OVERLAYS }}
         onClick={() => setShowSidebar(!showSidebar)}
       >
         {showSidebar ? <X className="h-4 w-4" /> : <List className="h-4 w-4" />}
       </Button>
 
       {showSidebar && (
-        <Card className="absolute right-4 top-4 z-[400] hidden w-80 md:flex flex-col h-[calc(100%-2rem)] gap-0 py-0">
+        <Card
+          className="absolute right-4 top-4 hidden h-[calc(100%-2rem)] w-80 flex-col gap-0 py-0 md:flex"
+          style={{ zIndex: Z_INDEX.MAP_OVERLAYS }}
+        >
           <CardHeader className="p-6 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Map className="h-5 w-5 text-primary" />
@@ -215,7 +220,10 @@ export default function MapPage() {
       )}
 
       {showSidebar && (
-        <Card className="absolute bottom-4 left-4 right-4 z-[400] md:hidden !py-0">
+        <Card
+          className="absolute bottom-4 left-4 right-4 !py-0 md:hidden"
+          style={{ zIndex: Z_INDEX.MAP_OVERLAYS }}
+        >
           <CardContent className="px-3 py-2">
             <ScrollArea className="w-full whitespace-nowrap">
               <div className="flex w-max space-x-2 pb-3">

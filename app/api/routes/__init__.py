@@ -1,5 +1,6 @@
 # Exportar todos los routers
 from . import (
+    account,
     alerts,
     analysis,
     audit,
@@ -24,6 +25,7 @@ from . import (
 )
 
 __all__ = [
+    "account",
     "fires",
     "explorations",
     "audit",

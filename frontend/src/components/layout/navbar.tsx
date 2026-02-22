@@ -1,14 +1,6 @@
-import { Link, NavLink } from 'react-router-dom'
-import {
-  Trees,
-  User,
-  LogIn,
-  LogOut,
-  Globe,
-  Sun,
-  Moon,
-  Settings,
-} from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { Globe, Lock, LogIn, LogOut, Moon, Settings, Sun, Trees, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -20,80 +12,90 @@ import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
-import { isFeatureEnabled } from '@/lib/featureFlags'
 import { BRAND } from '@/config/brand'
-import { HOME_PATH } from '@/lib/routing'
-import { PRIMARY_NAVIGATION_ITEMS, navLinkShouldUseExactMatch } from '@/features/navigation/config/navigation'
+import { HOME_PATH, LOGIN_PATH } from '@/lib/routing'
+import {
+  getInternalItems,
+  getVisibleItems,
+  isLockedPreview,
+  navLinkShouldUseExactMatch,
+} from '@/features/navigation/config/navigation'
+import { NavigationBottomNav } from '@/features/navigation/components/navigation-bottom-nav'
+import { NavigationTopbarTablet } from '@/features/navigation/components/navigation-topbar-tablet'
+import { NavigationDrawer } from '@/features/navigation/components/navigation-drawer'
+import { RestrictedAccessDialog } from '@/components/auth/RestrictedAccessDialog'
 
-export function Navbar() {
+function DesktopNavbar() {
   const { language, setLanguage, t } = useI18n()
   const { user, signOut, isAuthenticated } = useAuth()
   const { theme, setTheme } = useTheme()
+  const navigate = useNavigate()
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [lockedTargetPath, setLockedTargetPath] = useState<string | null>(null)
+
+  const desktopItems = useMemo(
+    () => [
+      ...getInternalItems(
+        getVisibleItems('explore', isAuthenticated, { includeLockedPreviews: true }),
+      ),
+      ...getInternalItems(
+        getVisibleItems('tools', isAuthenticated, { includeLockedPreviews: true }),
+      ),
+    ],
+    [isAuthenticated],
+  )
 
   return (
     <>
-      {/* Desktop Navigation */}
-      <header className="hidden md:flex fixed top-0 left-0 right-0 z-50 h-24 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="fixed top-0 left-0 right-0 z-50 hidden h-24 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:flex">
         <Link to={HOME_PATH} className="flex items-center gap-2">
           <Trees className="h-8 w-8 text-primary" />
           <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
         </Link>
 
         <nav className="flex items-center gap-1">
-          {PRIMARY_NAVIGATION_ITEMS.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={navLinkShouldUseExactMatch(item.activeMatch)}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              {t(item.labelKey)}
-            </NavLink>
-          ))}
-          {isFeatureEnabled('certificates') && (
-            <NavLink
-              to="/certificates"
-              end
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )
-              }
-            >
-              {t('certificates')}
-            </NavLink>
-          )}
-          {isFeatureEnabled('refuges') && (
-            <NavLink
-              to="/shelters"
-              end
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )
-              }
-            >
-              {t('shelters')}
-            </NavLink>
-          )}
+          {desktopItems.map((item) => {
+            const locked = isLockedPreview(item, isAuthenticated)
+            if (locked) {
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setLockedTargetPath(item.to)}
+                  aria-label={`${t(item.labelKey)} - requiere inicio de sesion`}
+                  className={cn(
+                    'flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                  )}
+                >
+                  <item.icon className="h-4 w-4" />
+                  {t(item.labelKey)}
+                  <Lock className="h-3.5 w-3.5 opacity-80" />
+                </button>
+              )
+            }
+
+            return (
+              <NavLink
+                key={item.id}
+                to={item.to}
+                end={navLinkShouldUseExactMatch(item.activeMatch)}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    isActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )
+                }
+              >
+                <item.icon className="h-4 w-4" />
+                {t(item.labelKey)}
+              </NavLink>
+            )
+          })}
         </nav>
 
         <div className="flex items-center gap-2">
-          {/* Language Toggle */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon">
@@ -111,7 +113,6 @@ export function Navbar() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Theme Toggle */}
           <Button
             variant="ghost"
             size="icon"
@@ -122,7 +123,6 @@ export function Navbar() {
             <span className="sr-only">Toggle theme</span>
           </Button>
 
-          {/* Auth */}
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -157,38 +157,33 @@ export function Navbar() {
         </div>
       </header>
 
-      {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex h-24 items-center justify-around border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        {PRIMARY_NAVIGATION_ITEMS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={navLinkShouldUseExactMatch(item.activeMatch)}
-            className={({ isActive }) =>
-              cn(
-                'flex flex-col items-center gap-1 px-3 py-2',
-                isActive ? 'text-primary' : 'text-muted-foreground',
-              )
-            }
-          >
-            <item.icon className="h-5 w-5" />
-            <span className="text-xs">{t(item.labelKey)}</span>
-          </NavLink>
-        ))}
-        <NavLink
-          to={isAuthenticated ? '/profile' : '/login'}
-          end
-          className={({ isActive }) =>
-            cn(
-              'flex flex-col items-center gap-1 px-3 py-2',
-              isActive ? 'text-primary' : 'text-muted-foreground',
-            )
-          }
-        >
-          <User className="h-5 w-5" />
-          <span className="text-xs">{isAuthenticated ? t('profile') : t('login')}</span>
-        </NavLink>
-      </nav>
+      <NavigationBottomNav onMenuPress={() => setDrawerOpen(true)} />
+      <NavigationTopbarTablet onMenuPress={() => setDrawerOpen(true)} />
+      <NavigationDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onLockedItemIntent={(path) => setLockedTargetPath(path)}
+      />
+      <RestrictedAccessDialog
+        open={lockedTargetPath !== null}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setLockedTargetPath(null)
+        }}
+        onGoBack={() => {
+          setLockedTargetPath(null)
+        }}
+        onLogin={() => {
+          if (!lockedTargetPath) return
+          navigate(LOGIN_PATH, {
+            state: { from: { pathname: lockedTargetPath }, reason: 'nav_locked_item' },
+          })
+          setLockedTargetPath(null)
+        }}
+      />
     </>
   )
+}
+
+export function Navbar() {
+  return <DesktopNavbar />
 }

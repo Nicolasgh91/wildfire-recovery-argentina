@@ -56,6 +56,14 @@ export const translations = {
     profileSaveError: 'No se pudo actualizar el perfil',
     profileCreditsTitle: 'Agregar créditos',
     profileCreditsDescription: 'Comprá créditos para acceder a reportes premium.',
+    navExplore: 'Explorar',
+    navTools: 'Herramientas',
+    navAccount: 'Cuenta',
+    navHelp: 'Ayuda',
+    navMoreInformation: 'Más información',
+    navMenu: 'Menu',
+    navOpenMenu: 'Abrir menu de navegacion',
+    navPreferences: 'Preferencias',
 
     // Common
     viewDetails: 'Ver detalles',
@@ -709,6 +717,14 @@ export const translations = {
     profileSaveError: 'Unable to update profile',
     profileCreditsTitle: 'Add credits',
     profileCreditsDescription: 'Buy credits to access premium reports.',
+    navExplore: 'Explore',
+    navTools: 'Tools',
+    navAccount: 'Account',
+    navHelp: 'Help',
+    navMoreInformation: 'More information',
+    navMenu: 'Menu',
+    navOpenMenu: 'Open navigation menu',
+    navPreferences: 'Preferences',
 
     // Common
     viewDetails: 'View Details',

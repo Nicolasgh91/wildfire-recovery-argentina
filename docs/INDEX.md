@@ -1,6 +1,6 @@
 # ForestGuard — Documentation Index
 
-Master index of canonical documentation. Last updated: 2026-02-18.
+Master index of canonical documentation. Last updated: 2026-02-22.
 
 ## 📁 Estructura de Documentación
 
@@ -81,6 +81,7 @@ docs/
 
 | Document | Path | Description |
 |----------|------|-------------|
+| **Menu + Perfil v2: implementation** | [`menu/README.md`](menu/README.md) | Full stack implementation log for responsive navigation, profile v2, account delete, DB and CI guardrails |
 | **Routing Access Matrix (RUC)** | [`frontend/routing_access_ruc.md`](frontend/routing_access_ruc.md) | Route access rules for guest/authenticated users |
 | **RUC Execution Log** | [`frontend/ruc_home_landing_execution_log.md`](frontend/ruc_home_landing_execution_log.md) | Task-by-task implementation and validation log |
 | **Frontend Technical Debt** | [`frontend/technical_debt.md`](frontend/technical_debt.md) | Open frontend debt and follow-up actions |

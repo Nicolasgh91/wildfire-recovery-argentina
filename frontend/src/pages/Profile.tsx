@@ -10,6 +10,9 @@ import { PaymentButton } from '@/components/payments/PaymentButton'
 import { useAuth } from '@/context/AuthContext'
 import { useI18n } from '@/context/LanguageContext'
 import { useUserCredits } from '@/hooks/queries/useUserCredits'
+import { PasswordSecurityCard } from '@/features/account/components/password-security-card'
+import { LogoutAction } from '@/features/account/components/logout-action'
+import { DeleteAccountDialog } from '@/features/account/components/delete-account-dialog'
 
 export default function ProfilePage() {
   const { t } = useI18n()
@@ -122,6 +125,19 @@ export default function ProfilePage() {
             >
               {t('creditsProceed')}
             </PaymentButton>
+          </CardContent>
+        </Card>
+
+        <PasswordSecurityCard />
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Acciones de cuenta</CardTitle>
+            <CardDescription>Cierre de sesion y eliminacion segura de cuenta.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 sm:flex-row">
+            <LogoutAction />
+            <DeleteAccountDialog />
           </CardContent>
         </Card>
       </div>
