@@ -13,7 +13,7 @@ websockets>=11,<16
 boto3==1.29.7
 fpdf2>=2.7.8
 qrcode>=7.4.2
-python-jose[cryptography]~=3.3.0
+python-jose[cryptography]~=3.5.0
 passlib[bcrypt]~=1.7.4
 
 # Celery + Redis
