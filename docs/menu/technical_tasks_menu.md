@@ -7,6 +7,14 @@
 
 ---
 
+## Documentacion de implementacion
+
+- Documento principal de implementacion ejecutada: [`docs/menu/README.md`](README.md)
+- Este archivo (`technical_tasks_menu.md`) describe plan y tareas tecnicas por PR.
+- El README de implementacion complementa este plan con estado real, contratos, archivos y validaciones observadas.
+
+---
+
 ## Reglas generales para el agente
 
 1. **Un commit atómico por tarea** con formato: `PR0-001: create z-index token scale`.

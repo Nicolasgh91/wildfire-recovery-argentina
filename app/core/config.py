@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     SECRET_KEY: Optional[SecretStr] = None  # For JWT/session signing; loaded from .env
     GOOGLE_CLIENT_ID: Optional[str] = None  # Google OAuth client ID for frontend auth
     SUPABASE_URL: Optional[str] = None
+    SUPABASE_ANON_KEY: Optional[SecretStr] = None
+    SUPABASE_SERVICE_KEY: Optional[SecretStr] = None
     SUPABASE_JWT_SECRET: Optional[SecretStr] = None
     SUPABASE_JWT_AUDIENCE: Optional[str] = "authenticated"
 

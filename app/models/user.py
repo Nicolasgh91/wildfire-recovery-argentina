@@ -37,6 +37,9 @@ class User(Base):
     )
     last_login_at = Column(DateTime(timezone=True), nullable=True)
     is_verified = Column(Boolean, nullable=False, default=False)
+    is_deleted = Column(Boolean, nullable=False, default=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    deletion_reason = Column(String(255), nullable=True)
 
     __table_args__ = (
         CheckConstraint("role IN ('admin', 'user')", name="users_role_check"),

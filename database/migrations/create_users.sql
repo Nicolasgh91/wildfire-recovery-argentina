@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     last_login_at TIMESTAMPTZ,
     is_verified BOOLEAN      NOT NULL DEFAULT FALSE,
+    is_deleted BOOLEAN       NOT NULL DEFAULT FALSE,
+    deleted_at TIMESTAMPTZ,
+    deletion_reason VARCHAR(255),
 
     CONSTRAINT users_role_check CHECK (role IN ('admin', 'user')),
     CONSTRAINT users_auth_method_check CHECK (
