@@ -1,3 +1,9 @@
+.boto
+.config/
+exec -l /
+google-cloud-sdk/
+
+
 # System & IDE
 .DS_Store
 Thumbs.db
