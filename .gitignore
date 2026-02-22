@@ -1,3 +1,7 @@
+.oci/
+.cargo/
+.profile
+.rustup/
 /home/opc/.ssh
 .ssh/
 ssh
