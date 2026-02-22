@@ -1,4 +1,6 @@
+/home/opc/.ssh
 .ssh/
+ssh
 .boto
 .config/
 exec -l /
