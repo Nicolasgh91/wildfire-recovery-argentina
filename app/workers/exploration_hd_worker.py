@@ -21,6 +21,7 @@ from app.models.exploration import (
 from app.models.fire import FireEvent
 from app.services.fire_service import CENTROID_GEOMETRY, PERIMETER_GEOMETRY
 from app.core.gee_semaphore import gee_semaphore
+from app.services.gee_scene_cache import find_cached_scene
 from app.services.gee_service import GEEError, GEEImageNotFoundError, GEEService
 from app.services.storage_service import BUCKETS, StorageService
 
@@ -152,6 +153,25 @@ def generate_hd_image_for_item(
         window_days = int(vis_params.get("window_days", 15))
         start_date = target_date - timedelta(days=window_days)
         end_date = target_date + timedelta(days=window_days)
+
+        # Cache check: skip GEE if an identical asset already exists
+        if fire_event:
+            cached = find_cached_scene(
+                db=db,
+                gee_system_index=str(vis_params.get("gee_image_id", "")),
+                visualization_params=vis_params,
+                fire_event_id=str(fire_event.id),
+            )
+            if cached and cached.r2_url:
+                logger.info(
+                    "Cache HIT for item %s, reusing asset from satellite_image %s",
+                    item_id,
+                    cached.id,
+                )
+                item.status = "generated"
+                item.updated_at = datetime.now(timezone.utc)
+                db.commit()
+                return True
 
         gee = GEEService()
         gee.authenticate()
