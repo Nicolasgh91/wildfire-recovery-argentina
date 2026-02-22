@@ -428,5 +428,17 @@ def run_generation_job(job_id: UUID) -> None:
                 job.status,
                 failed_items,
             )
+
+        # Enqueue PDF generation as independent task (only if job succeeded)
+        if job and job.status == "ready":
+            try:
+                from workers.tasks.pdf_generation_task import generate_pdf_for_job
+
+                generate_pdf_for_job.delay(str(job.id))
+                logger.info("pdf_task_enqueued job_id=%s", job_id)
+            except Exception as exc:
+                logger.warning(
+                    "pdf_task_enqueue_failed job_id=%s error=%s", job_id, exc
+                )
     finally:
         db.close()
