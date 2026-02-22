@@ -161,6 +161,7 @@ class HdGenerationJob(Base):
     progress_done = Column(Integer, nullable=False, default=0)
     started_at = Column(DateTime(timezone=True))
     finished_at = Column(DateTime(timezone=True))
+    results = Column(JSONB, server_default=text("'{}'::jsonb"))
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

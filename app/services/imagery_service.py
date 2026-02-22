@@ -65,6 +65,8 @@ from app.services.gee_service import (
     GEERateLimitError,
     GEEService,
 )
+from app.core.gee_semaphore import gee_semaphore
+from app.services.gee_scene_cache import find_cached_scene, should_regenerate_thumbnail
 from app.services.storage_service import StorageService
 from app.utils.watermark import apply_watermark
 
@@ -497,27 +499,29 @@ class ImageryService:
 
         for threshold in thresholds:
             try:
-                collection = self._gee.get_sentinel_collection(
-                    bbox=bbox,
-                    start_date=start,
-                    end_date=today,
-                    max_cloud_cover=float(threshold),
-                )
-                image = self._gee.get_best_image(collection)
+                with gee_semaphore.acquire_sync(timeout=120):
+                    collection = self._gee.get_sentinel_collection(
+                        bbox=bbox,
+                        start_date=start,
+                        end_date=today,
+                        max_cloud_cover=float(threshold),
+                    )
+                    image = self._gee.get_best_image(collection)
                 return image, False, int(threshold)
             except GEEImageNotFoundError:
                 continue
 
         # Fallback: oldest clear image in last 30 days
         try:
-            fallback_collection = self._gee.get_sentinel_collection(
-                bbox=bbox,
-                start_date=today - timedelta(days=30),
-                end_date=today,
-                max_cloud_cover=30,
-            )
-            oldest = fallback_collection.sort("system:time_start")
-            image = self._first_image(oldest)
+            with gee_semaphore.acquire_sync(timeout=120):
+                fallback_collection = self._gee.get_sentinel_collection(
+                    bbox=bbox,
+                    start_date=today - timedelta(days=30),
+                    end_date=today,
+                    max_cloud_cover=30,
+                )
+                oldest = fallback_collection.sort("system:time_start")
+                image = self._first_image(oldest)
             return image, True, 30
         except GEEImageNotFoundError:
             return None, False, None
@@ -578,11 +582,13 @@ class ImageryService:
         if resample is not None:
             kwargs["resample"] = resample
         try:
-            return self._gee.download_thumbnail(image, bbox, **kwargs)
+            with gee_semaphore.acquire_sync(timeout=120):
+                return self._gee.download_thumbnail(image, bbox, **kwargs)
         except TypeError as exc:
             if "resample" in kwargs and "resample" in str(exc):
                 kwargs.pop("resample", None)
-                return self._gee.download_thumbnail(image, bbox, **kwargs)
+                with gee_semaphore.acquire_sync(timeout=120):
+                    return self._gee.download_thumbnail(image, bbox, **kwargs)
             raise
 
     def _delete_existing_carousel_images(self, event_id: str) -> None:
@@ -628,12 +634,42 @@ class ImageryService:
         if not representative:
             return {"status": "skipped", "reason": "missing_event"}
 
+        # Cache check: skip GEE if all vis_types have cached scenes
+        if not force_refresh:
+            fire_event_id = str(self._normalize_fire_id(representative.id))
+            cached_slides = []
+            for vis_type, vis_params in VISUALS.items():
+                cached = find_cached_scene(
+                    db=self.db,
+                    gee_system_index=episode.last_gee_image_id or "",
+                    visualization_params=vis_params,
+                    fire_event_id=fire_event_id,
+                )
+                if cached and cached.thumbnail_url:
+                    cached_slides.append(
+                        {
+                            "type": vis_type.lower(),
+                            "thumbnail_url": cached.thumbnail_url,
+                            "satellite_image_id": str(cached.id),
+                            "generated_at": cached.created_at.isoformat()
+                            if cached.created_at
+                            else None,
+                        }
+                    )
+            if len(cached_slides) == len(VISUALS):
+                logger.info(
+                    "Cache HIT all vis_types for episode %s, skipping GEE",
+                    episode.id,
+                )
+                return {"status": "skipped", "reason": "cache_hit"}
+
         bbox = self._bbox_from_point(episode.lat, episode.lon)
         image, is_archive, used_threshold = self._select_image(bbox, thresholds)
         if image is None:
             return {"status": "skipped", "reason": "no_image"}
 
-        metadata = self._gee.get_image_metadata(image)
+        with gee_semaphore.acquire_sync(timeout=120):
+            metadata = self._gee.get_image_metadata(image)
         if not metadata.image_id:
             return {"status": "skipped", "reason": "missing_image_id"}
 

@@ -157,5 +157,14 @@ class ExplorationAssetResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ExplorationPdfResponse(BaseModel):
+    url: Optional[str] = None
+    status: str = "not_requested"
+    sha256: Optional[str] = None
+    size_bytes: Optional[int] = None
+    error: Optional[str] = None
+
+
 class ExplorationAssetsResponse(BaseModel):
     assets: List[ExplorationAssetResponse]
+    pdf: Optional[ExplorationPdfResponse] = None

@@ -67,14 +67,16 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
   const severity = getSeverityConfig(fire.frp_max)
   const title = formatProvincesLabel(fire.provinces, t('noProvince'))
   const statusKey = resolveStatus(fire)
-  const slides =
-    fire.slides_data?.filter((slide) => slide.thumbnail_url || slide.url) ?? []
+  const allSlides = fire.slides_data ?? []
+  const slides = allSlides.filter((slide) => slide.thumbnail_url || slide.url)
   const slidesToShow = slides.slice(0, Math.min(slides.length, slideStage))
-  // Heuristic: slides_data == null → data not loaded / absent.
-  // slidesToShow.length === 0 → no usable thumbnails.
-  // See docs/frontend/ui_debt_log.md - ideally backend exposes explicit flag.
+  // Show carousel if at least 1 slide has a usable URL (partial render).
+  // Show fallback only when NO slide has a URL.
+  // slides_data == null → never fetched; [] → fetched but empty (processing).
   const isImagePending =
     fire.slides_data == null || slidesToShow.length === 0
+  const isProcessing =
+    fire.slides_data != null && allSlides.length > 0 && slidesToShow.length === 0
   const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const detailId = fire.representative_event_id ?? fire.id
@@ -161,6 +163,11 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
               <span className="max-w-[180px] truncate text-sm font-medium text-slate-700">
                 {fire.provinces?.[0] ?? t('noProvince')}
               </span>
+              {isProcessing && (
+                <span className="text-xs text-slate-500">
+                  Imagen en procesamiento...
+                </span>
+              )}
             </div>
           </div>
         )}

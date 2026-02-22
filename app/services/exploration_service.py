@@ -62,6 +62,7 @@ from app.schemas.exploration import (
     ExplorationItemCreateRequest,
     ExplorationListItem,
     ExplorationListResponse,
+    ExplorationPdfResponse,
     ExplorationQuoteResponse,
     PaginationMeta,
 )
@@ -356,6 +357,24 @@ class ExplorationService:
                 )
                 return existing_job, 0, credits_balance
 
+            # Deduplication: return active job if one exists (queued or processing)
+            active_job = (
+                self.db.query(HdGenerationJob)
+                .filter(
+                    HdGenerationJob.investigation_id == investigation.id,
+                    HdGenerationJob.status.in_(["queued", "processing"]),
+                )
+                .first()
+            )
+            if active_job:
+                credits_balance = (
+                    self.db.query(UserCredits.balance)
+                    .filter(UserCredits.user_id == user_id)
+                    .scalar()
+                    or 0
+                )
+                return active_job, 0, credits_balance
+
             latest_job = (
                 self.db.query(HdGenerationJob)
                 .filter(HdGenerationJob.investigation_id == investigation.id)
@@ -612,4 +631,22 @@ class ExplorationService:
         if cache_updated:
             self.db.commit()
 
-        return ExplorationAssetsResponse(assets=assets)
+        # Build PDF info from latest job results
+        pdf_info = None
+        latest_job = (
+            self.db.query(HdGenerationJob)
+            .filter(HdGenerationJob.investigation_id == investigation_id)
+            .order_by(HdGenerationJob.created_at.desc())
+            .first()
+        )
+        if latest_job and latest_job.results:
+            results = latest_job.results
+            pdf_info = ExplorationPdfResponse(
+                url=results.get("pdf_url"),
+                status=results.get("pdf_status", "not_requested"),
+                sha256=results.get("pdf_sha256"),
+                size_bytes=results.get("pdf_size_bytes"),
+                error=results.get("pdf_error"),
+            )
+
+        return ExplorationAssetsResponse(assets=assets, pdf=pdf_info)

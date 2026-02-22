@@ -20,6 +20,8 @@ from app.models.exploration import (
 )
 from app.models.fire import FireEvent
 from app.services.fire_service import CENTROID_GEOMETRY, PERIMETER_GEOMETRY
+from app.core.gee_semaphore import gee_semaphore
+from app.services.gee_scene_cache import find_cached_scene
 from app.services.gee_service import GEEError, GEEImageNotFoundError, GEEService
 from app.services.storage_service import BUCKETS, StorageService
 
@@ -152,6 +154,25 @@ def generate_hd_image_for_item(
         start_date = target_date - timedelta(days=window_days)
         end_date = target_date + timedelta(days=window_days)
 
+        # Cache check: skip GEE if an identical asset already exists
+        if fire_event:
+            cached = find_cached_scene(
+                db=db,
+                gee_system_index=str(vis_params.get("gee_image_id", "")),
+                visualization_params=vis_params,
+                fire_event_id=str(fire_event.id),
+            )
+            if cached and cached.r2_url:
+                logger.info(
+                    "Cache HIT for item %s, reusing asset from satellite_image %s",
+                    item_id,
+                    cached.id,
+                )
+                item.status = "generated"
+                item.updated_at = datetime.now(timezone.utc)
+                db.commit()
+                return True
+
         gee = GEEService()
         gee.authenticate()
         requests_before = gee.get_request_count()
@@ -162,21 +183,22 @@ def generate_hd_image_for_item(
 
         for attempt in range(1, max_retries + 1):
             try:
-                collection = gee.get_sentinel_collection(
-                    bbox=bbox,
-                    start_date=start_date,
-                    end_date=end_date,
-                    max_cloud_cover=max_cloud_cover,
-                )
-                image = gee.get_best_image(collection, target_date=target_date)
-                metadata = gee.get_image_metadata(image)
-                image_bytes = gee.download_thumbnail(
-                    image=image,
-                    bbox=bbox,
-                    vis_type=vis_type,
-                    dimensions=dimensions,
-                    format=image_format,
-                )
+                with gee_semaphore.acquire_sync(timeout=120):
+                    collection = gee.get_sentinel_collection(
+                        bbox=bbox,
+                        start_date=start_date,
+                        end_date=end_date,
+                        max_cloud_cover=max_cloud_cover,
+                    )
+                    image = gee.get_best_image(collection, target_date=target_date)
+                    metadata = gee.get_image_metadata(image)
+                    image_bytes = gee.download_thumbnail(
+                        image=image,
+                        bbox=bbox,
+                        vis_type=vis_type,
+                        dimensions=dimensions,
+                        format=image_format,
+                    )
                 last_error = None
                 break
             except (GEEImageNotFoundError, GEEError, ValueError) as exc:
@@ -406,5 +428,17 @@ def run_generation_job(job_id: UUID) -> None:
                 job.status,
                 failed_items,
             )
+
+        # Enqueue PDF generation as independent task (only if job succeeded)
+        if job and job.status == "ready":
+            try:
+                from workers.tasks.pdf_generation_task import generate_pdf_for_job
+
+                generate_pdf_for_job.delay(str(job.id))
+                logger.info("pdf_task_enqueued job_id=%s", job_id)
+            except Exception as exc:
+                logger.warning(
+                    "pdf_task_enqueue_failed job_id=%s error=%s", job_id, exc
+                )
     finally:
         db.close()
