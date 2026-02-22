@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import asc, bindparam, desc, text
 from sqlalchemy.orm import Session
 
@@ -258,8 +258,11 @@ def list_fire_episodes(
     "/active",
     response_model=FireEpisodeListResponse,
     summary="Episodios para Home con thumbnails",
+    deprecated=True,
+    description="DEPRECATED: usar GET /fire-episodes?mode=active. Se eliminará el 2026-05-22.",
 )
 def list_active_episodes_for_home(
+    response: Response,
     limit: Optional[int] = Query(
         None,
         ge=1,
@@ -268,6 +271,10 @@ def list_active_episodes_for_home(
     ),
     db: Session = Depends(deps.get_db),
 ) -> FireEpisodeListResponse:
+    response.headers["Sunset"] = "Sat, 23 May 2026 00:00:00 GMT"
+    response.headers["Deprecation"] = "true"
+    response.headers["Link"] = '</api/v1/fire-episodes?mode=active>; rel="successor-version"'
+
     effective_limit = resolve_carousel_home_limit(db, override=limit)
 
     rows = (
