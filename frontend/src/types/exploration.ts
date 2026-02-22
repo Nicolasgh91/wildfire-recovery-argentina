@@ -87,6 +87,15 @@ export type ExplorationAsset = {
   status: ExplorationItemStatus
 }
 
+export type ExplorationPdfInfo = {
+  url?: string | null
+  status: string
+  sha256?: string | null
+  size_bytes?: number | null
+  error?: string | null
+}
+
 export type ExplorationAssetsResponse = {
   assets: ExplorationAsset[]
+  pdf?: ExplorationPdfInfo | null
 }

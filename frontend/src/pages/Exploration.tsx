@@ -72,6 +72,7 @@ import type { FireSearchItem, ExplorationPreviewResponse } from '@/types/fire'
 import type {
   ExplorationAsset,
   ExplorationGenerationStatusResponse,
+  ExplorationPdfInfo,
   ExplorationQuoteResponse,
 } from '@/types/exploration'
 import type { JudicialReportResponse } from '@/types/report'
@@ -342,6 +343,7 @@ export default function ExplorationPage() {
     useState<ExplorationGenerationStatusResponse | null>(null)
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [generatedAssets, setGeneratedAssets] = useState<ExplorationAsset[]>([])
+  const [explorationPdf, setExplorationPdf] = useState<ExplorationPdfInfo | null>(null)
   const [assetsLoading, setAssetsLoading] = useState(false)
   const [pdfGenerating, setPdfGenerating] = useState(false)
   const [pdfResult, setPdfResult] = useState<JudicialReportResponse | null>(null)
@@ -462,6 +464,7 @@ export default function ExplorationPage() {
     try {
       const response = await getExplorationAssets(explorationId)
       setGeneratedAssets(response.assets ?? [])
+      setExplorationPdf(response.pdf ?? null)
     } catch {
       setGenerationError('No se pudieron cargar las imagenes generadas.')
     } finally {
@@ -1800,6 +1803,32 @@ export default function ExplorationPage() {
                         </p>
                       )}
                     </div>
+
+                    {/* PDF Report Section */}
+                    {explorationPdf && (
+                      <div className="w-full rounded-lg border border-border bg-muted/20 p-4">
+                        <p className="mb-2 text-sm font-semibold text-foreground">Reporte PDF</p>
+                        {explorationPdf.status === 'generated' && explorationPdf.url && (
+                          <button
+                            type="button"
+                            onClick={() => window.open(explorationPdf.url!, '_blank')}
+                            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                          >
+                            <span>Descargar PDF del reporte</span>
+                          </button>
+                        )}
+                        {explorationPdf.status === 'failed' && (
+                          <p className="text-sm text-amber-600">
+                            El PDF no pudo generarse. Las imagenes HD estan disponibles para descarga individual.
+                          </p>
+                        )}
+                        {(!explorationPdf.status || explorationPdf.status === 'not_requested') && (
+                          <p className="text-sm text-muted-foreground">
+                            PDF generandose...
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     <div className="w-full rounded-lg border border-border bg-muted/20 p-4">
                       <p className="mb-2 text-sm font-semibold text-foreground">{t('explorationDownloadTitle')}</p>
