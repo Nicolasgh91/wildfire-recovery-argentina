@@ -1,3 +1,4 @@
+.oci/
 .cargo/
 .profile
 .rustup/
