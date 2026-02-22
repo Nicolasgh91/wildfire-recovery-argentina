@@ -66,6 +66,7 @@ from app.services.gee_service import (
     GEEService,
 )
 from app.core.gee_semaphore import gee_semaphore
+from app.services.gee_scene_cache import find_cached_scene, should_regenerate_thumbnail
 from app.services.storage_service import StorageService
 from app.utils.watermark import apply_watermark
 
@@ -632,6 +633,35 @@ class ImageryService:
         representative, is_fire_event = self._resolve_representative_event(episode.id)
         if not representative:
             return {"status": "skipped", "reason": "missing_event"}
+
+        # Cache check: skip GEE if all vis_types have cached scenes
+        if not force_refresh:
+            fire_event_id = str(self._normalize_fire_id(representative.id))
+            cached_slides = []
+            for vis_type, vis_params in VISUALS.items():
+                cached = find_cached_scene(
+                    db=self.db,
+                    gee_system_index=episode.last_gee_image_id or "",
+                    visualization_params=vis_params,
+                    fire_event_id=fire_event_id,
+                )
+                if cached and cached.thumbnail_url:
+                    cached_slides.append(
+                        {
+                            "type": vis_type.lower(),
+                            "thumbnail_url": cached.thumbnail_url,
+                            "satellite_image_id": str(cached.id),
+                            "generated_at": cached.created_at.isoformat()
+                            if cached.created_at
+                            else None,
+                        }
+                    )
+            if len(cached_slides) == len(VISUALS):
+                logger.info(
+                    "Cache HIT all vis_types for episode %s, skipping GEE",
+                    episode.id,
+                )
+                return {"status": "skipped", "reason": "cache_hit"}
 
         bbox = self._bbox_from_point(episode.lat, episode.lon)
         image, is_archive, used_threshold = self._select_image(bbox, thresholds)
