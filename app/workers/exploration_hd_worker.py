@@ -20,6 +20,7 @@ from app.models.exploration import (
 )
 from app.models.fire import FireEvent
 from app.services.fire_service import CENTROID_GEOMETRY, PERIMETER_GEOMETRY
+from app.core.gee_semaphore import gee_semaphore
 from app.services.gee_service import GEEError, GEEImageNotFoundError, GEEService
 from app.services.storage_service import BUCKETS, StorageService
 
@@ -162,21 +163,22 @@ def generate_hd_image_for_item(
 
         for attempt in range(1, max_retries + 1):
             try:
-                collection = gee.get_sentinel_collection(
-                    bbox=bbox,
-                    start_date=start_date,
-                    end_date=end_date,
-                    max_cloud_cover=max_cloud_cover,
-                )
-                image = gee.get_best_image(collection, target_date=target_date)
-                metadata = gee.get_image_metadata(image)
-                image_bytes = gee.download_thumbnail(
-                    image=image,
-                    bbox=bbox,
-                    vis_type=vis_type,
-                    dimensions=dimensions,
-                    format=image_format,
-                )
+                with gee_semaphore.acquire_sync(timeout=120):
+                    collection = gee.get_sentinel_collection(
+                        bbox=bbox,
+                        start_date=start_date,
+                        end_date=end_date,
+                        max_cloud_cover=max_cloud_cover,
+                    )
+                    image = gee.get_best_image(collection, target_date=target_date)
+                    metadata = gee.get_image_metadata(image)
+                    image_bytes = gee.download_thumbnail(
+                        image=image,
+                        bbox=bbox,
+                        vis_type=vis_type,
+                        dimensions=dimensions,
+                        format=image_format,
+                    )
                 last_error = None
                 break
             except (GEEImageNotFoundError, GEEError, ValueError) as exc:
