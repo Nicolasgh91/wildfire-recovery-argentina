@@ -58,6 +58,22 @@ jobs:
             exit 1
           fi
 
+      - name: Validate required build secrets
+        run: |
+          missing=""
+          if [ -z "${{ secrets.VITE_SUPABASE_URL }}" ]; then
+            missing="$missing VITE_SUPABASE_URL"
+          fi
+          if [ -z "${{ secrets.VITE_SUPABASE_ANON_KEY }}" ]; then
+            missing="$missing VITE_SUPABASE_ANON_KEY"
+          fi
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required GitHub Secrets:$missing"
+            echo "Add them at: Settings > Secrets and variables > Actions > New repository secret"
+            exit 1
+          fi
+          echo "All required build secrets are present."
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
