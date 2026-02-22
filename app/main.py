@@ -21,6 +21,7 @@ from app.api.routes import (
     tasks
 )
 from app.api.v1 import (
+    admin,
     analysis,
     audit,
     contact,
@@ -334,6 +335,14 @@ app.include_router(
     tasks.router, # This is the new generalized tasks router
     prefix=f"{settings.API_V1_PREFIX}/tasks",
     tags=["tasks"],
+    dependencies=[Depends(verify_api_key)],
+)
+
+# Admin monitoring endpoints
+app.include_router(
+    admin.router,
+    prefix=f"{settings.API_V1_PREFIX}/admin",
+    tags=["admin"],
     dependencies=[Depends(verify_api_key)],
 )
 
