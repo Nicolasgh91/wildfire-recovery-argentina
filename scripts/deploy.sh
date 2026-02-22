@@ -91,7 +91,8 @@ case "${1:-}" in
         PRIVKEY_PATH="${CERT_DIR}/privkey.pem"
         CHAIN_PATH="${CERT_DIR}/chain.pem"
 
-        # Pull de imagenes base
+        # Pull de imagenes externas y de GHCR
+        docker compose -f "$COMPOSE_FILE" pull frontend 2>/dev/null || true
         docker compose -f "$COMPOSE_FILE" --profile ssl pull nginx certbot 2>/dev/null || true
 
         # Auto-bootstrap SSL para primer deploy
