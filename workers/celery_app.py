@@ -76,6 +76,7 @@ celery_app = Celery(
         'workers.tasks.notification',
         'workers.tasks.exploration_hd_task',
         'workers.tasks.export_task',
+        'workers.tasks.pdf_generation_task',
     ]
 )
 
@@ -104,6 +105,7 @@ celery_app.conf.update(
         'workers.tasks.destruction.detect_destruction': {'queue': 'analysis'},
         'workers.tasks.notification.send_contact_email': {'queue': 'notification'},
         'workers.tasks.export_task.export_fires_async': {'queue': 'analysis'},
+        'workers.tasks.pdf_generation_task.generate_pdf_for_job': {'queue': 'reports'},
     },
     
     # Retry policy
