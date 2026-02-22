@@ -116,8 +116,9 @@ class StorageService:
 
     Backends soportados:
     - "gcs": Google Cloud Storage
-    - "r2": S3-compatible (legacy)
-    - "local": filesystem local (Oracle VM)
+    - "r2": S3-compatible (legacy, Cloudflare R2)
+    - "oci": OCI Object Storage (S3-compatible API)
+    - "local": filesystem local (desarrollo/testing)
     """
 
     _instance = None
@@ -154,7 +155,7 @@ class StorageService:
         if _env == "production" and self._backend == "local":
             raise StorageError(
                 "STORAGE_BACKEND='local' is not allowed in production. "
-                "Use 'gcs' or 'r2'."
+                "Use 'gcs', 'r2', or 'oci'."
             )
         self._access_key = access_key
         self._secret_key = secret_key
@@ -196,6 +197,31 @@ class StorageService:
                 else:
                     self._client = gcs_storage.Client(project=self._gcs_project_id)
             return self._client
+
+        if self._backend == "oci":
+            # OCI Object Storage S3-compatible API
+            if self._client is None:
+                access_key = self._access_key or os.environ.get("OCI_S3_ACCESS_KEY")
+                secret_key = self._secret_key or os.environ.get("OCI_S3_SECRET_KEY")
+                endpoint = self._endpoint_url or os.environ.get("OCI_S3_ENDPOINT_URL")
+                region = os.environ.get("OCI_REGION", "sa-saopaulo-1")
+
+                if not all([access_key, secret_key, endpoint]):
+                    raise StorageError(
+                        "Faltan credenciales OCI. Configurar OCI_S3_ACCESS_KEY, "
+                        "OCI_S3_SECRET_KEY y OCI_S3_ENDPOINT_URL"
+                    )
+
+                self._client = boto3.client(
+                    "s3",
+                    endpoint_url=endpoint,
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key,
+                    region_name=region,
+                )
+            return self._client
+
+        # R2 (fallback S3-compatible)
         if self._client is None:
             access_key = self._access_key or os.environ.get("R2_ACCESS_KEY_ID")
             secret_key = self._secret_key or os.environ.get("R2_SECRET_ACCESS_KEY")
@@ -539,6 +565,14 @@ class StorageService:
                 return f"{self._public_url_base.rstrip('/')}/{bucket}/{key}"
             return f"https://storage.googleapis.com/{bucket}/{key}"
 
+        if self._backend == "oci":
+            oci_public_url = os.environ.get("OCI_PUBLIC_URL", "")
+            if oci_public_url:
+                return f"{oci_public_url.rstrip('/')}/{key}"
+            # Fallback: use signed URL when no public URL is configured
+            return self.get_signed_url(key, bucket)
+
+        # R2 fallback
         public_url_base = os.environ.get("R2_PUBLIC_URL", "")
         if public_url_base:
             return f"{public_url_base.rstrip('/')}/{key}"
@@ -840,12 +874,13 @@ class StorageService:
                     "sample_objects": len(objects),
                 }
 
+            # OCI or R2 (both use boto3 S3-compatible client)
             client = self._get_client()
             client.head_bucket(Bucket=self._default_bucket)
             objects = self.list_objects(max_keys=10)
             return {
                 "status": "healthy",
-                "backend": "r2",
+                "backend": self._backend,
                 "bucket": self._default_bucket,
                 "accessible": True,
                 "sample_objects": len(objects),
