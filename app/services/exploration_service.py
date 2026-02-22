@@ -356,6 +356,24 @@ class ExplorationService:
                 )
                 return existing_job, 0, credits_balance
 
+            # Deduplication: return active job if one exists (queued or processing)
+            active_job = (
+                self.db.query(HdGenerationJob)
+                .filter(
+                    HdGenerationJob.investigation_id == investigation.id,
+                    HdGenerationJob.status.in_(["queued", "processing"]),
+                )
+                .first()
+            )
+            if active_job:
+                credits_balance = (
+                    self.db.query(UserCredits.balance)
+                    .filter(UserCredits.user_id == user_id)
+                    .scalar()
+                    or 0
+                )
+                return active_job, 0, credits_balance
+
             latest_job = (
                 self.db.query(HdGenerationJob)
                 .filter(HdGenerationJob.investigation_id == investigation.id)
