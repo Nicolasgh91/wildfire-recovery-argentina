@@ -174,17 +174,28 @@ jobs:
           echo "=== Container status ==="
           docker compose ps
 
-          echo "=== Health check ==="
-          if curl -fsS -L --max-time 15 http://localhost/health; then
-            echo "Health check passed (HTTP)"
-          else
-            echo "Trying HTTPS..."
-            curl -fsS --insecure --max-time 15 https://localhost/health || {
-              echo "ERROR: Health check failed."
-              docker compose logs --tail=50 api nginx 2>/dev/null || true
-              exit 1
-            }
-            echo "Health check passed (HTTPS)"
+          echo "=== Health check (up to 12 attempts) ==="
+          HEALTHY=false
+          for i in $(seq 1 12); do
+            if curl -fsS -L --max-time 15 http://localhost/health 2>/dev/null; then
+              echo "Health check passed (HTTP) on attempt $i"
+              HEALTHY=true
+              break
+            fi
+            if curl -fsS --insecure --max-time 15 https://localhost/health 2>/dev/null; then
+              echo "Health check passed (HTTPS) on attempt $i"
+              HEALTHY=true
+              break
+            fi
+            echo "  Attempt $i/12 failed, retrying in 5s..."
+            sleep 5
+          done
+
+          if ! $HEALTHY; then
+            echo "ERROR: Health check failed after 12 attempts."
+            docker compose logs --tail=80 api nginx 2>/dev/null || true
+            docker compose ps || true
+            exit 1
           fi
 
           echo "=== Worker-reports check ==="

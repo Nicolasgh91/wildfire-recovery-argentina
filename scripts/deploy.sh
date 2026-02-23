@@ -93,7 +93,11 @@ case "${1:-}" in
 
         # Pull de imagenes de GHCR
         echo "=== Pulling images ==="
-        docker compose -f "$COMPOSE_FILE" pull 2>/dev/null || true
+        if ! docker compose -f "$COMPOSE_FILE" pull; then
+            echo "ERROR: Failed to pull images from GHCR."
+            echo "  Check that the backend-build workflow completed successfully."
+            exit 1
+        fi
 
         # Cleanup before building new images
         echo "=== Pre-build cleanup ==="
@@ -135,17 +139,24 @@ case "${1:-}" in
             exit 1
         fi
 
-       # Esperar a que la API este lista
+        # Esperar a que la API este lista (requiere HTTP 2xx)
         echo "Esperando a que la API inicie..."
+        API_READY=false
         for i in $(seq 1 12); do
             sleep 5
-            if curl -s http://localhost/health > /dev/null; then
+            if curl -fsS -L --max-time 5 http://localhost/health >/dev/null 2>&1; then
+                API_READY=true
+                break
+            fi
+            # HTTPS fallback (self-signed OK)
+            if curl -fsS --insecure --max-time 5 https://localhost/health >/dev/null 2>&1; then
+                API_READY=true
                 break
             fi
             echo "  Intento $i/12..."
         done
-        # Health check
-        if curl -s http://localhost/health > /dev/null; then
+
+        if $API_READY; then
             echo "Deploy completado exitosamente"
             echo ""
             echo "Estado:"
@@ -156,8 +167,11 @@ case "${1:-}" in
             echo "  - Docs:   http://$(curl -s ifconfig.me)/docs"
             echo "  - API:    http://$(curl -s ifconfig.me)/api/v1/"
         else
-            echo "La API puede estar iniciando aun. Verificar con:"
-            echo "  ./scripts/deploy.sh --logs"
+            echo "ERROR: API health check failed after 12 attempts."
+            echo "=== Diagnostic logs ==="
+            docker compose -f "$COMPOSE_FILE" logs --tail=50 api nginx || true
+            docker compose -f "$COMPOSE_FILE" ps || true
+            exit 1
         fi
         ;;
 esac
