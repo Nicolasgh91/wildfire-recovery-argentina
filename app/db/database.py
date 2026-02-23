@@ -18,34 +18,14 @@ Este módulo delega al engine/session de app.db.session para evitar duplicación
 
 from typing import Generator
 
-from sqlalchemy import event, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal as _SessionLocal
 from app.db.session import get_db as _get_db
 from app.db.session import get_engine
 
-
-# Re-export engine y SessionLocal para compatibilidad con importaciones existentes
-engine = get_engine()
-
 SessionLocal = _SessionLocal
-
-
-# Event listener para habilitar PostGIS en cada conexión
-# PostGIS es la extensión geoespacial de PostgreSQL. Necesita estar activada
-# para que nuestros campos Geometry funcionen correctamente.
-# Este listener corre cada vez que se abre una nueva conexión.
-@event.listens_for(engine, "connect")
-def setup_postgis(dbapi_conn, connection_record):
-    """
-    Ejecuta comandos SQL cuando se abre una nueva conexión.
-    Esto asegura que PostGIS está disponible en la BD.
-    """
-    # Ejecutar comando para habilitar la extensión PostGIS
-    with dbapi_conn.cursor() as cursor:
-        cursor.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
-        dbapi_conn.commit()
 
 
 def get_db() -> Generator[Session, None, None]:
