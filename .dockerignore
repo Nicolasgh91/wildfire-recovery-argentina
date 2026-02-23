@@ -25,10 +25,14 @@ wheels/
 *.egg
 MANIFEST
 
-# Virtual environments
+# Virtual environments (match with and without trailing slash)
+.venv
 .venv/
+venv
 venv/
+env
 env/
+ENV
 ENV/
 
 # IDE
@@ -66,24 +70,28 @@ docs/
 *.md
 !README.md
 
-# Frontend (when building API)
-frontend/node_modules/
-frontend/dist/
-frontend/.cache/
-frontend/.coverage/
-frontend/playwright-report/
-frontend/cypress/
+# MyPy cache (65 MB locally)
+.mypy_cache/
+.mypy_cache
+
+# Frontend — the API/worker images don't need ANY frontend source.
+# Exclude the entire tree; only the compiled static assets served by nginx
+# are relevant, and those are built separately via the frontend Dockerfile.
+frontend/
+
+# Global node_modules catch-all (safety net for any nested npm projects)
+**/node_modules/
 
 # Data and cache
 data/
 cache/
 *.cache
 
-# Environment files
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Environment files — never bake secrets into the image
+# Runtime secrets live in /home/opc/.env on the VM, not in the image.
+.env
+.env.*
+!.env.template
 
 # Temporary files
 *.tmp
@@ -93,3 +101,23 @@ cache/
 # Docker files (exclude from build context)
 docker-compose.override.yml
 Dockerfile.dev
+
+# Secrets directory
+secrets/
+
+# Supabase local dev artifacts
+supabase/.branches/
+supabase/.temp/
+
+# Test artifacts
+tests/
+pytest.ini
+pyproject.toml
+
+# CI/CD (not needed inside the image)
+.github/
+
+# Local scripts not needed at runtime
+scripts/setup-ssl.sh
+scripts/renew-ssl*.sh
+scripts/verify-ssl.sh
