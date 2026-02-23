@@ -19,9 +19,7 @@ services:
       retries: 5
 
   api:
-    build:
-      context: .
-      dockerfile: Dockerfile.api
+    image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/backend:latest
     container_name: forestguard-api
     environment:
       # Base de datos
@@ -85,9 +83,7 @@ services:
 
   # Worker 1: Ingestion (Descarga FIRMS)
   worker-ingestion:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
+    image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/backend:latest
     container_name: forestguard-worker-ingestion
     environment:
       # Base de datos
@@ -143,9 +139,7 @@ services:
 
   # Worker 2: Clustering (DBSCAN)
   worker-clustering:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
+    image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/backend:latest
     container_name: forestguard-worker-clustering
     environment:
       DB_HOST: ${DB_HOST}
@@ -194,9 +188,7 @@ services:
 
   # Worker 3: Analysis (Recovery + Destruction)
   worker-analysis:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
+    image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/backend:latest
     container_name: forestguard-worker-analysis
     environment:
       DB_HOST: ${DB_HOST}
@@ -245,9 +237,7 @@ services:
 
   # Worker 4: Reports (PDF generation)
   worker-reports:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
+    image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/backend:latest
     container_name: forestguard-worker-reports
     restart: unless-stopped
     environment:
@@ -297,9 +287,7 @@ services:
 
   # Celery Beat (scheduler)
   celery-beat:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
+    image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/backend:latest
     container_name: forestguard-celery-beat
     environment:
       DB_HOST: ${DB_HOST}
@@ -324,9 +312,7 @@ services:
 
   # Flower (monitoring dashboard)
   flower:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
+    image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/backend:latest
     container_name: forestguard-flower
     environment:
       CELERY_BROKER_URL: redis://redis:6379/0

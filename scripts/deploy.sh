@@ -47,7 +47,7 @@ nginx_is_running() {
 case "${1:-}" in
     --build)
         echo "Rebuilding images..."
-        docker compose -f "$COMPOSE_FILE" build --no-cache
+        docker compose -f "$COMPOSE_FILE" pull
         docker compose -f "$COMPOSE_FILE" up -d
         echo "Deploy completado con rebuild"
         ;;
@@ -72,7 +72,7 @@ case "${1:-}" in
     --pull)
         echo "Actualizando codigo..."
         git pull origin main
-        docker compose -f "$COMPOSE_FILE" up -d --build
+        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
         echo "Codigo actualizado y desplegado"
         ;;
     *)
@@ -91,23 +91,9 @@ case "${1:-}" in
         PRIVKEY_PATH="${CERT_DIR}/privkey.pem"
         CHAIN_PATH="${CERT_DIR}/chain.pem"
 
-        # ── Pre-deploy cleanup ─────────────────────────────────
-        echo "Limpiando recursos Docker obsoletos..."
-        docker container prune -f 2>/dev/null || true
-        docker image prune -f 2>/dev/null || true
-
-        # Aggressive cleanup if disk usage exceeds 75%
-        DISK_USE=$(df / | awk 'NR==2 {gsub("%","",$5); print $5}')
-        if [ "$DISK_USE" -gt 75 ]; then
-            echo "WARNING: Disco al ${DISK_USE}%. Ejecutando limpieza agresiva..."
-            docker builder prune -af 2>/dev/null || true
-            docker image prune -af --filter "until=168h" 2>/dev/null || true
-        fi
-
-        # Pull de imagenes externas y de GHCR
+        # Pull de imagenes de GHCR
         echo "=== Pulling images ==="
-        docker compose -f "$COMPOSE_FILE" pull frontend 2>/dev/null || true
-        docker compose -f "$COMPOSE_FILE" --profile ssl pull nginx certbot 2>/dev/null || true
+        docker compose -f "$COMPOSE_FILE" pull 2>/dev/null || true
 
         # Cleanup before building new images
         echo "=== Pre-build cleanup ==="
@@ -129,7 +115,7 @@ case "${1:-}" in
         fi
 
         # Levantar servicios
-        docker compose -f "$COMPOSE_FILE" up -d
+        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
         # Esperar a que nginx inicie
         echo "Waiting for Nginx to start..."
