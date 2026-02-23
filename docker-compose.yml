@@ -291,6 +291,9 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      SECRET_KEY: ${SECRET_KEY}
+      GEE_PROJECT_ID: ${GEE_PROJECT_ID:-}
+      GEE_SERVICE_ACCOUNT_EMAIL: ${GEE_SERVICE_ACCOUNT_EMAIL:-}
     
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
