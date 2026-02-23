@@ -1,0 +1,28 @@
+# ── Base Image for ForestGuard Python Services ───────────────────────────
+# This base image contains common dependencies to reduce layer duplication
+# across multiple containers (api, workers, flower, celery-beat)
+
+FROM python:3.11-slim AS base
+
+WORKDIR /app
+
+# Install common system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy common Python dependencies
+COPY requirements.txt .
+
+# Install Python dependencies (this will be cached across builds)
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Create non-root user for workers
+RUN useradd -m celery
+
+# Set common environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
