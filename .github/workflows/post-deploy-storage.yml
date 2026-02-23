@@ -312,9 +312,10 @@ jobs:
               db.close()
           PYSCRIPT
 
-          # Copy script into api container and execute
-          docker compose cp /tmp/cleanup_stale_urls.py api:/tmp/cleanup_stale_urls.py
-          timeout 300 docker compose exec -T api python3 /tmp/cleanup_stale_urls.py
+          # Copy script into api container at /app (so sys.path finds 'app' module) and execute
+          docker compose cp /tmp/cleanup_stale_urls.py api:/app/cleanup_stale_urls.py
+          timeout 300 docker compose exec -T api python3 /app/cleanup_stale_urls.py
+          docker compose exec -T api rm -f /app/cleanup_stale_urls.py
 
           echo ""
           echo "✓ V-04 passed — stale 127.* URLs cleaned"
@@ -360,8 +361,9 @@ jobs:
               sys.exit(1)
           PYSCRIPT
 
-          docker compose cp /tmp/health_check.py api:/tmp/health_check.py
-          result=$(timeout 300 docker compose exec -T api python3 /tmp/health_check.py 2>&1)
+          docker compose cp /tmp/health_check.py api:/app/health_check.py
+          result=$(timeout 300 docker compose exec -T api python3 /app/health_check.py 2>&1)
+          docker compose exec -T api rm -f /app/health_check.py
 
           echo "$result"
 
@@ -421,8 +423,9 @@ jobs:
               sys.exit(1)
           PYSCRIPT
 
-          docker compose cp /tmp/carousel_regen.py api:/tmp/carousel_regen.py
-          result=$(timeout 600 docker compose exec -T api python3 /tmp/carousel_regen.py 2>&1)
+          docker compose cp /tmp/carousel_regen.py api:/app/carousel_regen.py
+          result=$(timeout 600 docker compose exec -T api python3 /app/carousel_regen.py 2>&1)
+          docker compose exec -T api rm -f /app/carousel_regen.py
 
           echo "$result"
 
