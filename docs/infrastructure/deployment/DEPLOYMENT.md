@@ -1,334 +1,84 @@
-# ForestGuard Production Deployment Guide
+﻿# guia de despliegue de Vestigia
 
-## Prerequisites
+Esta guia prioriza el camino simple y actual para operar la app.
 
-- Ubuntu 22.04 LTS server (Oracle Cloud VM)
-- Domain configured: forestguard.freedynamicdns.org
-- Ports 80, 443 open in firewall
+## resumen operativo
 
-> SSL NOTE (IMPORTANT): For Docker deployments, the official SSL procedure is `docs/SSL_SETUP.md`.
-> The host-level Certbot steps in this file are legacy and apply only if you run host Nginx intentionally.
+- entorno objetivo: VM Oracle Cloud
+- despliegue: Docker Compose + script `scripts/deploy.sh`
+- automatizacion: GitHub Actions (`deploy-prod-vm.yml`)
+- secretos de runtime: `.env` en la VM (no en el repo)
 
-## Step 1: Install Dependencies
+## prerequisitos
 
-## Step 1: Install Dependencies (Oracle Linux)
+- VM Linux con Docker y Docker Compose
+- dominio y SSL configurados
+- archivo `.env` en la VM con claves reales
+- repo clonado en `/home/opc`
 
-```bash
-# Update system
-sudo dnf update -y
+## flujo recomendado (produccion)
 
-# Enable EPEL and CodeReady Builder (needed for some packages)
-sudo dnf install -y oracle-epel-release-el9
-sudo dnf config-manager --set-enabled ol9_codeready_builder
+1. push y merge a `main`
+2. workflow de deploy ejecuta SSH a VM
+3. en VM:
+   - `git pull --ff-only`
+   - `./scripts/deploy.sh`
+4. healthcheck:
+   - `curl -L http://localhost/health`
 
-# Install Python 3.11 and tools
-sudo dnf install -y python3.11 python3.11-devel python3-pip git gcc
+Referencias:
 
-# Install Nginx
-sudo dnf install -y nginx
-sudo systemctl enable nginx
-sudo systemctl start nginx
+- `scripts/deploy.sh`
+- `.github/workflows/deploy-prod-vm.yml`
+- `docs/flujo-deploy.md`
 
-# Install Redis
-sudo dnf install -y redis
-sudo systemctl enable redis
-sudo systemctl start redis
-
-# Install Certbot (Let's Encrypt)
-sudo dnf install -y certbot python3-certbot-nginx
-
-# Install PostgreSQL client tools
-sudo dnf install -y postgresql
-```
-
-## Step 2: Clone Repository
+## flujo local rapido
 
 ```bash
-# Create application directory
-sudo mkdir -p /opt/forestguard
-sudo chown opc:opc /opt/forestguard
-
-# Clone repository
-cd /opt/forestguard
-git clone https://github.com/Nicolasgh91/wildfire-recovery-argentina.git .
-
-# Create virtual environment
-python3.11 -m venv venv
-source venv/bin/activate
-
-# Install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+docker compose up -d
 ```
 
-## Step 3: Configure Secrets
+Servicios utiles:
+
+- API: `http://localhost:8000/docs`
+- frontend: `http://localhost:5173`
+
+## configuracion de entorno
+
+Plantilla base:
+
+- `./.env.template`
+
+Variables clave:
+
+- DB, Supabase, Redis/Celery
+- storage backend
+- FIRMS/GEE
+- MercadoPago (`MP_*`, `PAYMENT_*_URL`)
+
+## limitaciones y caveats
+
+- MercadoPago en produccion depende de webhook valido y retorno consistente.
+- algunos modulos estan condicionados por feature flags frontend.
+- certificados SSL y DNS deben estar estables antes de primer deploy automatizado.
+
+## troubleshooting minimo
 
 ```bash
-# Create secrets directory
-sudo mkdir -p /opt/secrets
-sudo chown opc:opc /opt/secrets
-sudo chmod 700 /opt/secrets
+# estado de contenedores
+docker compose ps
 
-# Copy GEE credentials
-# NOTE: Upload gee-service-account.json to server first
-cp ~/gee-service-account.json /opt/secrets/
-chmod 600 /opt/secrets/gee-service-account.json
+# logs relevantes
+docker compose logs --tail=100 api
+docker compose logs --tail=100 frontend
+docker compose logs --tail=100 nginx
+
+# health local en VM
+curl -L http://localhost/health
 ```
 
-## Step 4: Generate SECRET_KEY
+Si necesitas comandos mas detallados o escenarios de emergencia, revisar:
 
-```bash
-# Generate secure secret key
-python3 -c "import secrets; print(secrets.token_hex(32))"
-
-# Copy output and save for Step 5
-```
-
-## Step 5: Configure systemd Service
-
-```bash
-# Edit the service file with your actual credentials
-nano deployment/forestguard.service
-
-# IMPORTANT: Replace the following placeholders:
-# - SECRET_KEY: Use the key generated in Step 4
-# - DB_PASSWORD: Your Supabase password
-# - SUPABASE_ANON_KEY: From Supabase dashboard
-# - SUPABASE_SERVICE_KEY: From Supabase dashboard
-# - SUPABASE_JWT_SECRET: From Supabase dashboard
-# - FIRMS_API_KEY: Your NASA FIRMS key
-# - GCS_PROJECT_ID: Google Cloud project ID
-# - GCS_SERVICE_ACCOUNT_JSON: Path to GCS service account JSON
-
-# Copy to systemd directory
-sudo cp deployment/forestguard.service /etc/systemd/system/
-
-# Create log directory
-sudo mkdir -p /var/log/forestguard
-sudo chown opc:opc /var/log/forestguard
-
-# Reload systemd
-sudo systemctl daemon-reload
-
-# Enable and start service
-sudo systemctl enable forestguard
-sudo systemctl start forestguard
-
-# Check status
-sudo systemctl status forestguard
-```
-
-## Step 6: Configure Nginx
-
-```bash
-# Copy Nginx configuration
-sudo cp deployment/nginx.conf /etc/nginx/sites-available/forestguard
-
-# Enable site
-sudo ln -s /etc/nginx/sites-available/forestguard /etc/nginx/sites-enabled/
-
-# Remove default site
-sudo rm /etc/nginx/sites-enabled/default
-
-# Test configuration
-sudo nginx -t
-
-# Reload Nginx
-sudo systemctl reload nginx
-```
-
-## Step 7: Setup SSL Certificate (LEGACY HOST MODE)
-
-For Docker deployments, skip this section and follow `docs/SSL_SETUP.md`.
-
-```bash
-# Obtain certificate
-sudo certbot --nginx -d forestguard.freedynamicdns.org
-
-# Select option 2 (redirect HTTP to HTTPS)
-# Certificate will auto-renew
-
-# Test renewal
-sudo certbot renew --dry-run
-```
-
-## Step 8: Verify Deployment
-
-```bash
-# Check API health
-curl https://forestguard.freedynamicdns.org/health
-
-# Check API docs
-curl https://forestguard.freedynamicdns.org/docs
-
-# View logs
-sudo journalctl -u forestguard -f
-```
-
-## Step 9: Setup Log Rotation
-
-```bash
-# Create logrotate config
-sudo nano /etc/logrotate.d/forestguard
-```
-
-Add:
-```
-/var/log/forestguard/*.log {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    notifempty
-    missingok
-    sharedscripts
-    postrotate
-        systemctl reload forestguard > /dev/null 2>&1 || true
-    endscript
-}
-```
-
-## Maintenance Commands
-
-### Update Application
-```bash
-cd /opt/forestguard
-git pull origin main
-sudo systemctl restart forestguard
-```
-
-### View Logs
-```bash
-# Application logs
-sudo journalctl -u forestguard -f
-
-# Nginx access logs
-sudo tail -f /var/log/nginx/forestguard_access.log
-
-# Nginx error logs
-sudo tail -f /var/log/nginx/forestguard_error.log
-```
-
-### Restart Services
-```bash
-# Restart API
-sudo systemctl restart forestguard
-
-# Restart Nginx
-sudo systemctl restart nginx
-
-# Restart Redis
-sudo systemctl restart redis-server
-```
-
-### Check Status
-```bash
-# All services
-sudo systemctl status forestguard nginx redis-server
-
-# API health check
-curl https://forestguard.freedynamicdns.org/health
-
-# Database connectivity
-psql -h aws-0-us-west-2.pooler.supabase.com -U postgres.qkmuwmxifbahmcydteuj -d postgres -c "SELECT 1;"
-```
-
-## Security Checklist
-
-- [ ] SECRET_KEY generated and set
-- [ ] All credentials replaced in systemd file
-- [ ] GEE credentials in /opt/secrets/ with chmod 600
-- [ ] HTTPS enabled with Let's Encrypt
-- [ ] Firewall configured (ports 80, 443 only)
-- [ ] Log rotation configured
-- [ ] Auto-renewal of SSL certificate tested
-- [ ] Rate limiting enabled in Nginx
-- [ ] Security headers configured
-- [ ] DEBUG=false in production
-
-## Troubleshooting
-
-### API not starting
-```bash
-# Check logs
-sudo journalctl -u forestguard -n 50 --no-pager
-
-# Test manually
-cd /opt/forestguard
-source venv/bin/activate
-gunicorn app.main:app --bind 0.0.0.0:8000
-```
-
-### Contact form degraded (Redis/Celery unavailable)
-```bash
-# 1) Confirm broker status seen by API
-curl -s https://forestguard.freedynamicdns.org/api/v1/health/celery
-
-# 2) If degraded, inspect worker + redis health
-sudo systemctl status redis-server
-# (if worker is supervised separately)
-sudo journalctl -u forestguard -n 200 --no-pager | grep -E "contact|celery|redis"
-
-# 3) API fallback behavior
-# - If enqueue fails but SMTP works: /api/v1/contact still returns 202
-# - If enqueue and SMTP fail: /api/v1/contact returns 503
-```
-
-Métricas mínimas a revisar en degradación:
-- Tasa de `503` en `POST /api/v1/contact`.
-- Cantidad de logs `contact_enqueue_failed`.
-- Cantidad de logs `contact_delivery_failed`.
-- Latencia p95 del endpoint de contacto (sube cuando entra fallback SMTP).
-
-### SSL certificate issues
-```bash
-# Docker official flow (see docs/SSL_SETUP.md)
-cd /opt/forestguard
-./scripts/renew-ssl.sh
-
-# Check certificate status
-docker compose --profile ssl run --rm certbot certificates
-```
-
-### Database connection issues
-```bash
-# Test connection
-psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT version();"
-
-# Check if PostGIS is enabled
-psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT PostGIS_version();"
-```
-
-## Monitoring Setup (Optional)
-
-### UptimeRobot
-1. Go to https://uptimerobot.com
-2. Add new monitor:
-   - Type: HTTPS
-   - URL: https://forestguard.freedynamicdns.org/health
-   - Interval: 5 minutes
-
-### Sentry (Error Tracking)
-```bash
-# Add to systemd service file
-Environment="SENTRY_DSN=https://your-sentry-dsn@sentry.io/project-id"
-```
-
-## Backup Strategy
-
-### Database
-- Supabase handles automatic backups
-- Point-in-time recovery available in Supabase dashboard
-
-### Application Code
-- Stored in GitHub repository
-- Oracle Cloud VM has daily boot volume backups (free tier)
-
-### Credentials
-```bash
-# Backup secrets directory (encrypted)
-tar czf secrets-backup-$(date +%Y%m%d).tar.gz /opt/secrets/
-gpg -c secrets-backup-*.tar.gz
-rm secrets-backup-*.tar.gz
-# Store .gpg file securely offline
-```
+- `docs/infrastructure/deployment/quick-deployment-commands.md`
+- `docs/infrastructure/deployment/quick-fixes.md`
+- `docs/infrastructure/deployment/immediate-fix.md`

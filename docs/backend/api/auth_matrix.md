@@ -1,30 +1,35 @@
-# ForestGuard — Auth Matrix (BL-012)
+﻿# Vestigia — matriz de autenticacion por endpoint
 
-Endpoint authentication requirements. Generated from `tests/unit/test_auth_matrix.py`.
+Fuente: contrato vigente en codigo + validacion de pruebas de auth.
 
-| Method | Endpoint | Auth | Notes |
-|--------|----------|------|-------|
-| `POST` | `/api/v1/reports/judicial` | JWT | Forensic judicial report |
-| `POST` | `/api/v1/reports/historical` | JWT | Historical fire report |
-| `GET` | `/api/v1/reports/{id}/verify` | JWT | Report verification |
-| `POST` | `/api/v1/explorations/` | JWT | Create exploration draft |
-| `GET` | `/api/v1/explorations/` | JWT | List user explorations |
-| `POST` | `/api/v1/audit/land-use` | JWT | Legal land-use audit |
-| `GET` | `/api/v1/payments/credits/balance` | JWT | Credit balance |
-| `GET` | `/api/v1/payments/credits/transactions` | JWT | Transaction history |
-| `POST` | `/api/v1/payments/checkout` | JWT | Create checkout session |
-| `GET` | `/api/v1/fires` | Public | List fire events |
-| `GET` | `/api/v1/fires/{id}` | Public | Fire event detail |
-| `GET` | `/api/v1/fires/stats` | API Key or JWT | Aggregated stats |
-| `GET` | `/api/v1/fires/export` | API Key or JWT | Export dataset |
-| `POST` | `/api/v1/contact` | Public | Contact form (rate limited) |
-| `GET` | `/health` | Public | Health check |
-| `GET` | `/api/v1/quality/fire-event/{id}` | API Key | Quality metrics |
-| `GET` | `/api/v1/certificates/*` | API Key + Feature flag | Certificates (MVP off) |
-| `*` | `/api/v1/alerts/*` | API Key | Park capacity alerts |
-| `*` | `/api/v1/workers/*` | API Key | Worker endpoints (admin) |
-| `*` | `/api/v1/tasks/*` | API Key | Maintenance tasks |
-| `POST` | `/api/v1/webhooks/mercadopago` | Signature | MercadoPago webhook |
+## matriz principal
 
-> **Validation**: Run `pytest tests/unit/test_auth_matrix.py -v` to verify contract.
-> **Regenerate**: Run `python scripts/generate_auth_matrix.py` to update this file.
+| metodo | endpoint | auth | nota |
+|---|---|---|---|
+| `POST` | `/api/v1/reports/judicial` | JWT | reporte judicial especializado |
+| `POST` | `/api/v1/reports/historical` | JWT | reporte historico |
+| `GET` | `/api/v1/reports/{id}/verify` | JWT | verificacion de reporte |
+| `POST` | `/api/v1/explorations/` | JWT | crear borrador de exploracion |
+| `GET` | `/api/v1/explorations/` | JWT | listar exploraciones del usuario |
+| `POST` | `/api/v1/audit/land-use` | JWT | verificar terreno (modulo avanzado) |
+| `POST` | `/api/v1/payments/checkout` | JWT | crear checkout |
+| `GET` | `/api/v1/payments/{payment_request_id}` | JWT | consultar estado de pago |
+| `GET` | `/api/v1/payments/credits/balance` | JWT | saldo de creditos |
+| `GET` | `/api/v1/payments/credits/transactions` | JWT | movimientos de creditos |
+| `GET` | `/api/v1/fires` | Publico | listado de incendios |
+| `GET` | `/api/v1/fires/{id}` | Publico | detalle de incendio |
+| `GET` | `/api/v1/fires/stats` | API Key o JWT | estadisticas agregadas |
+| `GET` | `/api/v1/fires/export` | API Key o JWT | export de dataset |
+| `POST` | `/api/v1/contact` | Publico | formulario de contacto |
+| `GET` | `/health` | Publico | healthcheck |
+| `GET` | `/api/v1/quality/fire-event/{id}` | API Key | metricas de calidad |
+| `GET` | `/api/v1/certificates/*` | API Key + feature flag | certificados (modulo acotado) |
+| `*` | `/api/v1/alerts/*` | API Key | endpoints internos |
+| `*` | `/api/v1/workers/*` | API Key | endpoints de workers |
+| `*` | `/api/v1/tasks/*` | API Key | tareas de mantenimiento |
+| `POST` | `/api/v1/webhooks/mercadopago` | firma webhook | entrada de MercadoPago |
+
+## notas de lectura
+
+- Esta matriz describe el contrato tecnico, no el estado UX de cada modulo.
+- Para estado de producto y caveats: `docs/product/estado-real-del-producto.md`.
