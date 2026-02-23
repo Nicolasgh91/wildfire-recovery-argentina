@@ -21,7 +21,6 @@ def get_quality_service(db: Session = Depends(deps.get_db)) -> QualityService:
     "/fire-event/{fire_event_id}",
     response_model=QualityResponse,
     summary="Quality and reliability metrics (UC-F04)",
-    dependencies=[Depends(verify_api_key)],
 )
 def get_quality(
     fire_event_id: UUID,
