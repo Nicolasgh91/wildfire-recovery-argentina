@@ -90,11 +90,14 @@ jobs:
           echo "  Host   : $PROD_VM_HOST"
           echo "  Inputs : rebuild=${{ inputs.rebuild_services }} sql=${{ inputs.run_sql_cleanup }} carousel=${{ inputs.run_carousel_regen }}"
 
-      # ── 2. Set up SSH agent ─────────────────────────────────────────────────
+      # ── 2. Set up SSH agent (multiplexed) ───────────────────────────────────
       - name: Set up SSH
         env:
           PROD_VM_SSH_KEY:     ${{ secrets.PROD_VM_SSH_KEY }}
           PROD_VM_KNOWN_HOSTS: ${{ secrets.PROD_VM_KNOWN_HOSTS }}
+          VM_HOST:             ${{ secrets.PROD_VM_HOST }}
+          VM_USER:             ${{ secrets.PROD_VM_USER }}
+          VM_PORT:             ${{ secrets.PROD_VM_PORT }}
         run: |
           install -m 700 -d ~/.ssh
 
@@ -103,6 +106,26 @@ jobs:
 
           printf '%s\n' "$PROD_VM_KNOWN_HOSTS" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+
+          PORT="${VM_PORT:-22}"
+          cat > ~/.ssh/config << EOF
+          Host prod
+            HostName ${VM_HOST}
+            User ${VM_USER}
+            Port ${PORT}
+            IdentityFile ~/.ssh/prod_vm_key
+            StrictHostKeyChecking yes
+            BatchMode yes
+            ConnectTimeout 30
+            ControlMaster auto
+            ControlPersist 10m
+            ControlPath ~/.ssh/cm-%C
+          EOF
+          chmod 600 ~/.ssh/config
+
+          # Establecer conexión maestra
+          ssh -fN prod
+          echo "SSH multiplexed connection established"
 
       # ── 3. Validate OCI env vars are present inside the running containers ──
       #    This catches the case where .env was not updated (PASO 1 skipped).
@@ -114,14 +137,7 @@ jobs:
         run: |
           PORT="${VM_PORT:-22}"
 
-          ssh \
-            -i ~/.ssh/prod_vm_key \
-            -p "$PORT" \
-            -o StrictHostKeyChecking=yes \
-            -o ConnectTimeout=30 \
-            -o BatchMode=yes \
-            "${VM_USER}@${VM_HOST}" \
-            bash -s << 'REMOTE_SCRIPT'
+          ssh prod bash -s << 'REMOTE_SCRIPT'
           set -euo pipefail
           cd /home/opc
 
@@ -130,7 +146,7 @@ jobs:
           # Check vars exist inside the container (sourced from .env at compose up time)
           missing_vars=()
           for var in OCI_S3_ENDPOINT_URL OCI_S3_ACCESS_KEY OCI_S3_SECRET_KEY STORAGE_BACKEND; do
-            val=$(docker compose exec -T api env 2>/dev/null | grep "^${var}=" | cut -d'=' -f2- || true)
+            val=$(timeout 30 docker compose exec -T api env 2>/dev/null | grep "^${var}=" | cut -d'=' -f2- || true)
             if [[ -z "$val" ]]; then
               missing_vars+=("$var")
             else
@@ -156,7 +172,7 @@ jobs:
           fi
 
           # Also warn if STORAGE_BACKEND is not oci
-          backend=$(docker compose exec -T api env 2>/dev/null | grep "^STORAGE_BACKEND=" | cut -d'=' -f2- || true)
+          backend=$(timeout 30 docker compose exec -T api env 2>/dev/null | grep "^STORAGE_BACKEND=" | cut -d'=' -f2- || true)
           if [[ "$backend" != "oci" ]]; then
             echo "WARNING: STORAGE_BACKEND=${backend}. Expected 'oci'."
             echo "         Update /home/opc/.env → STORAGE_BACKEND=oci and restart containers."
@@ -221,20 +237,13 @@ jobs:
           cd /home/opc
 
           echo "=== Checking worker-reports container (V-05) ==="
-          status=$(docker compose ps --format json 2>/dev/null \
-            | python3 -c "
-          import sys, json
-          for line in sys.stdin:
-            line = line.strip()
-            if not line:
-              continue
-            try:
-              s = json.loads(line)
-            except Exception:
-              continue
-            if 'worker-reports' in s.get('Name', '') or s.get('Service', '') == 'worker-reports':
-              print(s.get('State', 'unknown'))
-          " || true)
+          if ! timeout 10 docker compose ps --format '{{.Service}} {{.State}}' > /tmp/compose_ps 2>&1; then
+            echo "ERROR: Docker compose unresponsive — infrastructure failure"
+            cat /tmp/compose_ps 2>/dev/null || true
+            exit 1
+          fi
+
+          status=$(grep '^worker-reports ' /tmp/compose_ps | awk '{print $2}' || echo "")
 
           if [[ -z "$status" ]]; then
             echo "ERROR: worker-reports container not found."
@@ -282,12 +291,12 @@ jobs:
           fi
 
           # Run inside the api container which has DATABASE_URL available
-          docker compose exec -T api \
+          timeout 300 docker compose exec -T api \
             bash -c 'psql "$DATABASE_URL" -f /app/scripts/fix_stale_minio_urls.sql'
 
           echo ""
           echo "=== Validating cleanup result (V-04) ==="
-          remaining=$(docker compose exec -T api \
+          remaining=$(timeout 30 docker compose exec -T api \
             bash -c "psql \"\$DATABASE_URL\" -tAc \"SELECT COUNT(*) FROM satellite_images WHERE thumbnail_url LIKE 'http://127%';\"" \
             2>/dev/null | tr -d '[:space:]' || echo "ERROR")
 
@@ -323,7 +332,7 @@ jobs:
 
           echo "=== StorageService health check (V-01 / PASO 5) ==="
 
-          result=$(docker compose exec -T api python3 -c "
+          result=$(timeout 300 docker compose exec -T api python3 -c "
           import json, sys
           try:
               from app.services.storage_service import StorageService
@@ -379,7 +388,7 @@ jobs:
 
           echo "=== Regenerating carousel thumbnails (PASO 6) ==="
 
-          result=$(docker compose exec -T api python3 -c "
+          result=$(timeout 600 docker compose exec -T api python3 -c "
           import json, sys
           try:
               from app.db.session import SessionLocal
@@ -409,3 +418,19 @@ jobs:
 
           echo "✓ Carousel thumbnails regenerated successfully"
           REMOTE_SCRIPT
+
+      # ── 9. Diagnostic logs on failure ───────────────────────────────────────
+      - name: Diagnostic logs on failure
+        if: failure()
+        run: |
+          ssh prod bash -s << 'REMOTE_SCRIPT' || true
+          set -uo pipefail
+          echo "=== DIAGNOSTIC: Container status ==="
+          docker compose -f /home/opc/docker-compose.yml ps 2>/dev/null || true
+          echo "=== DIAGNOSTIC: API logs ==="
+          docker compose -f /home/opc/docker-compose.yml logs --tail=120 api 2>/dev/null || true
+          REMOTE_SCRIPT
+
+      - name: Cleanup SSH
+        if: always()
+        run: ssh -O exit prod 2>/dev/null || true

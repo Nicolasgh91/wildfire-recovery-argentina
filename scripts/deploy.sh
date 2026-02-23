@@ -47,7 +47,7 @@ nginx_is_running() {
 case "${1:-}" in
     --build)
         echo "Rebuilding images..."
-        docker compose -f "$COMPOSE_FILE" build --no-cache
+        docker compose -f "$COMPOSE_FILE" pull
         docker compose -f "$COMPOSE_FILE" up -d
         echo "Deploy completado con rebuild"
         ;;
@@ -72,7 +72,7 @@ case "${1:-}" in
     --pull)
         echo "Actualizando codigo..."
         git pull origin main
-        docker compose -f "$COMPOSE_FILE" up -d --build
+        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
         echo "Codigo actualizado y desplegado"
         ;;
     *)
@@ -91,10 +91,9 @@ case "${1:-}" in
         PRIVKEY_PATH="${CERT_DIR}/privkey.pem"
         CHAIN_PATH="${CERT_DIR}/chain.pem"
 
-        # Pull de imagenes externas y de GHCR
+        # Pull de imagenes de GHCR
         echo "=== Pulling images ==="
-        docker compose -f "$COMPOSE_FILE" pull frontend 2>/dev/null || true
-        docker compose -f "$COMPOSE_FILE" --profile ssl pull nginx certbot 2>/dev/null || true
+        docker compose -f "$COMPOSE_FILE" pull 2>/dev/null || true
 
         # Cleanup before building new images
         echo "=== Pre-build cleanup ==="
@@ -116,7 +115,7 @@ case "${1:-}" in
         fi
 
         # Levantar servicios
-        docker compose -f "$COMPOSE_FILE" up -d
+        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans
 
         # Esperar a que nginx inicie
         echo "Waiting for Nginx to start..."
