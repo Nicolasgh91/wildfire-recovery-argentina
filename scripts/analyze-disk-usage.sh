@@ -1,85 +1,117 @@
 #!/bin/bash
 # =============================================================================
-# FORESTGUARD - Disk Usage Analysis Script
+# FORESTGUARD - Analyze Disk Usage
 # =============================================================================
-# This script analyzes disk usage on the production VM to identify
-# why container images have become so large and what's consuming space.
+#
+# Provides a detailed breakdown of disk usage on the VM, focused on Docker
+# resources (images, containers, volumes, BuildKit cache) and system-level
+# directories.
+#
+# Usage:
+#   ./scripts/analyze-disk-usage.sh
+#
+# =============================================================================
 
 set -euo pipefail
 
-echo "=== ForestGuard VM Disk Usage Analysis ==="
-echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-echo ""
+BOLD='\033[1m'
+RESET='\033[0m'
+YELLOW='\033[33m'
+RED='\033[31m'
 
-echo "=== 1. Overall Filesystem Usage ==="
+section() {
+    echo ""
+    echo -e "${BOLD}=== $1 ===${RESET}"
+}
+
+# ── 1. General disk usage ───────────────────────────────────────
+section "Filesystem Usage"
 df -h /
-echo ""
 
-echo "=== 2. Docker System Overview ==="
-docker system df
-echo ""
-
-echo "=== 3. Detailed Docker Space Usage ==="
-docker system df -v
-echo ""
-
-echo "=== 4. Largest Docker Images ==="
-docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}" | sort -k3 -hr | head -15
-echo ""
-
-echo "=== 5. Running Container Sizes ==="
-docker ps -s --format "table {{.Names}}\t{{.Status}}\t{{.Size}}" | head -10
-echo ""
-
-echo "=== 6. Docker Directory Breakdown ==="
-if [ -d /var/lib/docker ]; then
-    sudo du -sh /var/lib/docker/* 2>/dev/null | sort -hr | head -10
+DISK_USE=$(df / | awk 'NR==2 {gsub("%","",$5); print $5}')
+if [ "$DISK_USE" -gt 85 ]; then
+    echo -e "${RED}CRITICAL: Disk is ${DISK_USE}% full${RESET}"
+elif [ "$DISK_USE" -gt 70 ]; then
+    echo -e "${YELLOW}WARNING: Disk is ${DISK_USE}% full${RESET}"
 else
-    echo "Docker directory not found at /var/lib/docker"
+    echo "Disk usage is healthy (${DISK_USE}%)"
 fi
-echo ""
 
-echo "=== 7. BuildKit Cache Size ==="
-if [ -d /var/lib/docker/buildkit ]; then
-    sudo du -sh /var/lib/docker/buildkit 2>/dev/null || echo "BuildKit cache not accessible"
-fi
-echo ""
+# ── 2. Docker system overview ──────────────────────────────────
+section "Docker System Disk Usage"
+docker system df 2>/dev/null || echo "(Docker daemon not available)"
 
-echo "=== 8. Volume Usage ==="
-docker volume ls --format "table {{.Name}}\t{{.Driver}}" | head -10
-echo ""
+section "Docker System Disk Usage (verbose)"
+docker system df -v 2>/dev/null || echo "(Docker daemon not available)"
 
-echo "=== 9. Redis Volume Size ==="
-if docker volume inspect forestguard_redis_data >/dev/null 2>&1; then
-    echo "Redis volume mount point:"
-    docker volume inspect forestguard_redis_data --format '{{ .Mountpoint }}'
-    if [ -d "$(docker volume inspect forestguard_redis_data --format '{{ .Mountpoint }}')" ]; then
-        sudo du -sh "$(docker volume inspect forestguard_redis_data --format '{{ .Mountpoint }}')" 2>/dev/null || echo "Cannot access redis volume size"
-    fi
+# ── 3. Docker images ───────────────────────────────────────────
+section "Docker Images (sorted by size)"
+docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedSince}}" 2>/dev/null \
+    | head -30 || echo "(no images found)"
+
+# ── 4. Docker containers ──────────────────────────────────────
+section "Docker Containers (all)"
+docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Size}}" 2>/dev/null \
+    || echo "(no containers found)"
+
+# ── 5. Docker volumes ─────────────────────────────────────────
+section "Docker Volumes"
+docker volume ls 2>/dev/null || echo "(no volumes found)"
+
+echo ""
+echo "Volume sizes:"
+for vol in $(docker volume ls -q 2>/dev/null); do
+    SIZE=$(docker system df -v 2>/dev/null | grep "$vol" | awk '{print $NF}' || echo "unknown")
+    echo "  $vol: $SIZE"
+done
+
+# ── 6. BuildKit cache ─────────────────────────────────────────
+section "BuildKit Cache"
+docker builder du 2>/dev/null || echo "(BuildKit cache info not available)"
+
+# ── 7. Top directories by size ────────────────────────────────
+APP_DIR="${APP_DIR:-/home/opc}"
+section "Top 15 Directories by Size (${APP_DIR})"
+if [ -d "$APP_DIR" ]; then
+    du -h --max-depth=2 "$APP_DIR" 2>/dev/null | sort -rh | head -15
 else
-    echo "Redis volume not found"
+    echo "(Directory $APP_DIR not found, using current directory)"
+    du -h --max-depth=2 . 2>/dev/null | sort -rh | head -15
 fi
-echo ""
 
-echo "=== 10. Log Files Size ==="
-if [ -d /var/log ]; then
-    sudo du -sh /var/log/* 2>/dev/null | sort -hr | head -10
+# ── 8. Docker log sizes ──────────────────────────────────────
+section "Docker Container Log Sizes"
+LOG_DIR="/var/lib/docker/containers"
+if [ -d "$LOG_DIR" ] && [ -r "$LOG_DIR" ]; then
+    find "$LOG_DIR" -name "*.log" -exec du -h {} \; 2>/dev/null | sort -rh | head -10
+else
+    echo "(Cannot access $LOG_DIR — may need sudo)"
+    # Fallback: show log sizes via docker inspect
+    for cid in $(docker ps -q 2>/dev/null); do
+        NAME=$(docker inspect --format '{{.Name}}' "$cid" 2>/dev/null | sed 's|^/||')
+        LOG_PATH=$(docker inspect --format '{{.LogPath}}' "$cid" 2>/dev/null || true)
+        if [ -n "$LOG_PATH" ] && [ -f "$LOG_PATH" ]; then
+            LOG_SIZE=$(du -h "$LOG_PATH" 2>/dev/null | cut -f1 || echo "unknown")
+            echo "  $NAME: $LOG_SIZE"
+        fi
+    done
 fi
+
+# ── 9. Summary ────────────────────────────────────────────────
+section "Summary"
+echo "Disk usage: ${DISK_USE}%"
+IMAGES_COUNT=$(docker images -q 2>/dev/null | wc -l || echo 0)
+CONTAINERS_COUNT=$(docker ps -aq 2>/dev/null | wc -l || echo 0)
+RUNNING_COUNT=$(docker ps -q 2>/dev/null | wc -l || echo 0)
+VOLUMES_COUNT=$(docker volume ls -q 2>/dev/null | wc -l || echo 0)
+echo "Docker images: $IMAGES_COUNT"
+echo "Docker containers: $CONTAINERS_COUNT (running: $RUNNING_COUNT)"
+echo "Docker volumes: $VOLUMES_COUNT"
 echo ""
 
-echo "=== 11. Application Logs Size ==="
-if [ -d /home/opc/logs ]; then
-    du -sh /home/opc/logs/* 2>/dev/null | sort -hr | head -10
+if [ "$DISK_USE" -gt 75 ]; then
+    echo "Recommended actions:"
+    echo "  1. Run: ./scripts/cleanup-docker.sh"
+    echo "  2. If still high: ./scripts/cleanup-docker.sh --aggressive"
+    echo "  3. Emergency: ./scripts/emergency-disk-cleanup.sh"
 fi
-echo ""
-
-echo "=== 12. Top 15 Largest Directories in /home/opc ==="
-du -sh /home/opc/* 2>/dev/null | sort -hr | head -15
-echo ""
-
-echo "=== Analysis Complete ==="
-echo "Recommendations:"
-echo "1. Run 'docker system prune -af --volumes' to clean unused images and volumes"
-echo "2. Run 'docker builder prune -af' to clear BuildKit cache"
-echo "3. Consider optimizing Dockerfiles for smaller image sizes"
-echo "4. Implement automated cleanup in deployment workflow"

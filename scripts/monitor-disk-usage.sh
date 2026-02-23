@@ -1,100 +1,113 @@
 #!/bin/bash
 # =============================================================================
-# FORESTGUARD - Disk Usage Monitoring Script
+# FORESTGUARD - Monitor Disk Usage
 # =============================================================================
-# This script monitors disk usage and provides alerts/recommendations
-# Can be run manually or as a cron job for proactive monitoring
+#
+# Checks disk usage against configurable thresholds and outputs status/alerts.
+# Designed for integration with cron or systemd timers.
+#
+# Usage:
+#   ./scripts/monitor-disk-usage.sh                    # Default thresholds
+#   ./scripts/monitor-disk-usage.sh --warn 60 --crit 80
+#   ./scripts/monitor-disk-usage.sh --json             # JSON output for tooling
+#
+# Exit codes:
+#   0 — OK (below warning threshold)
+#   1 — WARNING (above warning, below critical)
+#   2 — CRITICAL (above critical threshold)
+#
+# Cron example (check every 6 hours):
+#   0 */6 * * * /home/opc/scripts/monitor-disk-usage.sh >> /var/log/forestguard-disk.log 2>&1
+#
+# =============================================================================
 
 set -euo pipefail
 
-# Configuration
-ALERT_THRESHOLD=80
-WARNING_THRESHOLD=70
-LOG_FILE="/home/opc/logs/disk-monitor.log"
+WARN_THRESHOLD=70
+CRIT_THRESHOLD=85
+JSON_OUTPUT=false
 
-# Ensure log directory exists
-mkdir -p "$(dirname "$LOG_FILE")"
-
-# Function to log with timestamp
-log() {
-    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $1" | tee -a "$LOG_FILE"
-}
-
-log "=== Disk Usage Monitoring Started ==="
-
-# Get disk usage
-DISK_USE=$(df / | awk 'NR==2 {gsub("%","",$5); print $5}')
-DISK_AVAILABLE=$(df -h / | awk 'NR==2 {print $4}')
-
-log "Root filesystem: ${DISK_USE}% used (${DISK_AVAILABLE} available)"
-
-# Docker system usage
-if docker info >/dev/null 2>&1; then
-    DOCKER_TOTAL=$(docker system df --format "{{.Type}}" | head -1)
-    log "Docker system is responsive"
-    
-    # Get Docker usage breakdown
-    DOCKER_IMAGES_SIZE=$(docker system df --format "{{.Size}}" | head -1)
-    log "Docker images size: ${DOCKER_IMAGES_SIZE}"
-else
-    log "WARNING: Docker daemon is not responsive"
-fi
-
-# Alert based on usage
-if [[ "$DISK_USE" -gt "$ALERT_THRESHOLD" ]]; then
-    log "🚨 ALERT: Disk usage is ${DISK_USE}% (threshold: ${ALERT_THRESHOLD}%)"
-    log "IMMEDIATE ACTION REQUIRED:"
-    log "1. Run: ./scripts/cleanup-docker.sh"
-    log "2. Run: docker system prune -af --volumes"
-    log "3. Consider moving to larger VM instance"
-    
-    # Send alert (could be extended to email/slack)
-    echo "CRITICAL: VM disk usage at ${DISK_USE}%" >> /tmp/disk_alert
-    
-elif [[ "$DISK_USE" -gt "$WARNING_THRESHOLD" ]]; then
-    log "⚠️  WARNING: Disk usage is ${DISK_USE}% (threshold: ${WARNING_THRESHOLD}%)"
-    log "RECOMMENDED ACTIONS:"
-    log "1. Run: docker system prune -f"
-    log "2. Check for large unused images: docker images | head -10"
-    log "3. Monitor trending usage"
-    
-else
-    log "✅ Disk usage is acceptable: ${DISK_USE}%"
-fi
-
-# Check for large individual files/directories
-log "=== Top 10 largest directories in /home/opc ==="
-du -sh /home/opc/* 2>/dev/null | sort -hr | head -10 | while read size path; do
-    log "  ${size}  ${path}"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --warn)  WARN_THRESHOLD="$2"; shift 2 ;;
+        --crit)  CRIT_THRESHOLD="$2"; shift 2 ;;
+        --json)  JSON_OUTPUT=true; shift ;;
+        --help|-h)
+            echo "Usage: $0 [--warn N] [--crit N] [--json]"
+            echo ""
+            echo "  --warn N   Warning threshold percentage (default: 70)"
+            echo "  --crit N   Critical threshold percentage (default: 85)"
+            echo "  --json     Output in JSON format"
+            echo ""
+            echo "Exit codes: 0=OK, 1=WARNING, 2=CRITICAL"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+    esac
 done
 
-# Docker-specific checks
-if docker info >/dev/null 2>&1; then
-    log "=== Docker Usage Details ==="
-    
-    # Large images
-    log "Top 5 largest Docker images:"
-    docker images --format "{{.Repository}}:{{.Tag}}\t{{.Size}}" | sort -k2 -hr | head -5 | while read line; do
-        log "  $line"
-    done
-    
-    # Unused images count
-    UNUSED_IMAGES=$(docker images -f "dangling=true" -q | wc -l)
-    log "Unused (dangling) images: $UNUSED_IMAGES"
-    
-    # Stopped containers
-    STOPPED_CONTAINERS=$(docker ps -a -f "status=exited" -q | wc -l)
-    log "Stopped containers: $STOPPED_CONTAINERS"
-fi
+TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+DISK_USE=$(df / | awk 'NR==2 {gsub("%","",$5); print $5}')
+DISK_AVAIL=$(df -h / | awk 'NR==2 {print $4}')
+DISK_TOTAL=$(df -h / | awk 'NR==2 {print $2}')
 
-log "=== Monitoring Complete ==="
-echo ""
-
-# Exit with appropriate code for automation
-if [[ "$DISK_USE" -gt "$ALERT_THRESHOLD" ]]; then
-    exit 2  # Critical
-elif [[ "$DISK_USE" -gt "$WARNING_THRESHOLD" ]]; then
-    exit 1  # Warning
+# Determine status
+if [ "$DISK_USE" -gt "$CRIT_THRESHOLD" ]; then
+    STATUS="CRITICAL"
+    EXIT_CODE=2
+elif [ "$DISK_USE" -gt "$WARN_THRESHOLD" ]; then
+    STATUS="WARNING"
+    EXIT_CODE=1
 else
-    exit 0  # OK
+    STATUS="OK"
+    EXIT_CODE=0
 fi
+
+# Docker metrics (best-effort)
+DOCKER_IMAGES_SIZE=$(docker system df --format '{{.Size}}' 2>/dev/null | head -1 || echo "unknown")
+DOCKER_CONTAINERS_SIZE=$(docker system df --format '{{.Size}}' 2>/dev/null | sed -n '2p' || echo "unknown")
+DOCKER_VOLUMES_SIZE=$(docker system df --format '{{.Size}}' 2>/dev/null | sed -n '3p' || echo "unknown")
+DOCKER_BUILDCACHE_SIZE=$(docker system df --format '{{.Size}}' 2>/dev/null | sed -n '4p' || echo "unknown")
+
+if $JSON_OUTPUT; then
+    cat <<EOF
+{
+  "timestamp": "$TIMESTAMP",
+  "status": "$STATUS",
+  "disk_use_percent": $DISK_USE,
+  "disk_available": "$DISK_AVAIL",
+  "disk_total": "$DISK_TOTAL",
+  "warn_threshold": $WARN_THRESHOLD,
+  "crit_threshold": $CRIT_THRESHOLD,
+  "docker": {
+    "images_size": "$DOCKER_IMAGES_SIZE",
+    "containers_size": "$DOCKER_CONTAINERS_SIZE",
+    "volumes_size": "$DOCKER_VOLUMES_SIZE",
+    "buildcache_size": "$DOCKER_BUILDCACHE_SIZE"
+  }
+}
+EOF
+else
+    echo "[$TIMESTAMP] Disk Monitor: $STATUS"
+    echo "  Filesystem: ${DISK_USE}% used (${DISK_AVAIL} available of ${DISK_TOTAL})"
+    echo "  Thresholds: warn=${WARN_THRESHOLD}%, crit=${CRIT_THRESHOLD}%"
+    echo "  Docker images:      $DOCKER_IMAGES_SIZE"
+    echo "  Docker containers:  $DOCKER_CONTAINERS_SIZE"
+    echo "  Docker volumes:     $DOCKER_VOLUMES_SIZE"
+    echo "  Docker build cache: $DOCKER_BUILDCACHE_SIZE"
+
+    if [ "$EXIT_CODE" -gt 0 ]; then
+        echo ""
+        echo "Recommended actions:"
+        if [ "$EXIT_CODE" -eq 2 ]; then
+            echo "  IMMEDIATE: ./scripts/emergency-disk-cleanup.sh --force"
+        fi
+        echo "  1. Run: ./scripts/analyze-disk-usage.sh"
+        echo "  2. Run: ./scripts/cleanup-docker.sh --aggressive"
+    fi
+fi
+
+exit $EXIT_CODE
