@@ -7,7 +7,7 @@ on:
       - 'app/**'
       - 'workers/**'
       - 'requirements*.txt'
-      - 'Dockerfile'
+      - 'Dockerfile.*'
       - '.github/workflows/backend-build.yml'
   workflow_dispatch:
 
@@ -47,8 +47,8 @@ jobs:
           push: true
           tags: ${{ steps.meta-api.outputs.tags }}
           labels: ${{ steps.meta-api.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha-api,mode=max
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
       - id: meta-worker
         uses: docker/metadata-action@v5
         with:
@@ -65,5 +65,5 @@ jobs:
           push: true
           tags: ${{ steps.meta-worker.outputs.tags }}
           labels: ${{ steps.meta-worker.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha-worker,mode=max
+          cache-from: type=gha,scope=worker
+          cache-to: type=gha,scope=worker,mode=max
