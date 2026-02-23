@@ -222,6 +222,39 @@ jobs:
             }
             echo "Health check passed (HTTPS)"
           fi
+
+          echo "=== Worker-reports container check (V-05) ==="
+          # worker-reports was added in the OCI storage layer. Fail the deploy
+          # if it is defined in docker-compose.yml but not running.
+          if docker compose config --services 2>/dev/null | grep -q "worker-reports"; then
+            status=$(docker compose ps --format json 2>/dev/null \
+              | python3 -c "
+          import sys, json
+          for line in sys.stdin:
+            line = line.strip()
+            if not line: continue
+            try:
+              s = json.loads(line)
+            except Exception:
+              continue
+            if 'worker-reports' in s.get('Name','') or s.get('Service','') == 'worker-reports':
+              print(s.get('State','unknown'))
+          " || true)
+
+            if [[ -z "$status" ]]; then
+              echo "ERROR: worker-reports service is defined but no container was found."
+              docker compose logs --tail=30 worker-reports 2>/dev/null || true
+              exit 1
+            fi
+            if [[ "$status" != "running" ]]; then
+              echo "ERROR: worker-reports is '${status}' — expected 'running'."
+              docker compose logs --tail=30 worker-reports 2>/dev/null || true
+              exit 1
+            fi
+            echo "✓ worker-reports is running"
+          else
+            echo "  worker-reports not in compose file — skipping check"
+          fi
           REMOTE_SCRIPT
 
       # ── 5. Diagnostic logs on failure (read-only, no state mutation) ───────
