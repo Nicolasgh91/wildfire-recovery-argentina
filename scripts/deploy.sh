@@ -93,7 +93,11 @@ case "${1:-}" in
 
         # Pull de imagenes de GHCR
         echo "=== Pulling images ==="
-        docker compose -f "$COMPOSE_FILE" pull 2>/dev/null || true
+        if ! docker compose -f "$COMPOSE_FILE" pull; then
+            echo "ERROR: Failed to pull images from GHCR."
+            echo "  Check that the backend-build workflow completed successfully."
+            exit 1
+        fi
 
         # Cleanup before building new images
         echo "=== Pre-build cleanup ==="
