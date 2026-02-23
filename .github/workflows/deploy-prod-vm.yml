@@ -170,12 +170,25 @@ jobs:
           fi
           echo "Docker daemon OK"
 
-          echo "=== Automatic Docker prune (dangling images + stopped containers) ==="
+          echo "=== Automatic Docker cleanup (dangling images + stopped containers) ==="
           # Only removes dangling (untagged) images and stopped containers.
           # Does NOT remove volumes or images used by running containers.
           docker container prune -f
           docker image prune -f
-          echo "Docker prune completed"
+          
+          # Additional cleanup for disk space optimization
+          echo "=== Additional cleanup for disk space ==="
+          # Remove BuildKit cache to free up significant space
+          docker builder prune -af
+          
+          # Remove unused images (not just dangling) if disk > 75%
+          DISK_USE=$(df / | awk 'NR==2 {gsub("%","",$5); print $5}')
+          if [[ "$DISK_USE" -gt 75 ]]; then
+            echo "Disk usage is ${DISK_USE}%, performing aggressive image cleanup..."
+            docker image prune -af
+          fi
+          
+          echo "Docker cleanup completed"
 
           echo "=== Docker disk usage after prune ==="
           docker system df 2>/dev/null || echo "(docker system df skipped — daemon busy)"
