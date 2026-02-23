@@ -3,7 +3,9 @@ import { MapPin, Calendar, Flame, ArrowRight } from 'lucide-react'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { RecoveryStatusBadge } from '@/components/monitoring/RecoveryStatusBadge'
 import { useI18n } from '@/context/LanguageContext'
+import { useAuth } from '@/context/AuthContext'
 import type { Fire } from '@/data/mockdata'
 import { cn } from '@/lib/utils'
 
@@ -13,6 +15,7 @@ interface FireCardProps {
 
 export function FireCard({ fire }: FireCardProps) {
   const { t } = useI18n()
+  const { isAuthenticated } = useAuth()
   const detailId = fire.id
 
   const severityColors = {
@@ -46,12 +49,18 @@ export function FireCard({ fire }: FireCardProps) {
         <Badge className={cn('absolute top-3 left-3', severityColors[fire.severity])}>
           {severityLabels[fire.severity]}
         </Badge>
-        <Badge 
-          variant="outline" 
+        <Badge
+          variant="outline"
           className={cn('absolute top-3 right-3', statusColors[fire.status])}
         >
           {fire.status === 'active' ? t('active') : t('extinguished')}
         </Badge>
+        {isAuthenticated && (fire as Fire & { recovery_status?: string }).recovery_status && (
+          <RecoveryStatusBadge
+            status={(fire as Fire & { recovery_status?: string }).recovery_status}
+            className="absolute bottom-3 left-3"
+          />
+        )}
       </div>
 
       <CardContent className="p-4">

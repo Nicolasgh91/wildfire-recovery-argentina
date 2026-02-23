@@ -11,12 +11,22 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { useI18n } from '@/context/LanguageContext'
 
-interface NdviChartProps {
-  data: { month: string; value: number }[]
+interface NdviDataPoint {
+  month: string
+  value: number
+  recovery_percentage?: number | null
+  cloud_cover_pct?: number | null
 }
 
-export function NdviChart({ data }: NdviChartProps) {
+interface NdviChartProps {
+  data: NdviDataPoint[]
+  baselineNdvi?: number | null
+}
+
+export function NdviChart({ data, baselineNdvi }: NdviChartProps) {
   const { t } = useI18n()
+
+  const baseline = baselineNdvi ?? 0.5
 
   return (
     <Card>
@@ -36,16 +46,22 @@ export function NdviChart({ data }: NdviChartProps) {
               margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis 
-                dataKey="month" 
+              <XAxis
+                dataKey="month"
                 className="text-xs"
                 tick={{ fill: 'currentColor' }}
+                tickFormatter={(v: string) => {
+                  const d = new Date(v)
+                  return Number.isNaN(d.getTime())
+                    ? v
+                    : d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' })
+                }}
               />
-              <YAxis 
-                domain={[0, 1]} 
+              <YAxis
+                domain={[0, 1]}
                 className="text-xs"
                 tick={{ fill: 'currentColor' }}
-                tickFormatter={(value) => value.toFixed(1)}
+                tickFormatter={(value: number) => value.toFixed(1)}
               />
               <Tooltip
                 contentStyle={{
@@ -55,16 +71,24 @@ export function NdviChart({ data }: NdviChartProps) {
                   color: 'hsl(var(--foreground))',
                 }}
                 labelStyle={{ color: 'hsl(var(--foreground))' }}
-                formatter={(value) => [
-                  typeof value === 'number' ? value.toFixed(2) : '0.00',
-                  'NDVI',
-                ]}
+                labelFormatter={(label: string) => {
+                  const d = new Date(label)
+                  return Number.isNaN(d.getTime()) ? label : d.toLocaleDateString('es-AR')
+                }}
+                formatter={(value: number, name: string) => {
+                  if (name === 'value') return [value.toFixed(3), 'NDVI']
+                  return [value, name]
+                }}
               />
               <ReferenceLine
-                y={0.5}
+                y={baseline}
                 stroke="hsl(var(--primary))"
                 strokeDasharray="5 5"
-                label={{ value: 'Healthy', fill: 'hsl(var(--primary))', fontSize: 12 }}
+                label={{
+                  value: baselineNdvi != null ? `Baseline (${baseline.toFixed(2)})` : 'Healthy',
+                  fill: 'hsl(var(--primary))',
+                  fontSize: 12,
+                }}
               />
               <Line
                 type="monotone"

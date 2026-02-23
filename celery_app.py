@@ -68,8 +68,9 @@ celery_app.conf.update(
     task_routes={
         'workers.tasks.ingestion.download_firms_daily': {'queue': 'ingestion'},
         'workers.tasks.clustering.cluster_detections': {'queue': 'clustering'},
-        'workers.tasks.recovery.analyze_recovery': {'queue': 'analysis'},
-        'workers.tasks.destruction.detect_destruction': {'queue': 'analysis'},
+        'workers.tasks.recovery.analyze_recovery': {'queue': 'vae'},
+        'workers.tasks.recovery.batch_recovery_analysis': {'queue': 'vae'},
+        'workers.tasks.destruction.detect_destruction': {'queue': 'vae'},
         'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
     },
     
@@ -91,6 +92,13 @@ celery_app.conf.update(
             'schedule': crontab(hour=1, minute=0),  # 01:00 UTC
             'kwargs': {'days_back': 1},
             'options': {'queue': 'clustering'}
+        },
+        # UC-F12: Periodic VAE recovery analysis for recent fire events
+        'vae-recovery-weekly': {
+            'task': 'workers.tasks.recovery.batch_recovery_analysis',
+            'schedule': crontab(hour=3, minute=0, day_of_week='sunday'),  # 03:00 UTC Sundays
+            'kwargs': {'fire_event_ids': []},  # Populated dynamically by task
+            'options': {'queue': 'vae'}
         },
     },
     
