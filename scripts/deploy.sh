@@ -91,6 +91,19 @@ case "${1:-}" in
         PRIVKEY_PATH="${CERT_DIR}/privkey.pem"
         CHAIN_PATH="${CERT_DIR}/chain.pem"
 
+        # ── Pre-deploy cleanup ─────────────────────────────────
+        echo "Limpiando recursos Docker obsoletos..."
+        docker container prune -f 2>/dev/null || true
+        docker image prune -f 2>/dev/null || true
+
+        # Aggressive cleanup if disk usage exceeds 75%
+        DISK_USE=$(df / | awk 'NR==2 {gsub("%","",$5); print $5}')
+        if [ "$DISK_USE" -gt 75 ]; then
+            echo "WARNING: Disco al ${DISK_USE}%. Ejecutando limpieza agresiva..."
+            docker builder prune -af 2>/dev/null || true
+            docker image prune -af --filter "until=168h" 2>/dev/null || true
+        fi
+
         # Pull de imagenes externas y de GHCR
         docker compose -f "$COMPOSE_FILE" pull frontend 2>/dev/null || true
         docker compose -f "$COMPOSE_FILE" --profile ssl pull nginx certbot 2>/dev/null || true

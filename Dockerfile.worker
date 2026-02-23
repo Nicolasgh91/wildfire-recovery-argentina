@@ -1,30 +1,48 @@
+# ── Stage 1: Builder ────────────────────────────────────────────
+# Install build tools and compile Python C-extension wheels.
+# This stage is discarded — build-essential never reaches the final image.
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+# Compile into a separate prefix so we can COPY just the installed packages.
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ── Stage 2: Runtime ───────────────────────────────────────────
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema
+# Runtime-only dependencies (no compilers, no curl needed).
+# libpq5 — runtime library for psycopg2-binary.
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    curl \
-    postgresql-client \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements
-COPY requirements.txt .
+# Copy pre-compiled Python packages from builder stage.
+COPY --from=builder /install /usr/local
 
-# Instalar dependencias Python
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copiar código de la aplicación
+# Copy application code (filtered by .dockerignore).
 COPY . .
 
-# User para ejecutar celery (evita ejecutar como root)
+# Run as non-root for security (Celery best practice).
 RUN useradd -m celery
 USER celery
 
-# Health check (ping a Redis)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD python -c "import redis; redis.Redis.from_url('${CELERY_BROKER_URL}').ping()" || exit 1
+# Avoid .pyc files and ensure unbuffered stdout/stderr for log visibility.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Celery entrypoint
+# Health check: verify the Celery worker process responds to ping.
+# The previous check used shell variable interpolation (${CELERY_BROKER_URL})
+# which does not work inside Dockerfile HEALTHCHECK instructions.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD celery -A workers.celery_app inspect ping --timeout 5 2>/dev/null | grep -q OK || exit 1
+
 CMD ["celery", "-A", "workers.celery_app", "worker", "--loglevel=info"]

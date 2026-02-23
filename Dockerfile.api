@@ -1,29 +1,47 @@
+# ── Stage 1: Builder ────────────────────────────────────────────
+# Install build tools and compile Python C-extension wheels.
+# This stage is discarded — build-essential never reaches the final image.
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+
+# Compile into a separate prefix so we can COPY just the installed packages.
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ── Stage 2: Runtime ───────────────────────────────────────────
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Instalar dependencias del sistema
+# Runtime-only dependencies (no compilers).
+# curl  — used by the HEALTHCHECK.
+# libpq5 — runtime library for psycopg2-binary.
 RUN apt-get update && apt-get install -y \
-    build-essential \
     curl \
-    postgresql-client \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copiar requirements
-COPY requirements.txt .
+# Copy pre-compiled Python packages from builder stage.
+COPY --from=builder /install /usr/local
 
-# Instalar dependencias Python
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copiar todo el código de la aplicación
+# Copy application code (filtered by .dockerignore).
 COPY . .
 
-# Exposar puerto
+# Avoid .pyc files and ensure unbuffered stdout/stderr for log visibility.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
 EXPOSE 8000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Ejecutar la aplicación
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# NOTE: --reload is intentionally omitted; the compose command overrides for
+# development.  The default CMD targets production (no hot-reload).
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

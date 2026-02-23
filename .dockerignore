@@ -121,3 +121,7 @@ pyproject.toml
 scripts/setup-ssl.sh
 scripts/renew-ssl*.sh
 scripts/verify-ssl.sh
+scripts/analyze-disk-usage.sh
+scripts/cleanup-docker.sh
+scripts/monitor-disk-usage.sh
+scripts/emergency-disk-cleanup.sh
