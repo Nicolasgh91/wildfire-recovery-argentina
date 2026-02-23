@@ -180,7 +180,7 @@ class Settings(BaseSettings):
         if env == "production" and v == "local":
             raise ValueError(
                 "STORAGE_BACKEND='local' is not allowed in production. "
-                "Use 'gcs' or 'r2'."
+                "Use 'oci', 'gcs', or 'r2'."
             )
         return v
 

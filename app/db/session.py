@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from threading import Lock
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -47,6 +47,13 @@ def get_engine() -> Engine:
                 max_overflow=settings.DB_MAX_OVERFLOW,
                 echo=settings.DEBUG,  # Log SQL queries in debug mode
             )
+
+            @event.listens_for(_engine, "connect")
+            def _setup_postgis(dbapi_conn, connection_record):
+                with dbapi_conn.cursor() as cursor:
+                    cursor.execute("CREATE EXTENSION IF NOT EXISTS postgis;")
+                    dbapi_conn.commit()
+
     return _engine
 
 
