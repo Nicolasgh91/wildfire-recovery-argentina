@@ -218,6 +218,10 @@ class StorageService:
                     aws_access_key_id=access_key,
                     aws_secret_access_key=secret_key,
                     region_name=region,
+                    config=boto3.session.Config(
+                        s3={"addressing_style": "path"},
+                        signature_version="s3v4",
+                    ),
                 )
             return self._client
 
