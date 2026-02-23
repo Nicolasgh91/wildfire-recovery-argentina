@@ -17,7 +17,9 @@ import {
 } from '@/components/ui/carousel'
 import { Skeleton } from '@/components/ui/skeleton'
 import { QualityIndicator } from '@/components/fires/QualityIndicator'
+import { RecoveryPanel } from '@/components/monitoring/RecoveryPanel'
 import { useI18n } from '@/context/LanguageContext'
+import { useAuth } from '@/context/AuthContext'
 import { useFire } from '@/hooks/queries/useFire'
 import { useFireQuality } from '@/hooks/queries/useFireQuality'
 import {
@@ -87,6 +89,7 @@ export default function FireDetailPage() {
   const fireId = id ?? ''
   const navigate = useNavigate()
   const location = useLocation()
+  const { isAuthenticated } = useAuth()
 
   const handleBack = useCallback(() => {
     const state = location.state as ReturnContext | null
@@ -406,6 +409,12 @@ export default function FireDetailPage() {
             </Card>
           </div>
         </div>
+
+        {isAuthenticated && !isEpisodeDetail && (
+          <div className="mt-6">
+            <RecoveryPanel fireEventId={fireId} />
+          </div>
+        )}
 
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Card>
