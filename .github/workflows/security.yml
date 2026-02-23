@@ -110,11 +110,27 @@ jobs:
       - name: Build and check budget
         run: npm run build:budget
 
+  compose-contracts:
+    name: Docker Compose Healthcheck Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pyyaml
+      - name: Run healthcheck contract tests
+        run: pytest tests/unit/test_compose_healthchecks.py -v
+
   dependabot-auto-merge:
     name: Auto-merge Safe Patches
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
-    needs: [secret-scan, docs-layout, pip-audit, npm-audit, auth-contracts, bundle-budget]
+    needs: [secret-scan, docs-layout, pip-audit, npm-audit, auth-contracts, bundle-budget, compose-contracts]
     permissions:
       contents: write
       pull-requests: write
