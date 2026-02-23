@@ -111,6 +111,7 @@ jobs:
 
           echo "=== Cleanup (dangling only) ==="
           docker container prune -f
+          # 2. Remove dangling (untagged) images
           docker image prune -f
 
           # Limpieza agresiva solo si hay presión de disco real

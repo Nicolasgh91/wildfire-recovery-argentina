@@ -1,82 +1,132 @@
 #!/bin/bash
 # =============================================================================
-# FORESTGUARD - Docker Cleanup Script
+# FORESTGUARD - Docker Cleanup
 # =============================================================================
-# This script safely cleans up Docker resources to free disk space
-# while preserving running containers and important volumes.
+#
+# Safe cleanup of Docker resources. By default only removes clearly
+# unnecessary items (dangling images, stopped containers, old BuildKit cache).
+#
+# Usage:
+#   ./scripts/cleanup-docker.sh              # Safe cleanup
+#   ./scripts/cleanup-docker.sh --aggressive # Also remove unused images >7 days
+#   ./scripts/cleanup-docker.sh --dry-run    # Show what would be removed
+#
+# =============================================================================
 
 set -euo pipefail
 
-echo "=== ForestGuard Docker Cleanup ==="
-echo "Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-echo ""
+AGGRESSIVE=false
+DRY_RUN=false
 
-# Check if Docker is running
-if ! docker info >/dev/null 2>&1; then
-    echo "ERROR: Docker daemon is not running"
-    exit 1
-fi
+for arg in "$@"; do
+    case "$arg" in
+        --aggressive) AGGRESSIVE=true ;;
+        --dry-run)    DRY_RUN=true ;;
+        --help|-h)
+            echo "Usage: $0 [--aggressive] [--dry-run]"
+            echo ""
+            echo "  (default)     Safe cleanup: dangling images, stopped containers, old BuildKit cache"
+            echo "  --aggressive  Also remove all unused images older than 7 days"
+            echo "  --dry-run     Show what would be removed without executing"
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $arg"
+            echo "Run: $0 --help"
+            exit 1
+            ;;
+    esac
+done
 
-echo "=== Before Cleanup - Disk Usage ==="
+BOLD='\033[1m'
+RESET='\033[0m'
+
+section() {
+    echo ""
+    echo -e "${BOLD}=== $1 ===${RESET}"
+}
+
+# Record disk usage before cleanup
+DISK_BEFORE=$(df / | awk 'NR==2 {print $4}')
+DISK_BEFORE_H=$(df -h / | awk 'NR==2 {print $4}')
+
+section "Disk Usage Before Cleanup"
 df -h /
-echo ""
-docker system df
-echo ""
 
-echo "=== Step 1: Remove stopped containers ==="
-STOPPED_CONTAINERS=$(docker ps -a -q --filter "status=exited")
-if [ -n "$STOPPED_CONTAINERS" ]; then
-    echo "Found stopped containers, removing..."
-    docker rm $STOPPED_CONTAINERS
-else
-    echo "No stopped containers found"
+if $DRY_RUN; then
+    echo ""
+    echo "[DRY RUN] The following actions would be performed:"
+    echo ""
 fi
-echo ""
 
-echo "=== Step 2: Remove unused images (dangling) ==="
-docker image prune -f
-echo ""
-
-echo "=== Step 3: Remove unused networks ==="
-docker network prune -f
-echo ""
-
-echo "=== Step 4: Remove BuildKit cache ==="
-docker builder prune -af
-echo ""
-
-echo "=== Step 5: Remove unused volumes (EXCEPT redis_data) ==="
-# Get all unused volumes except redis_data
-UNUSED_VOLUMES=$(docker volume ls -q --filter "dangling=true" | grep -v "forestguard_redis_data" || true)
-if [ -n "$UNUSED_VOLUMES" ]; then
-    echo "Found unused volumes (excluding redis_data), removing..."
-    docker volume rm $UNUSED_VOLUMES
+# ── 1. Stopped containers ──────────────────────────────────────
+section "Removing stopped containers"
+if $DRY_RUN; then
+    STOPPED=$(docker ps -a --filter "status=exited" --format "{{.Names}}" 2>/dev/null || true)
+    if [ -n "$STOPPED" ]; then
+        echo "Would remove: $STOPPED"
+    else
+        echo "No stopped containers to remove"
+    fi
 else
-    echo "No unused volumes found"
+    docker container prune -f 2>/dev/null || true
 fi
-echo ""
 
-echo "=== Step 6: Aggressive cleanup (safe for production) ==="
-# This removes all unused images, not just dangling ones
-# BUT preserves images used by running containers
-docker image prune -af
-echo ""
+# ── 2. Dangling images ────────────────────────────────────────
+section "Removing dangling images"
+if $DRY_RUN; then
+    DANGLING=$(docker images -f "dangling=true" -q 2>/dev/null | wc -l || echo 0)
+    echo "Would remove $DANGLING dangling image(s)"
+else
+    docker image prune -f 2>/dev/null || true
+fi
 
-echo "=== After Cleanup - Disk Usage ==="
-df -h /
-echo ""
-docker system df
-echo ""
+# ── 3. BuildKit cache ─────────────────────────────────────────
+section "Removing BuildKit cache (older than 7 days)"
+if $DRY_RUN; then
+    echo "Would prune BuildKit cache entries older than 168 hours"
+else
+    docker builder prune -f --filter "until=168h" 2>/dev/null || true
+fi
 
-echo "=== Current running containers ==="
-docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
-echo ""
+# ── 4. Aggressive: unused images ──────────────────────────────
+if $AGGRESSIVE; then
+    section "Removing ALL unused images older than 7 days (aggressive)"
+    if $DRY_RUN; then
+        UNUSED=$(docker images --filter "dangling=false" --format "{{.Repository}}:{{.Tag}} ({{.Size}}, {{.CreatedSince}})" 2>/dev/null || true)
+        echo "Would evaluate these images for removal (unused + older than 7 days):"
+        echo "$UNUSED" | head -20
+    else
+        docker image prune -af --filter "until=168h" 2>/dev/null || true
+    fi
 
-echo "=== Cleanup Complete ==="
-echo "Space freed successfully!"
-echo ""
-echo "Note: If disk is still >85% full, consider:"
-echo "1. Checking for large files outside Docker"
-echo "2. Optimizing application Dockerfiles"
-echo "3. Implementing log rotation"
-echo "4. Moving to larger VM instance"
+    section "Removing ALL BuildKit cache (aggressive)"
+    if $DRY_RUN; then
+        echo "Would remove entire BuildKit cache"
+    else
+        docker builder prune -af 2>/dev/null || true
+    fi
+fi
+
+# ── Summary ────────────────────────────────────────────────────
+if ! $DRY_RUN; then
+    DISK_AFTER=$(df / | awk 'NR==2 {print $4}')
+    DISK_AFTER_H=$(df -h / | awk 'NR==2 {print $4}')
+    RECOVERED_KB=$((DISK_AFTER - DISK_BEFORE))
+
+    section "Disk Usage After Cleanup"
+    df -h /
+
+    echo ""
+    echo "Space before: $DISK_BEFORE_H available"
+    echo "Space after:  $DISK_AFTER_H available"
+    if [ "$RECOVERED_KB" -gt 0 ]; then
+        RECOVERED_MB=$((RECOVERED_KB / 1024))
+        echo "Recovered:    ~${RECOVERED_MB}MB"
+    else
+        echo "Recovered:    minimal (resources were already clean)"
+    fi
+fi
+
+section "Docker System Summary"
+docker system df 2>/dev/null || true

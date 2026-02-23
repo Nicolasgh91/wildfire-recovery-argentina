@@ -1,51 +1,48 @@
-# ── Stage 1: Builder ──────────────────────────────────────────────────
+# ── Stage 1: Builder ────────────────────────────────────────────
+# Install build tools and compile Python C-extension wheels.
+# This stage is discarded — build-essential never reaches the final image.
 FROM python:3.11-slim AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Install build dependencies for compilation
 RUN apt-get update && apt-get install -y \
     build-essential \
-    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# ── Stage 2: Runtime ──────────────────────────────────────────────────
-FROM python:3.11-slim AS runtime
+# Compile into a separate prefix so we can COPY just the installed packages.
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ── Stage 2: Runtime ───────────────────────────────────────────
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install only runtime dependencies
+# Runtime-only dependencies (no compilers, no curl needed).
+# libpq5 — runtime library for psycopg2-binary.
 RUN apt-get update && apt-get install -y \
-    curl \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd -m celery
+# Copy pre-compiled Python packages from builder stage.
+COPY --from=builder /install /usr/local
 
-# Copy installed packages from builder stage
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy application code
+# Copy application code (filtered by .dockerignore).
 COPY . .
 
-# Switch to non-root user
+# Run as non-root for security (Celery best practice).
+RUN useradd -m celery
 USER celery
 
-# Set environment variables
-ENV PYTHONPATH=/app
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# Avoid .pyc files and ensure unbuffered stdout/stderr for log visibility.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Health check (ping to Redis)
+# Health check: verify the Celery worker process responds to ping.
+# The previous check used shell variable interpolation (${CELERY_BROKER_URL})
+# which does not work inside Dockerfile HEALTHCHECK instructions.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD python -c "import redis; redis.Redis.from_url('${CELERY_BROKER_URL}').ping()" || exit 1
+    CMD celery -A workers.celery_app inspect ping --timeout 5 2>/dev/null | grep -q OK || exit 1
 
-# Celery entrypoint
 CMD ["celery", "-A", "workers.celery_app", "worker", "--loglevel=info"]

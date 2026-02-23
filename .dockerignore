@@ -133,3 +133,7 @@ certbot/
 temp_files/
 database/migrations/versions/*.py
 !database/migrations/versions/__init__.py
+scripts/analyze-disk-usage.sh
+scripts/cleanup-docker.sh
+scripts/monitor-disk-usage.sh
+scripts/emergency-disk-cleanup.sh
