@@ -285,29 +285,39 @@ jobs:
 
           echo "=== Applying fix_stale_minio_urls.sql (PASO 4) ==="
 
-          if [[ ! -f scripts/fix_stale_minio_urls.sql ]]; then
-            echo "ERROR: scripts/fix_stale_minio_urls.sql not found."
-            exit 1
-          fi
+          # The api container has Python + SQLAlchemy but NOT psql.
+          # Write a cleanup script to a temp file and execute it inside the container.
+          cat > /tmp/cleanup_stale_urls.py << 'PYSCRIPT'
+          import sys
+          from sqlalchemy import text
+          from app.db.session import SessionLocal
 
-          # Run inside the api container which has DATABASE_URL available
-          timeout 300 docker compose exec -T api \
-            bash -c 'psql "$DATABASE_URL" -f /app/scripts/fix_stale_minio_urls.sql'
+          db = SessionLocal()
+          try:
+              r1 = db.execute(text("SELECT COUNT(*) FROM satellite_images WHERE thumbnail_url LIKE 'http://127.0.0.1%%' OR thumbnail_url LIKE 'http://localhost%%' OR r2_url LIKE 'http://127.0.0.1%%' OR r2_url LIKE 'http://localhost%%'")).scalar()
+              r2 = db.execute(text("SELECT COUNT(*) FROM fire_episodes WHERE slides_data::text LIKE '%%127.0.0.1%%' OR slides_data::text LIKE '%%localhost%%'")).scalar()
+              print("Before: {} stale satellite_images, {} stale fire_episodes".format(r1, r2))
+
+              db.execute(text("UPDATE satellite_images SET thumbnail_url = NULL, r2_url = '' WHERE thumbnail_url LIKE 'http://127.0.0.1%%' OR thumbnail_url LIKE 'http://localhost%%' OR r2_url LIKE 'http://127.0.0.1%%' OR r2_url LIKE 'http://localhost%%'"))
+              db.execute(text("UPDATE fire_episodes SET slides_data = '[]'::jsonb, last_gee_image_id = NULL WHERE slides_data::text LIKE '%%127.0.0.1%%' OR slides_data::text LIKE '%%localhost%%'"))
+              db.commit()
+
+              after = db.execute(text("SELECT COUNT(*) FROM satellite_images WHERE thumbnail_url LIKE 'http://127.0.0.1%%' OR thumbnail_url LIKE 'http://localhost%%'")).scalar()
+              print("After: {} stale satellite_images remaining".format(after))
+              if after != 0:
+                  print("ERROR: {} rows still have stale URLs".format(after), file=sys.stderr)
+                  sys.exit(1)
+              print("OK: All stale URLs cleaned")
+          finally:
+              db.close()
+          PYSCRIPT
+
+          # Copy script into api container and execute
+          docker compose cp /tmp/cleanup_stale_urls.py api:/tmp/cleanup_stale_urls.py
+          timeout 300 docker compose exec -T api python3 /tmp/cleanup_stale_urls.py
 
           echo ""
-          echo "=== Validating cleanup result (V-04) ==="
-          remaining=$(timeout 30 docker compose exec -T api \
-            bash -c "psql \"\$DATABASE_URL\" -tAc \"SELECT COUNT(*) FROM satellite_images WHERE thumbnail_url LIKE 'http://127%';\"" \
-            2>/dev/null | tr -d '[:space:]' || echo "ERROR")
-
-          if [[ "$remaining" == "ERROR" ]]; then
-            echo "WARNING: Could not verify cleanup count — check DB access."
-          elif [[ "$remaining" != "0" ]]; then
-            echo "ERROR: ${remaining} rows still have stale 127.* URLs after cleanup."
-            exit 1
-          else
-            echo "✓ V-04 passed — 0 rows with stale 127.* URLs"
-          fi
+          echo "✓ V-04 passed — stale 127.* URLs cleaned"
           REMOTE_SCRIPT
 
       # ── 7. Storage health check ─────────────────────────────────────────────
@@ -332,24 +342,26 @@ jobs:
 
           echo "=== StorageService health check (V-01 / PASO 5) ==="
 
-          result=$(timeout 300 docker compose exec -T api python3 -c "
+          cat > /tmp/health_check.py << 'PYSCRIPT'
           import json, sys
           try:
               from app.services.storage_service import StorageService
               s = StorageService()
               h = s.health_check()
               print(json.dumps(h, indent=2))
-              # Validate expected values
-              assert h.get('backend') == 'oci',    f\"backend={h.get('backend')} — expected 'oci'\"
-              assert h.get('status') == 'healthy', f\"status={h.get('status')} — expected 'healthy'\"
-              assert h.get('accessible') == True,  f\"accessible={h.get('accessible')} — expected True\"
+              assert h.get("backend") == "oci", "backend={} -- expected oci".format(h.get("backend"))
+              assert h.get("status") == "healthy", "status={} -- expected healthy".format(h.get("status"))
+              assert h.get("accessible") is True, "accessible={} -- expected True".format(h.get("accessible"))
           except AssertionError as e:
-              print(f'ASSERTION FAILED: {e}', file=sys.stderr)
+              print("ASSERTION FAILED: {}".format(e), file=sys.stderr)
               sys.exit(1)
           except Exception as e:
-              print(f'ERROR: {e}', file=sys.stderr)
+              print("ERROR: {}".format(e), file=sys.stderr)
               sys.exit(1)
-          " 2>&1)
+          PYSCRIPT
+
+          docker compose cp /tmp/health_check.py api:/tmp/health_check.py
+          result=$(timeout 300 docker compose exec -T api python3 /tmp/health_check.py 2>&1)
 
           echo "$result"
 
@@ -388,7 +400,7 @@ jobs:
 
           echo "=== Regenerating carousel thumbnails (PASO 6) ==="
 
-          result=$(timeout 600 docker compose exec -T api python3 -c "
+          cat > /tmp/carousel_regen.py << 'PYSCRIPT'
           import json, sys
           try:
               from app.db.session import SessionLocal
@@ -398,16 +410,19 @@ jobs:
               result = svc.run_carousel(max_fires=20, force_refresh=True)
               print(json.dumps(result, indent=2))
               db.close()
-              errors = result.get('errors', [])
+              errors = result.get("errors", [])
               if errors:
-                  print(f'WARNING: {len(errors)} error(s) during carousel regen:', file=sys.stderr)
+                  print("WARNING: {} error(s) during carousel regen:".format(len(errors)), file=sys.stderr)
                   for e in errors:
-                      print(f'  - {e}', file=sys.stderr)
+                      print("  - {}".format(e), file=sys.stderr)
                   sys.exit(1)
           except Exception as e:
-              print(f'ERROR: {e}', file=sys.stderr)
+              print("ERROR: {}".format(e), file=sys.stderr)
               sys.exit(1)
-          " 2>&1)
+          PYSCRIPT
+
+          docker compose cp /tmp/carousel_regen.py api:/tmp/carousel_regen.py
+          result=$(timeout 600 docker compose exec -T api python3 /tmp/carousel_regen.py 2>&1)
 
           echo "$result"
 
