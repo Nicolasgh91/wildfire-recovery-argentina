@@ -39,6 +39,11 @@ else:
 logger = logging.getLogger(__name__)
 
 
+class BaselineNotAvailableError(Exception):
+    """Raised when pre-fire baseline NDVI cannot be determined."""
+    pass
+
+
 # =============================================================================
 # ENUMS Y CONSTANTES
 # =============================================================================
@@ -702,24 +707,40 @@ class VAEService:
             return ndvi_result.mean
 
         except GEEImageNotFoundError:
-            # Fallback: valor típico de vegetación moderada
-            logger.warning("No pre-fire image found, using default baseline")
-            return 0.45
+            logger.warning("No pre-fire image found for baseline NDVI")
+            raise BaselineNotAvailableError(
+                "No pre-fire satellite image available to compute baseline NDVI"
+            )
 
     def _get_current_ndvi(self, bbox: Dict[str, float], target_date: date) -> float:
-        """Obtiene NDVI para una fecha específica."""
-        # Ventana de ±30 días
-        start = target_date - timedelta(days=30)
-        end = target_date + timedelta(days=30)
+        """
+        Obtiene NDVI para una fecha específica.
 
-        collection = self._gee.get_sentinel_collection(
-            bbox=bbox, start_date=start, end_date=end, max_cloud_cover=30
+        Uses escalating cloud cover tolerance and temporal window
+        to handle cloudy periods (CT-UCF12-03).
+        """
+        for max_cloud in [30, 50, 70]:
+            for window_days in [30, 60, 90]:
+                try:
+                    start = target_date - timedelta(days=window_days)
+                    end = target_date + timedelta(days=window_days)
+
+                    collection = self._gee.get_sentinel_collection(
+                        bbox=bbox, start_date=start, end_date=end,
+                        max_cloud_cover=max_cloud,
+                    )
+
+                    image = self._gee.get_best_image(
+                        collection, target_date=target_date,
+                    )
+                    ndvi_result = self._gee.calculate_ndvi(image, bbox)
+                    return ndvi_result.mean
+                except GEEImageNotFoundError:
+                    continue
+
+        raise GEEImageNotFoundError(
+            f"No suitable image found for {target_date} after extended search"
         )
-
-        image = self._gee.get_best_image(collection, target_date=target_date)
-        ndvi_result = self._gee.calculate_ndvi(image, bbox)
-
-        return ndvi_result.mean
 
     def _months_between(self, date1: date, date2: date) -> int:
         """Calcula meses entre dos fechas."""

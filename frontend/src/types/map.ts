@@ -15,4 +15,5 @@ export type FireMapItem = {
   protected_area_name?: string | null
   count_protected_areas?: number | null
   representative_event_id?: string | null
+  is_potential_violation?: boolean
 }

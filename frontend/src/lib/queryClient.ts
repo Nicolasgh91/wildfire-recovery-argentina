@@ -25,6 +25,10 @@ export const queryKeys = {
   quality: {
     fire: (id: string) => ['quality', 'fire', id] as const,
   },
+  monitoring: {
+    recovery: (fireEventId: string) => ['monitoring', 'recovery', fireEventId] as const,
+    landUseChanges: (fireEventId: string) => ['monitoring', 'land-use-changes', fireEventId] as const,
+  },
   explorations: {
     all: ['explorations'] as const,
     detail: (id: string) => ['explorations', 'detail', id] as const,

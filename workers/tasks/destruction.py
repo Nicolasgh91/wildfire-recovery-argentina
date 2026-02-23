@@ -1,6 +1,8 @@
 """
 Destruction Task: Detección de destrucción de bosques y cambio de uso de suelo
-post-incendio usando análisis multitemporal de Sentinel-2
+post-incendio usando análisis multitemporal.
+
+Persists results to land_use_changes table with upsert semantics.
 """
 
 import logging
@@ -10,60 +12,157 @@ from ..celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+
 @celery_app.task(
     bind=True,
     name='workers.tasks.destruction.detect_destruction',
-    queue='analysis',
+    queue='vae',
     max_retries=2,
 )
 def detect_destruction(self, fire_event_id, months_window=12):
     """
-    Detecta cambios de uso de suelo post-incendio analizando:
-    - Cambios en NDVI (vegetación)
-    - Cambios espectrales (Sentinel-2 bandas específicas)
-    - Patrones de construcción (si aplica)
-    - Conversión a cultivos o urbanización
-    
+    Detecta cambios de uso de suelo post-incendio y persiste en land_use_changes.
+
     Args:
         fire_event_id: UUID del fuego
         months_window: Ventana temporal para analizar (meses)
-    
-    Retorna:
-        dict: {
-            'fire_event_id': str,
-            'destruction_detected': bool,
-            'destruction_type': str (reforestation|urbanization|agriculture|degradation|unknown),
-            'affected_area_ha': float,
-            'confidence': float (0-1),
-            'analysis_date': str ISO
-        }
     """
+    from app.db.session import SessionLocal
+    from sqlalchemy import text
+
+    db = SessionLocal()
     try:
-        logger.info(f"🔍 Detectando destrucción/cambio de uso para {fire_event_id}...")
-        
-        # Aquí va:
-        # 1. Obtener geometría del fuego
-        # 2. Descargar imágenes Sentinel-2 pre y post-incendio
-        # 3. Analizar cambios espectrales
-        # 4. Clasificar tipo de cambio de uso
-        # 5. Calcular área afectada
-        
-        result = {
-            'fire_event_id': fire_event_id,
-            'destruction_detected': True,
-            'destruction_type': 'degradation',
-            'affected_area_ha': 1250.5,
-            'confidence': 0.87,
-            'months_window': months_window,
-            'analysis_date': datetime.utcnow().isoformat(),
+        logger.info(f"Detecting land use change for fire {fire_event_id}...")
+
+        # 1. Get fire event geometry
+        fire_row = db.execute(
+            text("""
+                SELECT
+                    id,
+                    start_date,
+                    ST_Y(centroid::geometry) as lat,
+                    ST_X(centroid::geometry) as lon,
+                    estimated_area_hectares
+                FROM fire_events
+                WHERE id = :fire_id
+            """),
+            {"fire_id": str(fire_event_id)},
+        ).fetchone()
+
+        if not fire_row:
+            logger.warning(f"Fire event {fire_event_id} not found, skipping")
+            return {"fire_event_id": str(fire_event_id), "status": "skipped", "reason": "not_found"}
+
+        fire_date = fire_row.start_date
+        fire_lat = fire_row.lat
+        fire_lon = fire_row.lon
+        area_ha = fire_row.estimated_area_hectares or 0
+
+        # 2. Run VAE land use change detection
+        from app.services.vae_service import VAEService
+
+        vae = VAEService()
+        buffer = 0.01
+        bbox = {
+            "west": fire_lon - buffer,
+            "south": fire_lat - buffer,
+            "east": fire_lon + buffer,
+            "north": fire_lat + buffer,
         }
-        
-        logger.info(f"✅ Análisis completado: {result['affected_area_ha']}ha afectadas")
-        return result
-        
+
+        fire_date_obj = fire_date.date() if hasattr(fire_date, 'date') else fire_date
+
+        try:
+            analysis = vae.detect_land_use_change(
+                fire_event_id=str(fire_event_id),
+                bbox=bbox,
+                fire_date=fire_date_obj,
+                area_hectares=float(area_ha) if area_ha else 0,
+            )
+        except Exception as exc:
+            logger.warning(f"GEE land use analysis failed for {fire_event_id}: {exc}")
+            return {
+                "fire_event_id": str(fire_event_id),
+                "status": "gee_error",
+                "error": str(exc),
+            }
+
+        # 3. Persist to land_use_changes with upsert
+        change_date = analysis.analysis_date
+        upsert_query = text("""
+            INSERT INTO land_use_changes (
+                fire_event_id,
+                change_detected_at,
+                months_after_fire,
+                change_type,
+                change_severity,
+                affected_area_hectares,
+                is_potential_violation,
+                violation_confidence,
+                status,
+                notes,
+                created_at,
+                updated_at
+            ) VALUES (
+                :fire_event_id,
+                :change_detected_at,
+                :months_after_fire,
+                :change_type,
+                :change_severity,
+                :affected_area_hectares,
+                :is_potential_violation,
+                :violation_confidence,
+                :status,
+                :notes,
+                NOW(),
+                NOW()
+            )
+            ON CONFLICT (fire_event_id, change_detected_at) DO UPDATE SET
+                change_type = EXCLUDED.change_type,
+                change_severity = EXCLUDED.change_severity,
+                affected_area_hectares = EXCLUDED.affected_area_hectares,
+                is_potential_violation = EXCLUDED.is_potential_violation,
+                violation_confidence = EXCLUDED.violation_confidence,
+                status = EXCLUDED.status,
+                notes = EXCLUDED.notes,
+                updated_at = NOW()
+        """)
+
+        db.execute(upsert_query, {
+            "fire_event_id": str(fire_event_id),
+            "change_detected_at": change_date,
+            "months_after_fire": analysis.months_after_fire,
+            "change_type": analysis.change_type.value,
+            "change_severity": analysis.violation_severity.value,
+            "affected_area_hectares": analysis.affected_area_hectares,
+            "is_potential_violation": analysis.is_potential_violation,
+            "violation_confidence": str(analysis.change_confidence),
+            "status": "pending_review" if analysis.is_potential_violation else "reviewed",
+            "notes": analysis.recommended_action,
+        })
+        db.commit()
+
+        logger.info(
+            f"Land use change persisted for {fire_event_id}: "
+            f"type={analysis.change_type.value}, violation={analysis.is_potential_violation}"
+        )
+        return {
+            "fire_event_id": str(fire_event_id),
+            "status": "completed",
+            "destruction_detected": analysis.change_detected,
+            "destruction_type": analysis.change_type.value,
+            "affected_area_ha": analysis.affected_area_hectares,
+            "is_potential_violation": analysis.is_potential_violation,
+            "confidence": analysis.change_confidence,
+            "analysis_date": change_date.isoformat(),
+        }
+
     except Exception as exc:
-        logger.error(f"❌ Error detectando destrucción: {exc}")
+        db.rollback()
+        logger.error(f"Error detecting destruction for {fire_event_id}: {exc}")
         raise self.retry(exc=exc, countdown=300)
+    finally:
+        db.close()
 
 
 @shared_task(
@@ -73,33 +172,69 @@ def detect_destruction(self, fire_event_id, months_window=12):
 def classify_land_use(self, fire_event_id, date_after_fire):
     """
     Clasifica uso de suelo post-incendio en categorías Ley 26.815.
-    Categorías: Bosque nativo, Agricultura, Urbanización, Degradación, Recuperación
-    
-    Args:
-        fire_event_id: UUID del fuego
-        date_after_fire: Fecha para evaluar (ISO string)
-    
-    Retorna:
-        dict con clasificación y áreas por categoría
+    Uses VAEService for classification.
     """
+    from app.db.session import SessionLocal
+    from sqlalchemy import text
+
+    db = SessionLocal()
     try:
-        logger.info(f"📋 Clasificando uso de suelo para {fire_event_id}...")
-        
-        return {
-            'fire_event_id': fire_event_id,
-            'classification_date': date_after_fire,
-            'land_use_classes': {
-                'bosque_nativo': {'area_ha': 850, 'percentage': 68},
-                'agricultura': {'area_ha': 180, 'percentage': 14},
-                'degradacion': {'area_ha': 200, 'percentage': 16},
-                'urbanizacion': {'area_ha': 20, 'percentage': 2},
-            },
-            'legal_implications': 'Ley 26.815: Prohibición 60 años si es bosque nativo',
+        logger.info(f"Classifying land use for {fire_event_id}...")
+
+        fire_row = db.execute(
+            text("""
+                SELECT
+                    start_date,
+                    ST_Y(centroid::geometry) as lat,
+                    ST_X(centroid::geometry) as lon,
+                    estimated_area_hectares
+                FROM fire_events
+                WHERE id = :fire_id
+            """),
+            {"fire_id": str(fire_event_id)},
+        ).fetchone()
+
+        if not fire_row:
+            return {"fire_event_id": str(fire_event_id), "status": "not_found"}
+
+        from app.services.vae_service import VAEService
+        from datetime import date as date_type
+
+        vae = VAEService()
+        fire_lat, fire_lon = fire_row.lat, fire_row.lon
+        buffer = 0.01
+        bbox = {
+            "west": fire_lon - buffer,
+            "south": fire_lat - buffer,
+            "east": fire_lon + buffer,
+            "north": fire_lat + buffer,
         }
-        
+
+        fire_date_obj = fire_row.start_date.date() if hasattr(fire_row.start_date, 'date') else fire_row.start_date
+        analysis_date = date_type.fromisoformat(date_after_fire) if isinstance(date_after_fire, str) else date_after_fire
+
+        result = vae.detect_land_use_change(
+            fire_event_id=str(fire_event_id),
+            bbox=bbox,
+            fire_date=fire_date_obj,
+            analysis_date=analysis_date,
+            area_hectares=float(fire_row.estimated_area_hectares or 0),
+        )
+
+        return {
+            'fire_event_id': str(fire_event_id),
+            'classification_date': date_after_fire,
+            'change_type': result.change_type.value,
+            'is_potential_violation': result.is_potential_violation,
+            'confidence': result.change_confidence,
+            'recommended_action': result.recommended_action,
+        }
+
     except Exception as exc:
-        logger.error(f"Error clasificando uso de suelo: {exc}")
+        logger.error(f"Error classifying land use: {exc}")
         raise self.retry(exc=exc, countdown=60)
+    finally:
+        db.close()
 
 
 @shared_task(
@@ -109,26 +244,23 @@ def classify_land_use(self, fire_event_id, date_after_fire):
 def generate_destruction_report(self, fire_event_id):
     """
     Genera reporte judicial de destrucción post-incendio.
-    Combina análisis de destrucción + clasificación de uso de suelo.
-    
-    Retorna:
-        dict con datos para generar PDF
+    Combines destruction detection + land use classification.
     """
     try:
-        logger.info(f"📄 Generando reporte para {fire_event_id}...")
+        logger.info(f"Generating destruction report for {fire_event_id}...")
 
         report_date = datetime.utcnow().isoformat()
         workflow = chord(
             group(
-                detect_destruction.s(fire_event_id).set(queue='analysis'),
+                detect_destruction.s(fire_event_id).set(queue='vae'),
                 classify_land_use.s(
                     fire_event_id, datetime.utcnow().date().isoformat()
-                ).set(queue='analysis'),
+                ).set(queue='vae'),
             ),
             compose_destruction_report.s(
                 fire_event_id=fire_event_id,
                 report_date=report_date,
-            ).set(queue='analysis'),
+            ).set(queue='vae'),
         )
         async_result = workflow.apply_async()
 
@@ -139,9 +271,9 @@ def generate_destruction_report(self, fire_event_id):
             'report_date': report_date,
             'report_type': 'judicial_destruction',
         }
-        
+
     except Exception as exc:
-        logger.error(f"Error generando reporte: {exc}")
+        logger.error(f"Error generating report: {exc}")
         raise self.retry(exc=exc, countdown=60)
 
 
@@ -150,9 +282,7 @@ def generate_destruction_report(self, fire_event_id):
     bind=True,
 )
 def compose_destruction_report(self, analysis_results, fire_event_id, report_date):
-    """
-    Compose final report payload from chord/group subtask outputs.
-    """
+    """Compose final report payload from chord/group subtask outputs."""
     destruction = {}
     land_use = {}
     for item in analysis_results or []:
@@ -160,7 +290,7 @@ def compose_destruction_report(self, analysis_results, fire_event_id, report_dat
             continue
         if "destruction_detected" in item:
             destruction = item
-        elif "land_use_classes" in item:
+        elif "change_type" in item:
             land_use = item
 
     return {
