@@ -170,6 +170,9 @@ jobs:
           fi
           echo "Docker daemon OK"
 
+          echo "=== Automatic Docker cleanup (dangling images + stopped containers) ==="
+          # Only removes dangling (untagged) images and stopped containers.
+          # Does NOT remove volumes or images used by running containers.
           echo "=== Automatic Docker cleanup ==="
           # 1. Remove stopped containers
           docker container prune -f

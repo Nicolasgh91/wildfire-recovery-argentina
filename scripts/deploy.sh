@@ -105,8 +105,15 @@ case "${1:-}" in
         fi
 
         # Pull de imagenes externas y de GHCR
+        echo "=== Pulling images ==="
         docker compose -f "$COMPOSE_FILE" pull frontend 2>/dev/null || true
         docker compose -f "$COMPOSE_FILE" --profile ssl pull nginx certbot 2>/dev/null || true
+
+        # Cleanup before building new images
+        echo "=== Pre-build cleanup ==="
+        docker container prune -f
+        docker image prune -f
+        docker builder prune -af
 
         # Auto-bootstrap SSL para primer deploy
         if [ ! -f "$FULLCHAIN_PATH" ] || [ ! -f "$PRIVKEY_PATH" ] || [ ! -f "$CHAIN_PATH" ]; then

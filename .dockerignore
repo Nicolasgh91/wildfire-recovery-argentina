@@ -124,4 +124,16 @@ scripts/verify-ssl.sh
 scripts/analyze-disk-usage.sh
 scripts/cleanup-docker.sh
 scripts/monitor-disk-usage.sh
+
+# Additional optimization exclusions
+walkthrough.md
+fix-docker-deployment.sh
+nginx-temp.conf
+certbot/
+temp_files/
+database/migrations/versions/*.py
+!database/migrations/versions/__init__.py
+scripts/analyze-disk-usage.sh
+scripts/cleanup-docker.sh
+scripts/monitor-disk-usage.sh
 scripts/emergency-disk-cleanup.sh
