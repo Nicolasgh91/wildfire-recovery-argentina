@@ -111,7 +111,77 @@ jobs:
           printf '%s\n' "$PROD_VM_KNOWN_HOSTS" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      # ── 3. Deploy ──────────────────────────────────────────────────────────
+      # ── 3. VM Preflight — disk space + Docker daemon health ───────────────
+      - name: VM Preflight — disk space and Docker daemon
+        env:
+          VM_HOST: ${{ secrets.PROD_VM_HOST }}
+          VM_USER: ${{ secrets.PROD_VM_USER }}
+          VM_PORT: ${{ secrets.PROD_VM_PORT }}
+        run: |
+          PORT="${VM_PORT:-22}"
+
+          ssh \
+            -i ~/.ssh/prod_vm_key \
+            -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${VM_USER}@${VM_HOST}" \
+            bash -s << 'REMOTE_SCRIPT'
+          set -euo pipefail
+
+          echo "=== Disk usage ==="
+          df -h /
+
+          # ── Block deploy if root filesystem > 85% full ───────────────────
+          DISK_USE=$(df / | awk 'NR==2 {gsub("%","",$5); print $5}')
+          echo "Root filesystem: ${DISK_USE}% used"
+          if [[ "$DISK_USE" -gt 85 ]]; then
+            echo "ERROR: Disk is ${DISK_USE}% full — deploy aborted to prevent corruption."
+            echo "Run manually on the VM:"
+            echo "  docker system prune -af --volumes   # removes ALL unused images + volumes"
+            echo "  docker builder prune -af            # removes BuildKit cache"
+            exit 1
+          fi
+
+          # ── Warn at 70% ─────────────────────────────────────────────────
+          if [[ "$DISK_USE" -gt 70 ]]; then
+            echo "WARNING: Disk is ${DISK_USE}% full. Consider running 'docker system prune -f' soon."
+          fi
+
+          echo "=== CPU steal ==="
+          # High %steal indicates hypervisor resource contention (OCI burstable shapes).
+          STEAL=$(vmstat 1 2 | tail -1 | awk '{print $17}')
+          echo "CPU steal: ${STEAL}%"
+          if [[ "$STEAL" -gt 20 ]]; then
+            echo "WARNING: High CPU steal (${STEAL}%) — VM is CPU-throttled. Build will be slow."
+          fi
+
+          echo "=== Docker daemon health ==="
+          # Check if Docker daemon responds within 15s. If it doesn't, a previous
+          # crashed build left it in an unresponsive state — restart is required.
+          if ! timeout 15 docker info > /dev/null 2>&1; then
+            echo "ERROR: Docker daemon is not responding."
+            echo "A previous failed build likely left the daemon in a stuck state."
+            echo "Run manually on the VM (requires sudo):"
+            echo "  sudo systemctl restart docker"
+            echo "  docker system prune -f   # optional: clear dangling images"
+            exit 1
+          fi
+          echo "Docker daemon OK"
+
+          echo "=== Automatic Docker prune (dangling images + stopped containers) ==="
+          # Only removes dangling (untagged) images and stopped containers.
+          # Does NOT remove volumes or images used by running containers.
+          docker container prune -f
+          docker image prune -f
+          echo "Docker prune completed"
+
+          echo "=== Docker disk usage after prune ==="
+          docker system df 2>/dev/null || echo "(docker system df skipped — daemon busy)"
+          REMOTE_SCRIPT
+
+      # ── 4. Deploy ──────────────────────────────────────────────────────────
       - name: Deploy via SSH
         env:
           VM_HOST: ${{ secrets.PROD_VM_HOST }}
