@@ -1,0 +1,411 @@
+name: Post-Deploy Storage Setup
+
+# ─── PURPOSE ────────────────────────────────────────────────────────────────
+# Automates the manual operator steps documented in walkthrough.md for
+# enabling OCI Object Storage on production.
+#
+# RUN THIS WORKFLOW AFTER:
+#   1. A new deploy that introduces or modifies storage_service.py, or
+#   2. After editing /home/opc/.env with new OCI credentials (PASO 1).
+#
+# ─── WHAT IT DOES ────────────────────────────────────────────────────────────
+# Step 1  — Validate OCI env vars are present in the running containers.
+# Step 2  — (optional) Rebuild api + worker services and bring them up.
+# Step 3  — Confirm worker-reports container is running.
+# Step 4  — (optional, ONE-SHOT) Apply fix_stale_minio_urls.sql cleanup.
+# Step 5  — Verify StorageService health (backend must be "oci").
+# Step 6  — (optional) Regenerate carousel thumbnails with OCI URLs.
+#
+# ─── REQUIRED GITHUB ENVIRONMENT SECRETS (production) ───────────────────────
+# Same infra secrets as deploy-prod-vm.yml:
+#   PROD_VM_HOST        — VM IP or hostname
+#   PROD_VM_USER        — SSH user (e.g. opc)
+#   PROD_VM_SSH_KEY     — PEM private key (no passphrase)
+#   PROD_VM_KNOWN_HOSTS — Output of: ssh-keyscan -p <PORT> <HOST>
+#   PROD_VM_PORT        — SSH port (defaults to 22 if not set)
+#
+# ─── OPERATOR PRE-REQUISITES (PASO 0 + PASO 1 from walkthrough.md) ──────────
+# These steps CANNOT be automated and must be done manually before running:
+#   • Generate OCI Customer Secret Keys in OCI Console → Identity → Users.
+#   • Edit /home/opc/.env on the VM with OCI_* vars. See docs/ops/storage-runbook.md
+
+on:
+  workflow_dispatch:
+    inputs:
+      rebuild_services:
+        description: "Rebuild api + worker-analysis + worker-reports before verification?"
+        type: boolean
+        default: false
+      run_sql_cleanup:
+        description: "Apply fix_stale_minio_urls.sql (ONE-SHOT — only use on first deploy with OCI)"
+        type: boolean
+        default: false
+      run_carousel_regen:
+        description: "Regenerate carousel thumbnails with OCI URLs after SQL cleanup?"
+        type: boolean
+        default: false
+
+# Prevent concurrent storage operations (SQL + carousel could conflict).
+concurrency:
+  group: prod-storage-setup
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  post-deploy-storage:
+    name: Post-Deploy Storage Setup
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+
+    steps:
+      # ── 0. Checkout (for traceability) ─────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 1. Preflight — validate required secrets ────────────────────────────
+      - name: Preflight — validate required secrets
+        env:
+          PROD_VM_HOST:        ${{ secrets.PROD_VM_HOST }}
+          PROD_VM_USER:        ${{ secrets.PROD_VM_USER }}
+          PROD_VM_SSH_KEY:     ${{ secrets.PROD_VM_SSH_KEY }}
+          PROD_VM_KNOWN_HOSTS: ${{ secrets.PROD_VM_KNOWN_HOSTS }}
+        run: |
+          missing=()
+          [[ -z "$PROD_VM_HOST"        ]] && missing+=("PROD_VM_HOST")
+          [[ -z "$PROD_VM_USER"        ]] && missing+=("PROD_VM_USER")
+          [[ -z "$PROD_VM_SSH_KEY"     ]] && missing+=("PROD_VM_SSH_KEY")
+          [[ -z "$PROD_VM_KNOWN_HOSTS" ]] && missing+=("PROD_VM_KNOWN_HOSTS")
+
+          if [[ ${#missing[@]} -gt 0 ]]; then
+            echo "ERROR: Missing required secrets in GitHub Environment 'production':"
+            printf '  - %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+          echo "Preflight passed."
+          echo "  Commit : ${{ github.sha }}"
+          echo "  Host   : $PROD_VM_HOST"
+          echo "  Inputs : rebuild=${{ inputs.rebuild_services }} sql=${{ inputs.run_sql_cleanup }} carousel=${{ inputs.run_carousel_regen }}"
+
+      # ── 2. Set up SSH agent ─────────────────────────────────────────────────
+      - name: Set up SSH
+        env:
+          PROD_VM_SSH_KEY:     ${{ secrets.PROD_VM_SSH_KEY }}
+          PROD_VM_KNOWN_HOSTS: ${{ secrets.PROD_VM_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+
+          printf '%s\n' "$PROD_VM_SSH_KEY" > ~/.ssh/prod_vm_key
+          chmod 600 ~/.ssh/prod_vm_key
+
+          printf '%s\n' "$PROD_VM_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      # ── 3. Validate OCI env vars are present inside the running containers ──
+      #    This catches the case where .env was not updated (PASO 1 skipped).
+      - name: Validate OCI env vars on VM (PASO 1 check)
+        env:
+          VM_HOST: ${{ secrets.PROD_VM_HOST }}
+          VM_USER: ${{ secrets.PROD_VM_USER }}
+          VM_PORT: ${{ secrets.PROD_VM_PORT }}
+        run: |
+          PORT="${VM_PORT:-22}"
+
+          ssh \
+            -i ~/.ssh/prod_vm_key \
+            -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${VM_USER}@${VM_HOST}" \
+            bash -s << 'REMOTE_SCRIPT'
+          set -euo pipefail
+          cd /home/opc
+
+          echo "=== Checking OCI env vars in running api container ==="
+
+          # Check vars exist inside the container (sourced from .env at compose up time)
+          missing_vars=()
+          for var in OCI_S3_ENDPOINT_URL OCI_S3_ACCESS_KEY OCI_S3_SECRET_KEY STORAGE_BACKEND; do
+            val=$(docker compose exec -T api env 2>/dev/null | grep "^${var}=" | cut -d'=' -f2- || true)
+            if [[ -z "$val" ]]; then
+              missing_vars+=("$var")
+            else
+              # Mask secrets in logs
+              if [[ "$var" == *SECRET* || "$var" == *KEY* ]]; then
+                echo "  ✓ ${var}=***"
+              else
+                echo "  ✓ ${var}=${val}"
+              fi
+            fi
+          done
+
+          if [[ ${#missing_vars[@]} -gt 0 ]]; then
+            echo ""
+            echo "ERROR: The following OCI vars are missing inside the 'api' container:"
+            printf '  - %s\n' "${missing_vars[@]}"
+            echo ""
+            echo "Action required:"
+            echo "  1. Edit /home/opc/.env on the VM with the OCI credentials (PASO 1 from walkthrough.md)."
+            echo "  2. Run: docker compose up -d  (to reload env vars)"
+            echo "  3. See docs/ops/storage-runbook.md for full instructions."
+            exit 1
+          fi
+
+          # Also warn if STORAGE_BACKEND is not oci
+          backend=$(docker compose exec -T api env 2>/dev/null | grep "^STORAGE_BACKEND=" | cut -d'=' -f2- || true)
+          if [[ "$backend" != "oci" ]]; then
+            echo "WARNING: STORAGE_BACKEND=${backend}. Expected 'oci'."
+            echo "         Update /home/opc/.env → STORAGE_BACKEND=oci and restart containers."
+            exit 1
+          fi
+
+          echo "All OCI vars validated — STORAGE_BACKEND=oci"
+          REMOTE_SCRIPT
+
+      # ── 4. (Optional) Rebuild api + worker services ─────────────────────────
+      - name: Rebuild modified services (PASO 3)
+        if: inputs.rebuild_services == true
+        env:
+          VM_HOST: ${{ secrets.PROD_VM_HOST }}
+          VM_USER: ${{ secrets.PROD_VM_USER }}
+          VM_PORT: ${{ secrets.PROD_VM_PORT }}
+        run: |
+          PORT="${VM_PORT:-22}"
+
+          ssh \
+            -i ~/.ssh/prod_vm_key \
+            -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${VM_USER}@${VM_HOST}" \
+            bash -s << 'REMOTE_SCRIPT'
+          set -euo pipefail
+          cd /home/opc
+
+          echo "=== Rebuilding api + worker-analysis + worker-reports ==="
+          docker compose build --no-cache api worker-analysis worker-reports
+
+          echo "=== Bringing up all services ==="
+          docker compose up -d
+
+          echo "=== Waiting 15s for services to stabilize ==="
+          sleep 15
+
+          echo "=== Container status ==="
+          docker compose ps
+          REMOTE_SCRIPT
+
+      # ── 5. Verify worker-reports container is running ───────────────────────
+      - name: Verify worker-reports is running (PASO 3 check)
+        env:
+          VM_HOST: ${{ secrets.PROD_VM_HOST }}
+          VM_USER: ${{ secrets.PROD_VM_USER }}
+          VM_PORT: ${{ secrets.PROD_VM_PORT }}
+        run: |
+          PORT="${VM_PORT:-22}"
+
+          ssh \
+            -i ~/.ssh/prod_vm_key \
+            -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${VM_USER}@${VM_HOST}" \
+            bash -s << 'REMOTE_SCRIPT'
+          set -euo pipefail
+          cd /home/opc
+
+          echo "=== Checking worker-reports container (V-05) ==="
+          status=$(docker compose ps --format json 2>/dev/null \
+            | python3 -c "
+          import sys, json
+          for line in sys.stdin:
+            line = line.strip()
+            if not line:
+              continue
+            try:
+              s = json.loads(line)
+            except Exception:
+              continue
+            if 'worker-reports' in s.get('Name', '') or s.get('Service', '') == 'worker-reports':
+              print(s.get('State', 'unknown'))
+          " || true)
+
+          if [[ -z "$status" ]]; then
+            echo "ERROR: worker-reports container not found."
+            echo "       Verify docker-compose.yml includes the 'worker-reports' service."
+            echo "       Then run this workflow again with 'rebuild_services=true'."
+            docker compose ps
+            exit 1
+          fi
+
+          if [[ "$status" != "running" ]]; then
+            echo "ERROR: worker-reports is in state '${status}' — expected 'running'."
+            docker compose logs --tail=50 worker-reports || true
+            exit 1
+          fi
+
+          echo "✓ worker-reports is running (V-05 passed)"
+          REMOTE_SCRIPT
+
+      # ── 6. (Optional — ONE-SHOT) Apply SQL cleanup ──────────────────────────
+      - name: Apply stale URL cleanup SQL (PASO 4 — ONE-SHOT)
+        if: inputs.run_sql_cleanup == true
+        env:
+          VM_HOST: ${{ secrets.PROD_VM_HOST }}
+          VM_USER: ${{ secrets.PROD_VM_USER }}
+          VM_PORT: ${{ secrets.PROD_VM_PORT }}
+        run: |
+          PORT="${VM_PORT:-22}"
+
+          ssh \
+            -i ~/.ssh/prod_vm_key \
+            -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${VM_USER}@${VM_HOST}" \
+            bash -s << 'REMOTE_SCRIPT'
+          set -euo pipefail
+          cd /home/opc
+
+          echo "=== Applying fix_stale_minio_urls.sql (PASO 4) ==="
+
+          if [[ ! -f scripts/fix_stale_minio_urls.sql ]]; then
+            echo "ERROR: scripts/fix_stale_minio_urls.sql not found."
+            exit 1
+          fi
+
+          # Run inside the api container which has DATABASE_URL available
+          docker compose exec -T api \
+            bash -c 'psql "$DATABASE_URL" -f /app/scripts/fix_stale_minio_urls.sql'
+
+          echo ""
+          echo "=== Validating cleanup result (V-04) ==="
+          remaining=$(docker compose exec -T api \
+            bash -c "psql \"\$DATABASE_URL\" -tAc \"SELECT COUNT(*) FROM satellite_images WHERE thumbnail_url LIKE 'http://127%';\"" \
+            2>/dev/null | tr -d '[:space:]' || echo "ERROR")
+
+          if [[ "$remaining" == "ERROR" ]]; then
+            echo "WARNING: Could not verify cleanup count — check DB access."
+          elif [[ "$remaining" != "0" ]]; then
+            echo "ERROR: ${remaining} rows still have stale 127.* URLs after cleanup."
+            exit 1
+          else
+            echo "✓ V-04 passed — 0 rows with stale 127.* URLs"
+          fi
+          REMOTE_SCRIPT
+
+      # ── 7. Storage health check ─────────────────────────────────────────────
+      - name: Storage health check — backend must be oci (PASO 5)
+        env:
+          VM_HOST: ${{ secrets.PROD_VM_HOST }}
+          VM_USER: ${{ secrets.PROD_VM_USER }}
+          VM_PORT: ${{ secrets.PROD_VM_PORT }}
+        run: |
+          PORT="${VM_PORT:-22}"
+
+          ssh \
+            -i ~/.ssh/prod_vm_key \
+            -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${VM_USER}@${VM_HOST}" \
+            bash -s << 'REMOTE_SCRIPT'
+          set -euo pipefail
+          cd /home/opc
+
+          echo "=== StorageService health check (V-01 / PASO 5) ==="
+
+          result=$(docker compose exec -T api python3 -c "
+          import json, sys
+          try:
+              from app.services.storage_service import StorageService
+              s = StorageService()
+              h = s.health_check()
+              print(json.dumps(h, indent=2))
+              # Validate expected values
+              assert h.get('backend') == 'oci',    f\"backend={h.get('backend')} — expected 'oci'\"
+              assert h.get('status') == 'healthy', f\"status={h.get('status')} — expected 'healthy'\"
+              assert h.get('accessible') == True,  f\"accessible={h.get('accessible')} — expected True\"
+          except AssertionError as e:
+              print(f'ASSERTION FAILED: {e}', file=sys.stderr)
+              sys.exit(1)
+          except Exception as e:
+              print(f'ERROR: {e}', file=sys.stderr)
+              sys.exit(1)
+          " 2>&1)
+
+          echo "$result"
+
+          if echo "$result" | grep -q "ERROR\|ASSERTION FAILED"; then
+            echo ""
+            echo "Storage health check FAILED."
+            echo "Hints:"
+            echo "  1. Run: docker compose exec api env | grep OCI  — verify vars are loaded."
+            echo "  2. Verify OCI bucket permissions for the Customer Secret Key."
+            exit 1
+          fi
+
+          echo "✓ V-01 passed — StorageService backend=oci, status=healthy"
+          REMOTE_SCRIPT
+
+      # ── 8. (Optional) Regenerate carousel thumbnails ────────────────────────
+      - name: Regenerate carousel thumbnails (PASO 6)
+        if: inputs.run_carousel_regen == true
+        env:
+          VM_HOST: ${{ secrets.PROD_VM_HOST }}
+          VM_USER: ${{ secrets.PROD_VM_USER }}
+          VM_PORT: ${{ secrets.PROD_VM_PORT }}
+        run: |
+          PORT="${VM_PORT:-22}"
+
+          ssh \
+            -i ~/.ssh/prod_vm_key \
+            -p "$PORT" \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=30 \
+            -o BatchMode=yes \
+            "${VM_USER}@${VM_HOST}" \
+            bash -s << 'REMOTE_SCRIPT'
+          set -euo pipefail
+          cd /home/opc
+
+          echo "=== Regenerating carousel thumbnails (PASO 6) ==="
+
+          result=$(docker compose exec -T api python3 -c "
+          import json, sys
+          try:
+              from app.db.session import SessionLocal
+              from app.services.imagery_service import ImageryService
+              db = SessionLocal()
+              svc = ImageryService(db)
+              result = svc.run_carousel(max_fires=20, force_refresh=True)
+              print(json.dumps(result, indent=2))
+              db.close()
+              errors = result.get('errors', [])
+              if errors:
+                  print(f'WARNING: {len(errors)} error(s) during carousel regen:', file=sys.stderr)
+                  for e in errors:
+                      print(f'  - {e}', file=sys.stderr)
+                  sys.exit(1)
+          except Exception as e:
+              print(f'ERROR: {e}', file=sys.stderr)
+              sys.exit(1)
+          " 2>&1)
+
+          echo "$result"
+
+          if echo "$result" | grep -q "^ERROR:"; then
+            echo "Carousel regeneration FAILED."
+            exit 1
+          fi
+
+          echo "✓ Carousel thumbnails regenerated successfully"
+          REMOTE_SCRIPT
