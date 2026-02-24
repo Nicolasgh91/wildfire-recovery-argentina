@@ -55,16 +55,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR))
 load_dotenv(dotenv_path=BASE_DIR / ".env")
 
-# Usar /tmp/logs en Docker para evitar errores de permisos
-LOG_DIR = Path("/tmp/logs") if os.environ.get("ENVIRONMENT") else (BASE_DIR / "logs")
-LOG_DIR.mkdir(exist_ok=True)
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(LOG_DIR / "firms_incremental.log", mode='a')
+        logging.FileHandler("/tmp/firms_incremental.log", mode='a')
     ]
 )
 logger = logging.getLogger(__name__)
