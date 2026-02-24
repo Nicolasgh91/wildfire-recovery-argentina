@@ -88,12 +88,13 @@ postgres_data/
 # *.sql excluded from ignore so database/migrations/*.sql can be tracked.
 # Data dumps belong in data/ (already ignored above) not in the repo root.
 supabase
-
+data\raw\firms\0_historical_detections_2015_2026.csv
+data/raw/firms/0_historical_detections_2015_2026.csv
 # Data & Bloatware
 # data/
 *.zip
 *.tar.gz
-*.csv
+#*.csv
 *.tiff
 *.bak
 temp_files/
