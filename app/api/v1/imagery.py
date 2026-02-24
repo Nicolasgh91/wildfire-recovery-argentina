@@ -11,10 +11,12 @@ from app.core.security import require_admin
 from app.schemas.imagery import RefreshResponse
 from app.services.gee_service import GEEAuthenticationError, GEERateLimitError
 from app.services.imagery_service import ImageryService
+from app.core.rate_limiter import make_generation_rate_limiter
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(dependencies=[Depends(require_admin)])
+_generation_rate_limit = make_generation_rate_limiter()
+router = APIRouter(dependencies=[Depends(require_admin), Depends(_generation_rate_limit)])
 
 
 @router.post(

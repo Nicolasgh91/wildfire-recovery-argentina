@@ -764,6 +764,11 @@ class ImageryService:
                 }
             )
 
+        if len(slides) != len(VISUALS):
+            self.db.rollback()
+            logger.error("Atomic check failed for episode %s: expected %d slides, got %d", episode.id, len(VISUALS), len(slides))
+            return {"status": "skipped", "reason": "partial_generation"}
+
         self._update_episode(episode.id, metadata.image_id, slides)
         if is_fire_event:
             self._update_fire_event(representative.id, metadata.image_id, slides)
