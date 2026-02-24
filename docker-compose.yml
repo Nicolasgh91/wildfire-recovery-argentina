@@ -48,6 +48,11 @@ services:
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
       OCI_CONFIG_FILE: /home/opc/.oci/config
 
+      # Google Earth Engine (independent from storage)
+      GEE_PROJECT_ID: ${GEE_PROJECT_ID:-}
+      GEE_SERVICE_ACCOUNT_EMAIL: ${GEE_SERVICE_ACCOUNT_EMAIL:-}
+      GEE_PRIVATE_KEY_PATH: ${GEE_PRIVATE_KEY_PATH:-/run/secrets/gee-service-account.json}
+
       # Celery/Redis
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
