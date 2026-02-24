@@ -15,7 +15,7 @@ CANONICAL_EPISODE_FLOW_DEFAULTS: dict[str, float | int] = {
     "event_temporal_window_hours": 48,
     "event_monitoring_window_hours": 168,
     "episode_spatial_epsilon_meters": 6000.0,
-    "episode_temporal_window_hours": 96,
+    "episode_temporal_window_hours": 720,
 }
 
 

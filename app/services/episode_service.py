@@ -119,39 +119,61 @@ class EpisodeService:
             return default
         return max(1, hours)
 
+    def _get_episode_window_hours(self) -> int:
+        """Lee episode_temporal_window_hours de system_parameters con fallback a 720."""
+        try:
+            from app.services.episode_flow_parameters import get_parameter
+            value = get_parameter("episode_temporal_window_hours")
+            return int(value) if value is not None else 720
+        except Exception:
+            logger.warning("Could not read episode_temporal_window_hours, using default 720")
+            return 720
+
     def _resolve_episode_status(
         self,
-        last_seen_at: Optional[datetime],
         event_statuses: set[str],
-        *,
-        grace_hours: int,
+        last_seen_at: datetime | None,
+        start_date: datetime | None = None,
+        window_hours: int | None = None,
     ) -> str:
-        if last_seen_at is None:
-            return "extinct"
+        """Resuelve el estado de un episodio basándose en sus eventos y ventana temporal.
 
-        if last_seen_at.tzinfo is None:
-            last_seen_at = last_seen_at.replace(tzinfo=timezone.utc)
+        Reglas (en orden de prioridad):
+            1. Si al menos 1 evento está activo → 'active'
+            2. Si pasó más tiempo que la ventana desde last_seen_at → 'extinct'
+            3. En cualquier otro caso → 'monitoring'
 
-        now = datetime.now(timezone.utc)
-        if now - last_seen_at > timedelta(hours=grace_hours):
-            return "extinct"
+        Args:
+            event_statuses: conjunto de estados de los eventos asociados al episodio.
+            last_seen_at: timestamp de la última actividad detectada.
+            start_date: fallback si last_seen_at es None.
+            window_hours: ventana temporal en horas. Si None, lee de system_parameters.
 
-        unknown_statuses = sorted(
-            status
-            for status in event_statuses
-            if status not in {"active", "monitoring", "extinct"}
-        )
-        if unknown_statuses:
-            logger.warning(
-                "Unknown fire_event statuses while resolving episode status: %s",
-                unknown_statuses,
-            )
-
+        Returns:
+            Estado del episodio: 'active', 'monitoring' o 'extinct'.
+        """
         if "active" in event_statuses:
             return "active"
-        if "monitoring" in event_statuses:
+
+        if window_hours is None:
+            window_hours = self._get_episode_window_hours()
+
+        reference_date = last_seen_at or start_date
+        if reference_date is None:
+            logger.warning("Episode has no last_seen_at nor start_date, defaulting to monitoring")
             return "monitoring"
-        return "active"
+
+        now = datetime.now(timezone.utc)
+        if reference_date.tzinfo is None:
+            reference_date = reference_date.replace(tzinfo=timezone.utc)
+
+        elapsed = now - reference_date
+        window = timedelta(hours=window_hours)
+
+        if elapsed >= window:
+            return "extinct"
+
+        return "monitoring"
 
     def create_episode(self, event: EventPayload, clustering_version_id: UUID) -> UUID:
         provinces = [event.province] if event.province else []
@@ -475,9 +497,10 @@ class EpisodeService:
         else:
             grace_hours = self._resolve_inactive_grace_hours()
             status = self._resolve_episode_status(
-                last_seen_at,
-                status_values,
-                grace_hours=grace_hours,
+                event_statuses=status_values,
+                last_seen_at=last_seen_at,
+                start_date=row["start_date"],
+                window_hours=grace_hours,
             )
 
         gee_candidate = event_count >= min_points

@@ -565,3 +565,32 @@ def make_payments_rate_limiter():
             )
     
     return _limit
+
+def make_generation_rate_limiter():
+    """
+    Rate limiter for heavy generation endpoints like satellites or modeling.
+    
+    Limits:
+    - Authenticated User/Admin: 5/6 hours
+    - Anonymous IP: 0 (Auth required)
+    """
+    async def _limit(
+        request: Request,
+        user: Optional[UserPrincipal] = Depends(get_current_user_optional),
+    ) -> None:
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required.",
+            )
+            
+        key = f"rl:generation:key:{user.key}"
+        count = _backend.increment(key, 6 * 3600)  # 6 hours
+        if count > 5:
+            logger.warning("Generation rate limit exceeded for key %s", user.key[:8])
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded (5 requests per 6 hours).",
+            )
+            
+    return _limit

@@ -233,12 +233,12 @@ app.include_router(
 )
 
 # UC-06 / UC-F12: Vegetation Recovery Monitoring (VAE)
-# GET endpoints are public (read-only data for fire detail page).
-# POST /recovery/trigger has its own Depends(get_current_user) for admin-only access.
+# Endpoints are secured via get_current_user
 app.include_router(
     monitoring.router,
     prefix=f"{settings.API_V1_PREFIX}/monitoring",
     tags=["monitoring"],
+    dependencies=[Depends(get_current_user)],
 )
 
 # UC-02, UC-11: Reports (Judicial, Historical)

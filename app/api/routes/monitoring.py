@@ -41,7 +41,7 @@ except ImportError:
     from app.api.deps import get_db
 
 from app.api.auth_deps import get_current_user
-from app.core.rate_limiter import make_rate_limiter
+from app.core.rate_limiter import make_generation_rate_limiter
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -52,8 +52,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Rate limiter for trigger endpoint: 5 requests/day per IP (admin only anyway)
-_trigger_rate_limit = make_rate_limiter(limit_ip_daily=5)
+# Rate limiter for trigger endpoint: 5 requests/6 hours per user
+_trigger_rate_limit = make_generation_rate_limiter()
 
 # =============================================================================
 # SCHEMAS
@@ -270,8 +270,11 @@ async def get_recovery_summary(
             {"province": province, "min_months": min_months, "limit": limit},
         ).fetchall()
     except Exception as exc:
-        logger.error("Failed to query recovery summary: %s", exc)
-        results = []
+        logger.error("Failed to query recovery summary: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Servicio de análisis temporalmente no disponible, reintente en unos instantes.",
+        )
 
     fires = []
     status_counts = {
@@ -419,8 +422,11 @@ async def get_recovery_status(
             {"fire_id": str(fire_event_id), "max_months": max_months},
         ).fetchall()
     except Exception as exc:
-        logger.error("Failed to query vegetation_monitoring: %s", exc)
-        rows = []
+        logger.error("Failed to query vegetation_monitoring: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Servicio de análisis temporalmente no disponible, reintente en unos instantes.",
+        )
 
     query_duration_ms = int((time.time() - start_time) * 1000)
 
@@ -549,8 +555,11 @@ async def get_land_use_changes(
     try:
         rows = db.execute(query, {"fire_id": str(fire_event_id)}).fetchall()
     except Exception as exc:
-        logger.error("Failed to query land_use_changes: %s", exc)
-        rows = []
+        logger.error("Failed to query land_use_changes: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Servicio de análisis temporalmente no disponible, reintente en unos instantes.",
+        )
 
     changes = []
     violation_count = 0
@@ -640,10 +649,10 @@ async def trigger_recovery_analysis(
             queue="vae",
         )
     except Exception as exc:
-        logger.error("Failed to enqueue VAE tasks: %s", exc)
+        logger.error("Failed to enqueue VAE tasks: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Task queue unavailable",
+            detail="Servicio de análisis temporalmente no disponible, reintente en unos instantes.",
         )
 
     return TriggerResponse(

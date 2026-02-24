@@ -1,102 +1,164 @@
-# Branding Migration Report: ForestGuard -> Vestigia
+# Branding Migration Report: UI Inventory For Final Rename
 
-## 1. References Finding
-We scanned the codebase for "ForestGuard", "Wildfire Recovery", and "forestguard".
+## 1. Cobertura y criterio
 
-### Summary
-- **"ForestGuard"**: ~113 occurences.
-  - Hardcoded in UI components (`Navbar`, `Footer`, `Login`, `Register`).
-  - Hardcoded in Scripts (`setup-ssl.sh`, `deploy.sh`, `celery_app.py`, writers in `scripts/`).
-  - Hardcoded in Documentation (`README.md`, `docs/`).
-  - Hardcoded in Docker/Nginx configs.
-- **"Wildfire Recovery"**: ~1 occurence (in `deployment/forestguard.service`).
-- **"forestguard"**: ~215 occurences.
-  - Used in URLs/Domains (`forestguard.freedynamicdns.org`).
-  - Used in S3/GCS Bucket names (`forestguard-images`, etc.).
-  - Used in package names (`frontend/package.json`).
-  - Used in file paths/service names.
+### Alcance
+- Solo UI renderizada.
+- Se incluyen términos de marca y dominio funcional en UI: `ForestGuard`, `Vestigia`, `Wildfire/wildfires`.
+- Se considera que `Wildfire/wildfires` debe quedar centralizado para el rename final.
 
-### Detailed References (Sample)
-*Full list analyzed internally.*
+### Fuentes verificadas
+- `frontend/src/App.tsx` (rutas y shell layout).
+- `frontend/src/lib/routing.ts` (`HOME_PATH = /home`).
+- `frontend/src/data/translations.ts` (ES/EN).
+- `frontend/index.html` (title/meta SEO).
+- `frontend/src/components/layout/navbar.tsx`.
+- `frontend/src/components/layout/footer.tsx`.
+- `frontend/src/features/navigation/components/navigation-drawer.tsx`.
+- `frontend/src/features/navigation/components/navigation-topbar-tablet.tsx`.
+- `frontend/src/features/navigation/components/external-confirm-dialog.tsx`.
+- `frontend/src/features/navigation/config/navigation.ts`.
+- `frontend/src/features/navigation/config/public-sources.ts`.
+- `frontend/src/pages/*` (mapeo page-by-page).
+- `frontend/src/config/brand.ts` (fuente central actual).
 
-#### Frontend UI
-- `frontend/src/components/layout/navbar.tsx`: `<span ...>ForestGuard</span>`
-- `frontend/src/components/layout/footer.tsx`: Copyright, Links.
-- `frontend/src/pages/Login.tsx`, `Register.tsx`: Titles.
-- `frontend/index.html`: `<title>ForestGuard...</title>`
+### Reglas de clasificación
+- `texto_plano`: literal hardcodeado o texto i18n no parametrizado por `brand.ts`.
+- `variable`: valor inyectado desde `BRAND`.
+- `centralizado en brand.ts = si`: depende de `BRAND` hoy.
+- `centralizado en brand.ts = no`: no depende de `BRAND` hoy.
+- `centralizado en brand.ts = parcial`: mezcla de contenido centralizado y no centralizado en la misma superficie.
 
-#### Backend & Scripts
-- `app/core/config.py` (checked via grep): Likely contains project name.
-- `scripts/setup-ssl.sh`, `renew-ssl.sh`: echo "ForestGuard..."
-- `workers/__init__.py`: "ForestGuard Workers Package"
+### Exclusiones explícitas
+- No se incluye inventario principal de claves no renderizadas actualmente:
+  - `loginWelcome`.
+  - `footerExternalDailyReportTooltip`.
+- No se incluyen strings técnicos no visibles en UI (ejemplo: storage keys, comments, package name).
 
-#### Infrastructure / DevOps
-- `nginx.conf`: `server_name forestguard.freedynamicdns.org;`
-- `docker-compose.yml`: container names or labels (to be verified).
-- `README.md`: Title and descriptions.
+## 2. Inventario global (shell UI)
 
-## 2. Plan for "Single Source of Truth"
+| Superficie | Archivo | Clave/Literal | Tipo (texto_plano\|variable) | Centralizado en brand.ts (si/no) | Observación |
+| --- | --- | --- | --- | --- | --- |
+| Label de marca principal (navbar/footer/drawer/topbar/login/register) | `frontend/src/components/layout/navbar.tsx`;<br>`frontend/src/components/layout/footer.tsx`;<br>`frontend/src/features/navigation/components/navigation-drawer.tsx`;<br>`frontend/src/features/navigation/components/navigation-topbar-tablet.tsx`;<br>`frontend/src/pages/Login.tsx`;<br>`frontend/src/pages/Register.tsx` | `BRAND.name` | variable | si | Valor actual: `Vestigia`. En `App.tsx`, el shell global no se renderiza en `/`, `/login`, `/register`. |
+| SEO title HTML | `frontend/index.html` | `<title>Vestigia | Monitoreo de incendios forestales</title>` | texto_plano | no | Debe pasar a `BRAND.seo.title`. |
+| SEO meta description HTML | `frontend/index.html` | `Argentina wildfire recovery and monitoring platform...` | texto_plano | no | Contiene `wildfire/wildfires`; debe pasar a `BRAND.seo.description`. |
+| Link externo API docs | `frontend/src/features/navigation/config/navigation.ts` | `https://forestguard.freedynamicdns.org/docs` | texto_plano | no | URL hardcodeada; debe pasar a `BRAND.links.docsUrl`. |
+| Claim en footer (EN) | `frontend/src/data/translations.ts` (key `footerBrandLine1`), consumida en `frontend/src/components/layout/footer.tsx` | `Monitoring and recovery platform for wildfires in Argentina.` | texto_plano | no | Debe parametrizar `wildfires` con `{wildfireTerm}`. |
+| Título de salida a externos | `frontend/src/data/translations.ts` (key `footerLeavingTitle`), consumida en `frontend/src/features/navigation/components/external-confirm-dialog.tsx` | `You are leaving ForestGuard` / `Estás saliendo de ForestGuard` | texto_plano | no | Debe parametrizar `ForestGuard` con `{brandName}`. |
+| Label reporte diario (EN) | `frontend/src/data/translations.ts` (key `footerExternalDailyReportLabel`), consumida vía `frontend/src/features/navigation/config/navigation.ts` | `Daily wildfire report` | texto_plano | no | Debe parametrizar `wildfire` con `{wildfireTerm}`. |
+| Tooltip SNMF (EN) | `frontend/src/data/translations.ts` (key `footerExternalSnmfTooltip`), consumida vía `frontend/src/features/navigation/config/public-sources.ts` | `Official SNMF site with wildfire information in Argentina.` | texto_plano | no | Debe parametrizar `wildfire` con `{wildfireTerm}`. |
 
-### Frontend (`frontend/src/config/brand.ts`)
-```typescript
-export const BRAND = {
-  name: "Vestigia", // Was ForestGuard
-  tagline: "Wildfire Recovery & Monitoring",
-  logos: {
-    light: "/assets/branding/logo-light.svg", // TBD
-    dark: "/assets/branding/logo-dark.svg",   // TBD
-  },
-  favicon: "/favicon.ico",
-  meta: {
-    ogImage: "/assets/branding/og-image.jpg",
-  }
-};
+## 3. Inventario por ruta (page-by-page)
+
+| Ruta | Componente | Ocurrencias | Tipo | Centralizado en brand.ts | Acción |
+| --- | --- | --- | --- | --- | --- |
+| `/` | `RootRouteGate` | Sin UI de marca; ruta de redirección por estado de auth. | n/a | n/a | Sin acción (redirección). |
+| `/home` (`HOME_PATH`) | `HomePage` | `fireFeed` (EN: `Wildfire Feed`) + shell global. | texto_plano (i18n) + variable (shell) | parcial | Parametrizar `fireFeed` con `{wildfireTerm}`. |
+| `/map` | `MapPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/audit` | `AuditPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/credits` | `CreditsPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/exploracion` | `ExplorationPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/reports` | `Navigate` (`/exploracion`) | Sin UI de marca; redirección. | n/a | n/a | Sin acción (redirección). |
+| `/profile` | `ProfilePage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/payments/return` | `PaymentReturnPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/certificates` | `CertificatesPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/citizen-report` | `CitizenReportPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/fires` | `Navigate` (`/fires/history`) | Sin UI de marca; redirección. | n/a | n/a | Sin acción (redirección). |
+| `/fires/history` | `FireHistoryPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/fires/:id` | `FireDetailPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/login` | `LoginPage` | `BRAND.name` en header local (sin shell global por `hideChrome`). | variable | si | Sin acción local de texto plano. |
+| `/register` | `RegisterPage` | `registerTitle` (`ForestGuard`, ES/EN) + `BRAND.name` (header y alt de imagen). | texto_plano (i18n) + variable | parcial | Parametrizar `registerTitle` con `{brandName}`. |
+| `/auth/callback` | `AuthCallbackPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/shelters` | `SheltersPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `/faq` | `FaqPage` | `faqSubtitle`, `faqQ1`, `faqA1`, `faqA2`, `faqA4`, `faqA5`, `faqQ6`, `faqA6`, `faqA7`, `faqQ8`, `faqA8`, `faqQ10`, `faqA10`, `faqA11`. | texto_plano (i18n) | no | Parametrizar claves con `{brandName}` y/o `{wildfireTerm}` según corresponda. |
+| `/manual` | `ManualPage` | `manualSubtitle`, `manualGettingStartedP1`, `manualRegisterAccess1`, `manualRegisterAccess4`, `manualReportsP1`, `manualEpisodesP1`. | texto_plano (i18n) | no | Parametrizar claves con `{brandName}`, `{wildfireTerm}`, `{adminEmailDomain}`. |
+| `/glossary` | `GlossaryPage` | `glossarySubtitle`, `glossaryDefLaw`, `glossaryDefHotspot`. | texto_plano (i18n) | no | Parametrizar claves con `{wildfireTerm}`. |
+| `/contact` | `ContactPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+| `*` | `NotFoundPage` | Sin ocurrencias locales; usa shell global. | variable (shell) | si (solo shell) | Sin acción local. |
+
+## 4. Claves i18n a parametrizar
+
+| Clave | Locales con término | Ruta(s) / superficie | Término detectado | Placeholder objetivo |
+| --- | --- | --- | --- | --- |
+| `registerTitle` | ES + EN | `/register` | `ForestGuard` | `{brandName}` |
+| `manualSubtitle` | ES + EN | `/manual` | `ForestGuard` | `{brandName}` |
+| `manualGettingStartedP1` | ES + EN | `/manual` | `ForestGuard` + `wildfire` (EN) | `{brandName}`, `{wildfireTerm}` |
+| `manualRegisterAccess1` | ES + EN | `/manual` | `ForestGuard` | `{brandName}` |
+| `manualRegisterAccess4` | ES + EN | `/manual` | `@forestguard.ar` | `{adminEmailDomain}` |
+| `manualReportsP1` | EN | `/manual` | `wildfires` | `{wildfireTerm}` |
+| `manualEpisodesP1` | ES + EN | `/manual` | `ForestGuard` | `{brandName}` |
+| `faqSubtitle` | EN | `/faq` | `wildfires` | `{wildfireTerm}` |
+| `faqQ1` | ES + EN | `/faq` | `ForestGuard` + `wildfires` (EN) | `{brandName}`, `{wildfireTerm}` |
+| `faqA1` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `faqA2` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `faqA4` | EN | `/faq` | `wildfires` | `{wildfireTerm}` |
+| `faqA5` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `faqQ6` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `faqA6` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `faqA7` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `faqQ8` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `faqA8` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `faqQ10` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `faqA10` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `faqA11` | ES + EN | `/faq` | `ForestGuard` | `{brandName}` |
+| `glossarySubtitle` | EN | `/glossary` | `wildfire` | `{wildfireTerm}` |
+| `glossaryDefLaw` | EN | `/glossary` | `wildfires` | `{wildfireTerm}` |
+| `glossaryDefHotspot` | EN | `/glossary` | `wildfires` | `{wildfireTerm}` |
+| `fireFeed` | EN | `/home` | `Wildfire` | `{wildfireTerm}` |
+| `footerBrandLine1` | EN | Footer | `wildfires` | `{wildfireTerm}` |
+| `footerLeavingTitle` | ES + EN | Diálogo salida a externos | `ForestGuard` | `{brandName}` |
+| `footerExternalDailyReportLabel` | EN | Footer/help links | `wildfire` | `{wildfireTerm}` |
+| `footerExternalSnmfTooltip` | EN | Footer/public sources | `wildfire` | `{wildfireTerm}` |
+
+Claves detectadas con términos de marca pero fuera de alcance principal por no renderizarse hoy:
+- `loginWelcome`.
+- `footerExternalDailyReportTooltip`.
+
+## 5. Brechas respecto de `frontend/src/config/brand.ts`
+
+Estado actual:
+- `BRAND.name` ya se usa en superficies principales de marca.
+
+Brechas abiertas para el rename final:
+- Falta centralizar término funcional `wildfire/wildfires`.
+- Falta centralizar dominio de admins (`@forestguard.ar`).
+- Falta centralizar URL de docs (`/docs` con dominio actual hardcodeado en navegación).
+- Falta centralizar SEO (`title` y `description`) que hoy está hardcodeado en `frontend/index.html`.
+- Falta parametrización i18n por placeholders (`{brandName}`, `{wildfireTerm}`, `{adminEmailDomain}`).
+- Persisten literales de marca en traducciones (`ForestGuard`) fuera de `BRAND`.
+
+## 6. Contrato objetivo para rename final (single source)
+
+```ts
+BRAND = {
+  name,
+  terms: { wildfire: { es, en } },
+  domains: { adminEmailDomain },
+  links: { publicUrl, docsUrl, github },
+  seo: { title: { es, en }, description: { es, en } }
+}
 ```
 
-### Backend (`app/core/brand.py`)
-```python
-class BrandSettings:
-    APP_NAME = "Vestigia"
-    APP_TAGLINE = "Wildfire Recovery & Monitoring"
-    APP_PUBLIC_URL = "https://forestguard.freedynamicdns.org" # Keeping domain for now
-    APP_BRAND_SLUG = "vestigia"
+Placeholders obligatorios en i18n:
+- `{brandName}`
+- `{wildfireTerm}`
+- `{adminEmailDomain}`
 
-brand = BrandSettings()
-```
+Objetivo final:
+- No debe quedar ningún `ForestGuard|Vestigia|Wildfire` hardcodeado en UI fuera de `brand.ts`.
+- Los textos i18n deben consumir placeholders y resolver desde la configuración central.
 
-## 3. Implementation Checklist (Phase 1)
-- [ ] Create config files.
-- [ ] Refactor Frontend components to import `BRAND`.
-- [ ] Refactor Backend templates/reports to import `brand`.
-- [ ] Update `README.md` (carefully, matching new brand but keeping repo context).
+## 7. Casos de prueba y escenarios de aceptación (del reporte)
 
-## 4. Risks & Reversion
-- **Risk**: Breaking assets links if we move logo files without redirects or updates.
-- **Risk**: SSL transparency logs will still show old domain (acceptable).
-- **Mitigation**: We will NOT change the domain `forestguard.freedynamicdns.org` or bucket names in this phase.
-- **Reversion**: Revert commits; the config files allow quick toggling back to "ForestGuard" by changing string values.
+- [ ] Cada ruta declarada en `frontend/src/App.tsx` figura en el inventario page-by-page.
+- [ ] Toda coincidencia UI de `ForestGuard|Vestigia|Wildfire` en `frontend/src` + `frontend/index.html` está documentada.
+- [ ] Cada fila está clasificada como `texto_plano` o `variable`.
+- [ ] Cada fila indica si está centralizada en `brand.ts` (`si/no/parcial`).
+- [ ] Existe lista explícita de brechas accionables para pasar a fuente única.
 
-## 5. Verification Results (Phase 1)
+## 8. Supuestos y defaults aplicados
 
-### Status: COMPLETED WITH WARNINGS
-
-#### Implemented Changes
-- Created `frontend/src/config/brand.ts` and `app/core/brand.py`.
-- Updated `Navbar`, `Footer`, `Login`, `Register`, `index.html`.
-- Updated `app/core/config.py`, `scripts/setup-ssl.sh`, `README.md`, `app/main.py`, `deployment/forestguard.service`.
-- Centralized naming to "Vestigia".
-
-#### Verification Findings
-- **Frontend Build**: Fails with 49 pre-existing TypeScript errors (unrelated to branding).
-  - *Action*: Fixed `vite.config.ts` type errors to progress build.
-  - *Note*: `BRAND` imports are valid and causing no errors.
-- **Backend Tests**: `pytest` found no tests (empty `tests/` directories).
-- **Manual Check**: References to "ForestGuard" replaced in target files.
-  - `forestguard.freedynamicdns.org` preserved as requested.
-  - `forestguard` service/container names preserved as requested.
-
-#### Recommendations for Phase 2
-- [ ] Fix pre-existing 49 TypeScript errors in frontend to enable clean builds.
-- [ ] Populate backend tests.
-- [ ] Create proper logo assets for `frontend/public/assets/branding/`.
-- [ ] Schedule full domain migration (renaming `forestguard.freedynamicdns.org`).
+1. Alcance: solo UI renderizada.
+2. Se consideran ES y EN cuando al menos una locale contiene término de marca.
+3. `Wildfire/wildfires` se considera término de branding editable y se centraliza.
+4. No se incluye en el inventario principal lo no renderizado actualmente (`loginWelcome`, `footerExternalDailyReportTooltip`) ni strings técnicos no visibles.

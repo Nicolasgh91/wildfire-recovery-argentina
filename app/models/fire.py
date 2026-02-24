@@ -59,6 +59,7 @@ class FireEvent(Base):
     # Satelital / carrusel
     last_gee_image_id = Column(String)
     last_update_sat = Column(DateTime(timezone=True))
+    # DEPRECATED: Use FireEpisode.slides_data instead (to be removed in v2.x)
     slides_data = Column(JSONB, server_default=text("'[]'::jsonb"))
 
     # Auditoría

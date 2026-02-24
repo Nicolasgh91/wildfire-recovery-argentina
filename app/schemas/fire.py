@@ -128,7 +128,11 @@ class FireEventListItem(BaseModel):
     count_protected_areas: Optional[int] = None
 
     status: Optional[FireStatus] = None
-    slides_data: Optional[List[SlideItem]] = None
+    slides_data: Optional[List[SlideItem]] = Field(
+        None, 
+        deprecated=True, 
+        description="DEPRECATED: Usar FireEpisode.slides_data en su lugar. Se eliminará en futuras versiones."
+    )
 
     @model_validator(mode="after")
     def _ensure_status(self):

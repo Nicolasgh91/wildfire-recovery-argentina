@@ -140,7 +140,12 @@ def list_fire_episodes(
         raise HTTPException(status_code=400, detail="Invalid mode. Use active or recent.")
 
     if mode_value == "active":
-        query = query.filter(FireEpisode.status.in_(["active", "monitoring"]))
+        query = query.filter(
+            FireEpisode.status.in_(["active", "monitoring"]),
+            FireEpisode.gee_candidate == True,
+            FireEpisode.slides_data.isnot(None),
+            text("jsonb_array_length(fire_episodes.slides_data) > 0")
+        )
     elif mode_value == "recent":
         query = query.filter(
             text(
