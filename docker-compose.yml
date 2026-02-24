@@ -350,7 +350,7 @@ services:
     networks:
       - forestguard
     
-    command: celery -A workers.celery_app beat --loglevel=info
+    command: celery -A workers.celery_app beat --loglevel=info -s /tmp/celerybeat-schedule
     healthcheck:
       test: [ "CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1" ]
       interval: 30s
