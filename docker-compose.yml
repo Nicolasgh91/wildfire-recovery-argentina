@@ -341,6 +341,7 @@ services:
 
       ENVIRONMENT: ${ENVIRONMENT:-production}
       SECRET_KEY: ${SECRET_KEY}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
     
     depends_on:
       redis:
