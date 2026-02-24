@@ -300,3 +300,65 @@ def compose_destruction_report(self, analysis_results, fire_event_id, report_dat
         'report_date': report_date,
         'report_type': 'judicial_destruction',
     }
+
+
+@celery_app.task(
+    bind=True,
+    name='workers.tasks.destruction.batch_destruction_detection',
+    queue='vae',
+    max_retries=2,
+)
+def batch_destruction_detection(self, fire_event_ids=None, max_events=50):
+    """
+    Ejecuta detección de cambios de uso para eventos activos.
+
+    Cuando fire_event_ids es None o vacío, consulta la BD para obtener
+    los eventos activos más recientes (< 36 meses). Limita a max_events
+    por ejecución para proteger la cuota GEE.
+
+    Programada mensualmente vía Celery Beat.
+
+    Args:
+        fire_event_ids: Lista de UUIDs (opcional; si vacía, auto-query)
+        max_events: Máximo de eventos a procesar por batch
+    """
+    from app.db.session import SessionLocal
+    from sqlalchemy import text
+
+    try:
+        if not fire_event_ids:
+            db = SessionLocal()
+            try:
+                rows = db.execute(text("""
+                    SELECT fe.id
+                    FROM fire_events fe
+                    WHERE fe.start_date > NOW() - INTERVAL '36 months'
+                      AND fe.status IN ('active', 'monitoring', 'contained')
+                      AND fe.centroid IS NOT NULL
+                    ORDER BY fe.start_date DESC
+                    LIMIT :max_events
+                """), {"max_events": max_events}).fetchall()
+                fire_event_ids = [str(row.id) for row in rows]
+            finally:
+                db.close()
+
+        logger.info(f"Batch destruction detection: {len(fire_event_ids)} fires...")
+
+        from celery import group as celery_group
+        signatures = [
+            detect_destruction.s(fire_id).set(queue='vae')
+            for fire_id in fire_event_ids
+        ]
+
+        group_result = celery_group(signatures).apply_async() if signatures else None
+
+        return {
+            'total_tasks_enqueued': len(signatures),
+            'fire_events': len(fire_event_ids),
+            'status': 'queued',
+            'group_id': group_result.id if group_result else None,
+        }
+
+    except Exception as exc:
+        logger.error(f"Error in batch destruction detection: {exc}")
+        raise self.retry(exc=exc, countdown=60)

@@ -102,8 +102,10 @@ celery_app.conf.update(
         'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
         'workers.tasks.closure_report_task.generate_closure_reports': {'queue': 'analysis'},
         'workers.tasks.exploration_hd_task.generate_exploration_hd': {'queue': 'analysis'},
-        'workers.tasks.recovery.analyze_recovery': {'queue': 'analysis'},
-        'workers.tasks.destruction.detect_destruction': {'queue': 'analysis'},
+        'workers.tasks.recovery.analyze_recovery': {'queue': 'vae'},
+        'workers.tasks.recovery.batch_recovery_analysis': {'queue': 'vae'},
+        'workers.tasks.destruction.detect_destruction': {'queue': 'vae'},
+        'workers.tasks.destruction.batch_destruction_detection': {'queue': 'vae'},
         'workers.tasks.notification.send_contact_email': {'queue': 'notification'},
         'workers.tasks.export_task.export_fires_async': {'queue': 'analysis'},
         'workers.tasks.pdf_generation_task.generate_pdf_for_job': {'queue': 'reports'},
@@ -150,6 +152,20 @@ celery_app.conf.update(
             'task': 'workers.tasks.cleanup_assets_task.cleanup_expired_assets',
             'schedule': crontab(hour=4, minute=0),  # 04:00 UTC
             'options': {'queue': 'default'}
+        },
+        # UC-F12: Monthly VAE recovery analysis for active fire events
+        'vae-recovery-monthly': {
+            'task': 'workers.tasks.recovery.batch_recovery_analysis',
+            'schedule': crontab(hour=5, minute=0, day_of_month=1),  # 05:00 UTC, 1st of each month
+            'kwargs': {'max_events': 50},
+            'options': {'queue': 'vae'},
+        },
+        # UC-F12: Monthly VAE destruction detection for active fire events
+        'vae-destruction-monthly': {
+            'task': 'workers.tasks.destruction.batch_destruction_detection',
+            'schedule': crontab(hour=6, minute=0, day_of_month=1),  # 06:00 UTC, 1st of each month
+            'kwargs': {'max_events': 50},
+            'options': {'queue': 'vae'},
         },
     },
     

@@ -304,6 +304,16 @@ class VAEService:
         ndvi_change = current_ndvi - baseline_ndvi
 
         # Recovery percentage (0-100)
+        # Fórmula: (current_ndvi / baseline_ndvi) * 100
+        #
+        # NOTA: esta fórmula mide el "porcentaje del NDVI baseline alcanzado",
+        # NO el "porcentaje recuperado desde el nadir post-incendio".
+        # Ejemplo: baseline=0.6, nadir=0.1, actual=0.35 → resultado=58%
+        # (la recuperación real desde el nadir sería 50%)
+        #
+        # Se mantiene esta fórmula por consistencia con datos existentes.
+        # Si se desea cambiar a la fórmula de recuperación real, usar:
+        #   recovery_pct = (current - nadir) / (baseline - nadir) * 100
         if baseline_ndvi > 0:
             recovery_pct = min(100, max(0, (current_ndvi / baseline_ndvi) * 100))
         else:

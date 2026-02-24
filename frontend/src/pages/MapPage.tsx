@@ -84,6 +84,7 @@ export default function MapPage() {
           status,
           hectares: episode.estimated_area_hectares ?? null,
           representative_event_id: episode.representative_event_id ?? episode.id,
+          is_potential_violation: episode.is_potential_violation ?? false,
         } satisfies FireMapItem
       })
   }, [activeData?.episodes, recentData?.episodes])

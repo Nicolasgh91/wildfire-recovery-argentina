@@ -183,19 +183,25 @@ class TriggerResponse(BaseModel):
 
 
 def _classify_status(recovery_pct: Optional[float], has_activity: bool) -> str:
+    """
+    Clasifica el estado de recuperación según datos del último registro.
+    Retorna valores alineados con RecoveryStatusBadge del frontend.
+    """
     if has_activity:
-        return "suspicious"
+        return "anomaly_detected"
     if recovery_pct is None:
-        return "unknown"
+        return "pending"
     if recovery_pct >= 90:
-        return "excellent"
+        return "full_recovery"
     if recovery_pct >= 70:
-        return "good"
-    if recovery_pct >= 50:
-        return "moderate"
-    if recovery_pct >= 25:
-        return "poor"
-    return "critical"
+        return "advanced_recovery"
+    if recovery_pct >= 40:
+        return "moderate_recovery"
+    if recovery_pct >= 10:
+        return "early_recovery"
+    if recovery_pct >= 0:
+        return "stalled"
+    return "not_started"
 
 
 # =============================================================================
@@ -278,13 +284,14 @@ async def get_recovery_summary(
 
     fires = []
     status_counts = {
-        "excellent": 0,
-        "good": 0,
-        "moderate": 0,
-        "poor": 0,
-        "critical": 0,
-        "suspicious": 0,
-        "unknown": 0,
+        "full_recovery": 0,
+        "advanced_recovery": 0,
+        "moderate_recovery": 0,
+        "early_recovery": 0,
+        "stalled": 0,
+        "not_started": 0,
+        "anomaly_detected": 0,
+        "pending": 0,
     }
     suspicious_count = 0
 
@@ -303,7 +310,7 @@ async def get_recovery_summary(
             has_activity = True
 
         recovery_status = _classify_status(recovery_pct, has_activity)
-        is_suspicious = recovery_status == "suspicious"
+        is_suspicious = recovery_status == "anomaly_detected"
         if is_suspicious:
             suspicious_count += 1
 
@@ -325,7 +332,7 @@ async def get_recovery_summary(
     return RecoverySummaryResponse(
         total_fires=len(fires),
         fires_analyzed=len(
-            [f for f in fires if f.recovery_status != "unknown"]
+            [f for f in fires if f.recovery_status != "pending"]
         ),
         status_breakdown=status_counts,
         suspicious_count=suspicious_count,
@@ -347,12 +354,13 @@ async def get_recovery_summary(
     an empty monitoring_data array.
 
     **Recovery Status Classifications:**
-    - `excellent`: >90% recovered
-    - `good`: 70-90% recovered
-    - `moderate`: 50-70% recovered
-    - `poor`: 25-50% recovered
-    - `critical`: <25% recovered
-    - `suspicious`: Abnormal pattern detected
+    - `full_recovery`: >=90% recovered
+    - `advanced_recovery`: 70-90% recovered
+    - `moderate_recovery`: 40-70% recovered
+    - `early_recovery`: 10-40% recovered
+    - `stalled`: 0-10% recovered
+    - `not_started`: Negative recovery
+    - `anomaly_detected`: Abnormal pattern detected
     - `pending`: No monitoring data yet
     """,
     responses={

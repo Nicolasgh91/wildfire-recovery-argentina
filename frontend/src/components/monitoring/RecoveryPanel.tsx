@@ -1,51 +1,15 @@
-import { AlertTriangle, Leaf, ShieldAlert } from 'lucide-react'
+import { AlertTriangle, Leaf } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NdviChart } from '@/components/ndvi-chart'
 import { RecoveryStatusBadge } from './RecoveryStatusBadge'
+import { LandUseChangeCard } from './LandUseChangeCard'
 import { useRecovery } from '@/hooks/queries/useRecovery'
 import { useLandUseChanges } from '@/hooks/queries/useLandUseChanges'
-import type { LandUseChangeItem } from '@/services/endpoints/monitoring'
 
 interface RecoveryPanelProps {
   fireEventId: string
-}
-
-function LandUseChangeCard({ change }: { change: LandUseChangeItem }) {
-  const severityColors: Record<string, string> = {
-    critical: 'border-red-200 bg-red-50 text-red-800',
-    high: 'border-orange-200 bg-orange-50 text-orange-800',
-    medium: 'border-amber-200 bg-amber-50 text-amber-800',
-    low: 'border-muted bg-muted/40 text-muted-foreground',
-  }
-
-  return (
-    <div className="rounded-lg border border-border p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-foreground">{change.change_type}</span>
-        <div className="flex gap-2">
-          {change.change_severity && (
-            <Badge variant="outline" className={severityColors[change.change_severity] ?? severityColors.low}>
-              {change.change_severity}
-            </Badge>
-          )}
-          {change.is_potential_violation && (
-            <Badge variant="destructive" className="gap-1">
-              <ShieldAlert className="h-3 w-3" />
-              Violacion
-            </Badge>
-          )}
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        <span>Detectado: {new Date(change.change_detected_at).toLocaleDateString()}</span>
-        {change.months_after_fire != null && <span>{change.months_after_fire} meses post-incendio</span>}
-        {change.affected_area_hectares != null && <span>{change.affected_area_hectares.toFixed(1)} ha</span>}
-      </div>
-      {change.notes && <p className="text-xs text-muted-foreground">{change.notes}</p>}
-    </div>
-  )
 }
 
 export function RecoveryPanel({ fireEventId }: RecoveryPanelProps) {
@@ -54,10 +18,32 @@ export function RecoveryPanel({ fireEventId }: RecoveryPanelProps) {
 
   if (recoveryLoading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-[300px] w-full" />
-        <Skeleton className="h-24 w-full" />
+      <div className="space-y-4 animate-pulse">
+        {/* Header skeleton */}
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-5 w-5 rounded" />
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-6 w-24 rounded-full" />
+        </div>
+        {/* Metric cards skeleton */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <Skeleton className="mb-2 h-4 w-24" />
+                <Skeleton className="h-7 w-16" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        {/* Chart skeleton */}
+        <Skeleton className="h-[300px] w-full rounded-xl" />
+        {/* Land use cards skeleton */}
+        <div className="space-y-2">
+          {[1, 2].map((i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
       </div>
     )
   }
@@ -72,6 +58,23 @@ export function RecoveryPanel({ fireEventId }: RecoveryPanelProps) {
   }
 
   if (!recovery) return null
+
+  if (recovery.recovery_status === 'pending' && recovery.monitoring_data.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+        <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-4">
+          <Leaf className="w-8 h-8 text-emerald-400" />
+        </div>
+        <h3 className="text-sm font-medium text-foreground mb-1">
+          Analisis de recuperacion pendiente
+        </h3>
+        <p className="text-xs text-muted-foreground max-w-xs">
+          El monitoreo de vegetacion se ejecuta mensualmente. Los datos estaran disponibles
+          una vez que se procese el primer analisis NDVI para este evento.
+        </p>
+      </div>
+    )
+  }
 
   const chartData = recovery.monitoring_data.map((d) => ({
     month: d.date,
