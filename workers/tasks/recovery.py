@@ -181,15 +181,42 @@ def analyze_recovery(self, fire_event_id, months_after=None):
     queue='vae',
     max_retries=2,
 )
-def batch_recovery_analysis(self, fire_event_ids, months_list=None):
+def batch_recovery_analysis(self, fire_event_ids=None, max_events=50, months_list=None):
     """
-    Analiza recuperación en lote para múltiples incendios.
+    Ejecuta análisis de recuperación para eventos activos.
+
+    Cuando fire_event_ids es None o vacío, consulta la BD para obtener
+    los eventos activos más recientes (< 36 meses). Limita a max_events
+    por ejecución para proteger la cuota GEE.
+
+    Programada mensualmente vía Celery Beat.
 
     Args:
-        fire_event_ids: Lista de UUIDs
+        fire_event_ids: Lista de UUIDs (opcional; si vacía, auto-query)
+        max_events: Máximo de eventos a procesar por batch
         months_list: Not used (auto-detected per event), kept for compatibility
     """
+    from app.db.session import SessionLocal
+    from sqlalchemy import text
+
     try:
+        # If no IDs provided, query DB for active events
+        if not fire_event_ids:
+            db = SessionLocal()
+            try:
+                rows = db.execute(text("""
+                    SELECT fe.id
+                    FROM fire_events fe
+                    WHERE fe.start_date > NOW() - INTERVAL '36 months'
+                      AND fe.status IN ('active', 'monitoring', 'contained')
+                      AND fe.centroid IS NOT NULL
+                    ORDER BY fe.start_date DESC
+                    LIMIT :max_events
+                """), {"max_events": max_events}).fetchall()
+                fire_event_ids = [str(row.id) for row in rows]
+            finally:
+                db.close()
+
         logger.info(f"Batch recovery analysis: {len(fire_event_ids)} fires...")
 
         signatures = [

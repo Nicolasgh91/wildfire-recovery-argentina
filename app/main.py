@@ -81,7 +81,7 @@ tags_metadata = [
     },
     {
         "name": "monitoring",
-        "description": "**Vegetation Recovery (UC-06)** - Track NDVI-based vegetation recovery in burnt areas over 36 months. / *Monitoreo de recuperación de vegetación post-incendio.*",
+        "description": "**Vegetation Recovery & Land Use (UC-06/UC-F12/VAE)** - NDVI monitoring, vegetation recovery tracking and land-use change detection in burnt areas over 36 months. / *Monitoreo de recuperación vegetativa y cambio de uso de suelo post-incendio.*",
     },
     {
         "name": "reports",

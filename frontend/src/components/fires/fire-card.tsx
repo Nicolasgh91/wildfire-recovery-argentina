@@ -26,6 +26,7 @@ import type { EpisodeListItem, EpisodeStatus } from '@/types/episode'
 import { cn } from '@/lib/utils'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 import { useI18n } from '@/context/LanguageContext'
+import { RecoveryStatusBadge } from '@/components/monitoring/RecoveryStatusBadge'
 
 const VALID_STATUSES: EpisodeStatus[] = ['active', 'monitoring', 'extinct', 'closed']
 
@@ -203,6 +204,9 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
             >
               {t('recentLabel')}
             </Badge>
+          )}
+          {fire.recovery_status && (
+            <RecoveryStatusBadge status={fire.recovery_status} className="text-xs" />
           )}
           {isImagePending && (
             <Tooltip>

@@ -28,6 +28,8 @@ export type EpisodeListItem = {
   representative_event_id?: string | null
   is_recent?: boolean
   recent_days?: number | null
+  recovery_status?: string | null
+  is_potential_violation?: boolean
 }
 
 export type EpisodeListResponse = {

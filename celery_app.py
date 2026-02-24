@@ -16,8 +16,8 @@ Key Components:
 Task Routing:
 -   `workers.tasks.ingestion.download_firms_daily` -> `ingestion` queue
 -   `workers.tasks.clustering.cluster_detections` -> `clustering` queue
--   `workers.tasks.recovery.analyze_recovery` -> `analysis` queue
--   `workers.tasks.destruction.detect_destruction` -> `analysis` queue
+-   `workers.tasks.recovery.analyze_recovery` -> `vae` queue
+-   `workers.tasks.destruction.detect_destruction` -> `vae` queue
 -   `workers.tasks.carousel_task.generate_carousel` -> `analysis` queue
 
 Schedule (Beat):
@@ -71,6 +71,7 @@ celery_app.conf.update(
         'workers.tasks.recovery.analyze_recovery': {'queue': 'vae'},
         'workers.tasks.recovery.batch_recovery_analysis': {'queue': 'vae'},
         'workers.tasks.destruction.detect_destruction': {'queue': 'vae'},
+        'workers.tasks.destruction.batch_destruction_detection': {'queue': 'vae'},
         'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
     },
     
