@@ -90,7 +90,7 @@ postgres_data/
 supabase
 
 # Data & Bloatware
-data/
+# data/
 *.zip
 *.tar.gz
 *.csv
