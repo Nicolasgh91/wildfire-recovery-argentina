@@ -127,6 +127,7 @@ services:
       # NASA FIRMS
       FIRMS_API_KEY: ${FIRMS_API_KEY}
       
+      
       # Aplicación
       ENVIRONMENT: ${ENVIRONMENT:-production}
       SECRET_KEY: ${SECRET_KEY}
