@@ -64,6 +64,7 @@ def process_csv(csv_path: str):
         print(f"  Filtrados (alta confianza/dentro de Argentina): {len(filtered)}")
         
         if filtered:
+            print(f"  Insertando {len(filtered)} registros (esto puede demorar unos minutos por la red...)")
             res = insert_detections(
                 engine,
                 filtered,
