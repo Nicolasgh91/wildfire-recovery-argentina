@@ -136,6 +136,7 @@ services:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
       - ~/.config/gcloud:/home/user/.config/gcloud:ro
       - ~/.oci:/home/opc/.oci:ro
+      - ./scripts:/app/scripts:ro
     
     depends_on:
       redis:
@@ -191,6 +192,7 @@ services:
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
       - ~/.oci:/home/opc/.oci:ro
+      - ./scripts:/app/scripts:ro
     
     depends_on:
       redis:
@@ -251,6 +253,7 @@ services:
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
       - ~/.oci:/home/opc/.oci:ro
+      - ./scripts:/app/scripts:ro
     
     depends_on:
       redis:
@@ -312,6 +315,7 @@ services:
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
       - ~/.oci:/home/opc/.oci:ro
+      - ./scripts:/app/scripts:ro
     
     depends_on:
       redis:
