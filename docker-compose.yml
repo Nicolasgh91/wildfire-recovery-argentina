@@ -30,11 +30,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      # GCS (con ADC) - Mantener para compatibilidad
-      # /home/user/.config/gcloud/application_default_credentials.json
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
-      GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
-      GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
+      # LEGACY (GCS) — OCI is the active storage backend
+      # GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
+      # GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
+      # GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
@@ -103,10 +102,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      # GCS
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
-      GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
-      GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
+      # LEGACY (GCS) — OCI is the active storage backend
+      # GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
+      # GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
+      # GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
@@ -119,8 +118,6 @@ services:
       OCI_S3_SECRET_KEY: ${OCI_S3_SECRET_KEY}
       OCI_REGION: ${OCI_REGION:-sa-saopaulo-1}
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
-      
-      # OCI Object Storage (Principal)
       OCI_CONFIG_FILE: /home/opc/.oci/config
       
       # Celery
@@ -132,6 +129,7 @@ services:
       
       # Aplicación
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      SECRET_KEY: ${SECRET_KEY}
     
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
@@ -164,9 +162,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
-      GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
-      GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
+      # LEGACY (GCS) — OCI is the active storage backend
+      # GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
+      # GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
+      # GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
@@ -179,18 +178,16 @@ services:
       OCI_S3_SECRET_KEY: ${OCI_S3_SECRET_KEY}
       OCI_REGION: ${OCI_REGION:-sa-saopaulo-1}
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
-
-      # OCI Object Storage (Principal)
       OCI_CONFIG_FILE: /home/opc/.oci/config
       
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      SECRET_KEY: ${SECRET_KEY}
     
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
-      - ~/.config/gcloud:/home/user/.config/gcloud:ro
       - ~/.oci:/home/opc/.oci:ro
     
     depends_on:
@@ -208,7 +205,7 @@ services:
       retries: 3
       start_period: 60s
 
-  # Worker 3: Analysis (Recovery + Destruction)
+  # Worker 3: Analysis (Carousel + Recovery + Destruction)
   worker-analysis:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/worker:latest
     container_name: forestguard-worker-analysis
@@ -219,9 +216,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
-      GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
-      GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
+      # LEGACY (GCS) — OCI is the active storage backend
+      # GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
+      # GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
+      # GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
@@ -234,18 +232,21 @@ services:
       OCI_S3_SECRET_KEY: ${OCI_S3_SECRET_KEY}
       OCI_REGION: ${OCI_REGION:-sa-saopaulo-1}
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
-
-      # OCI Object Storage (Principal)
       OCI_CONFIG_FILE: /home/opc/.oci/config
+      
+      # Google Earth Engine (independent from storage)
+      GEE_PROJECT_ID: ${GEE_PROJECT_ID:-}
+      GEE_SERVICE_ACCOUNT_EMAIL: ${GEE_SERVICE_ACCOUNT_EMAIL:-}
+      GEE_PRIVATE_KEY_PATH: ${GEE_PRIVATE_KEY_PATH:-/run/secrets/gcp-sa.json}
       
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      SECRET_KEY: ${SECRET_KEY}
     
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
-      - ~/.config/gcloud:/home/user/.config/gcloud:ro
       - ~/.oci:/home/opc/.oci:ro
     
     depends_on:
@@ -276,10 +277,10 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      # GCS (legacy — kept for compatibility)
-      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
-      GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
-      GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
+      # LEGACY (GCS) — OCI is the active storage backend
+      # GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
+      # GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
+      # GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
@@ -294,17 +295,19 @@ services:
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
       OCI_CONFIG_FILE: /home/opc/.oci/config
       
+      # Google Earth Engine (independent from storage)
+      GEE_PROJECT_ID: ${GEE_PROJECT_ID:-}
+      GEE_SERVICE_ACCOUNT_EMAIL: ${GEE_SERVICE_ACCOUNT_EMAIL:-}
+      GEE_PRIVATE_KEY_PATH: ${GEE_PRIVATE_KEY_PATH:-/run/secrets/gcp-sa.json}
+      
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       
       ENVIRONMENT: ${ENVIRONMENT:-production}
       SECRET_KEY: ${SECRET_KEY}
-      GEE_PROJECT_ID: ${GEE_PROJECT_ID:-}
-      GEE_SERVICE_ACCOUNT_EMAIL: ${GEE_SERVICE_ACCOUNT_EMAIL:-}
     
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
-      - ~/.config/gcloud:/home/user/.config/gcloud:ro
       - ~/.oci:/home/opc/.oci:ro
     
     depends_on:
@@ -337,6 +340,7 @@ services:
       CELERY_RESULT_BACKEND: redis://redis:6379/1
 
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      SECRET_KEY: ${SECRET_KEY}
     
     depends_on:
       redis:
