@@ -7,7 +7,7 @@ Tasks are organized by function and routed to specific queues for optimal resour
 
 ## Worker Configuration
 
-**File:** `celery_app.py`
+**File:** `workers/celery_app.py`
 
 ```python
 celery_app = Celery(
@@ -17,8 +17,12 @@ celery_app = Celery(
     include=[
         'workers.tasks.ingestion',
         'workers.tasks.clustering',
+        'workers.tasks.clustering_task',
         'workers.tasks.recovery',
         'workers.tasks.destruction',
+        'workers.tasks.carousel_task',
+        'workers.tasks.closure_report_task',
+        'workers.tasks.notification',
     ]
 )
 ```
@@ -71,7 +75,7 @@ Manual trigger for clustering a specific date range.
 
 #### `recovery.analyze_recovery`
 **File:** `workers/tasks/recovery.py`
-**Queue:** `analysis`
+**Queue:** `vae`
 
 Analyzes vegetation recovery in burnt areas using NDVI indices.
 Tracks recovery progress over 36 months post-fire (UC-06).
@@ -84,7 +88,7 @@ Tracks recovery progress over 36 months post-fire (UC-06).
 
 #### `destruction.detect_destruction`
 **File:** `workers/tasks/destruction.py`
-**Queue:** `analysis`
+**Queue:** `vae`
 
 Detects land-use changes in areas affected by wildfires.
 Supports UC-08 (Land Use Change Detection).
@@ -100,9 +104,9 @@ Supports UC-08 (Land Use Change Detection).
 
 ### 4. Report Generation Tasks
 
-#### `closure_report_task.generate_closure_report`
+#### `closure_report_task.generate_closure_reports`
 **File:** `workers/tasks/closure_report_task.py`
-**Queue:** `default`
+**Queue:** `reports`
 
 Generates PDF closure reports for fire episodes.
 Includes summary statistics, affected areas, and recovery status.
@@ -113,15 +117,15 @@ Includes summary statistics, affected areas, and recovery status.
 **Returns:**
 - Report ID and storage URL
 
-#### `carousel_task.update_carousel`
+#### `carousel_task.generate_carousel`
 **File:** `workers/tasks/carousel_task.py`
-**Queue:** `default`
+**Queue:** `analysis`
 
 Updates the fire event carousel with latest satellite imagery.
 Used for the home page display.
 
 **Parameters:**
-- `limit: int` - Maximum fires to include (default: 10)
+- `max_fires: int | None` - Maximum fires to include (optional)
 
 **Returns:**
 - Count of updated carousel items
@@ -197,10 +201,10 @@ worker_max_tasks_per_child = 1000  # Recycle workers
 ## Monitoring
 
 Workers can be monitored using:
-- **Flower:** `celery -A celery_app flower`
+- **Flower:** `docker compose --profile debug up -d flower`
 - **Logs:** Check `logs/celery_worker.log`
 - **Redis CLI:** `redis-cli LLEN celery` to check queue depth
 
 ---
 
-*Last Updated: 2026-02-08*
+*Last Updated: 2026-02-25*

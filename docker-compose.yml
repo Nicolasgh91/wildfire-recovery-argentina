@@ -112,7 +112,7 @@ services:
       driver: "json-file"
       options:
         max-size: "10m"
-        max-file: "5"
+        max-file: "3"
 
   # Worker 1: Fast (ingestion, clustering, reports, notification, default)
   worker-fast:
@@ -288,7 +288,7 @@ services:
     mem_limit: 96m
     
     command: >
-      bash -c "sleep 65 && 
+      bash -c "sleep 40 && 
       celery -A workers.celery_app beat --loglevel=info -s /tmp/celerybeat-schedule"
     healthcheck:
       test: [ "CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1" ]
@@ -350,7 +350,7 @@ services:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/frontend:latest
     container_name: forestguard-frontend
     restart: unless-stopped
-    mem_limit: 64m
+    mem_limit: 32m
     depends_on:
       - api
     networks:
@@ -404,6 +404,11 @@ services:
       - ./certbot/www:/var/www/certbot
     entrypoint: [ "certbot" ]
     restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   forestguard:
