@@ -30,6 +30,18 @@ def cluster_fire_episodes(self, days_back: int = 90, max_events: int = 5000):
         service = ClusteringService(db)
         result = service.run_clustering(days_back=days_back, max_events=max_events)
         logger.info("Episode clustering completed: %s", result)
+
+        # DT-002: si se crearon episodios nuevos, encolar carousel inmediatamente
+        # en vez de esperar al beat diario de las 03:00 UTC (hasta 25h de delay).
+        if result.get("episodes_created", 0) > 0:
+            from workers.tasks.carousel_task import generate_carousel
+
+            generate_carousel.apply_async(queue="analysis")
+            logger.info(
+                "DT-002: %d new episodes created, enqueued carousel immediately.",
+                result["episodes_created"],
+            )
+
         return {"success": True, **result}
     except Exception as exc:
         logger.exception("Episode clustering failed: %s", exc)

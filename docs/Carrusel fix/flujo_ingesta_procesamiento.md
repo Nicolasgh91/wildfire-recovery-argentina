@@ -345,16 +345,19 @@ El home muestra **episodios** como tarjetas (FireCards) con imágenes satelitale
 ### 5.1 Workers Celery (procesos en segundo plano)
 
 | Worker | Archivo | Cola | Schedule | Función |
-|--------|---------|------|----------|---------|
+|--------|---------|------|----------|----------|
 | Ingestion | `workers/tasks/ingestion.py` | `ingestion` | 00:00 UTC | Descarga CSV de NASA FIRMS, parsea, deduplica, inserta en `fire_detections` |
 | Clustering | `workers/tasks/clustering.py` | `clustering` | 01:00 UTC | Ejecuta ST-DBSCAN sobre detecciones pendientes, crea `fire_events`, actualiza `fire_detections` |
+| Event status | `workers/tasks/event_status_task.py` | `clustering` | 01:30 UTC | Persiste transiciones de estado `fire_events`: `active → monitoring` (7d) y `monitoring → extinct` (14d + check espacial 2km) |
+| Geo-enrichment | `workers/tasks/geo_enrichment.py` | `analysis` | 01:45 UTC | Enriquece `fire_events` con provincia/departamento y cruza con áreas protegidas |
+| Episode aggregation | `workers/tasks/clustering_task.py` | `clustering` | 02:00 UTC | Agrupa eventos en `fire_episodes`, mantiene `fire_episode_events`, ejecuta fusiones, recalcula `gee_candidate`/`gee_priority` y `extinct_at` |
+| Carousel (GEE) | `workers/tasks/carousel_task.py` | `analysis` | 03:00 UTC | Genera 3 thumbnails por episodio (RGB/SWIR/NBR) vía GEE para `active`, `monitoring` y `extinct` recientes (≤30d) |
+| Cleanup | `workers/tasks/cleanup_assets_task.py` | `analysis` | 04:00 UTC | Limpieza de assets HD y PDFs expirados en storage |
+| Episode closer | `workers/tasks/episode_closer_task.py` | `analysis` | 05:00 UTC | Transiciona episodios `extinct` a `closed` cuando `extinct_at + 30d < NOW()` |
+| Closure reports | `workers/tasks/closure_report_task.py` | `analysis` | 08:00 UTC | Genera PDFs de cierre para episodios con dNBR |
 | Clustering manual | `workers/tasks/clustering_task.py` | `clustering` | Manual | Trigger manual de clustering para un rango de fechas específico |
-| Episode aggregation | (task `cluster-episodes-daily`) | `clustering` | 02:00 UTC | Agrupa eventos en `fire_episodes`, mantiene `fire_episode_events`, ejecuta fusiones |
-| Carousel (GEE) | `workers/tasks/carousel_task.py` | `analysis` | 03:00 UTC | Genera 3 thumbnails por episodio (RGB/SWIR/NBR) vía Google Earth Engine |
-| Cleanup | (task `cleanup-expired-assets`) | `default` | 04:00 UTC | Limpieza de assets temporales y expirados en storage |
-| Closure reports | `workers/tasks/closure_report_task.py` | `default` | 08:00 UTC | Genera PDFs de cierre para episodios con dNBR |
-| Recovery (VAE) | `workers/tasks/recovery.py` | `analysis` | Manual/trigger | Análisis de recuperación de vegetación (NDVI) post-fuego |
-| Destruction (VAE) | `workers/tasks/destruction.py` | `analysis` | Manual/trigger | Detección de cambios de uso del suelo en áreas quemadas |
+| Recovery (VAE) | `workers/tasks/recovery.py` | `vae` | Manual/trigger | Análisis de recuperación de vegetación (NDVI) post-fuego |
+| Destruction (VAE) | `workers/tasks/destruction.py` | `vae` | Manual/trigger | Detección de cambios de uso del suelo en áreas quemadas |
 | Episode merge | `workers/tasks/episode_merge_task.py` | `default` | Manual/trigger | Fusión manual de episodios relacionados |
 
 ### 5.2 Servicios backend (lógica de negocio)

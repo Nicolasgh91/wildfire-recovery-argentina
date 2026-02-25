@@ -27,6 +27,10 @@ from app.db.session import get_engine
 
 SessionLocal = _SessionLocal
 
+# Re-export para backward compatibility: codigo legacy que importa
+# `from app.db.database import engine` sigue funcionando.
+engine = get_engine()
+
 
 def get_db() -> Generator[Session, None, None]:
     """

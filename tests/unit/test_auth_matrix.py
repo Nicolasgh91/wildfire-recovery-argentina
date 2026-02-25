@@ -128,8 +128,8 @@ class TestApiKeyEndpointsRequireKey:
         assert resp.status_code == 403
 
     def test_workers_without_key_returns_403(self):
-        """POST /api/v1/workers/detect-land-use without API key → 403."""
-        resp = client.post("/api/v1/workers/detect-land-use", json={})
+        """POST /api/v1/workers/detect-land-use-change without API key → 403."""
+        resp = client.post("/api/v1/workers/detect-land-use-change", json={})
         assert resp.status_code == 403
 
     def test_jwt_not_accepted_on_api_key_endpoint(self):

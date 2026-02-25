@@ -70,6 +70,7 @@ celery_app = Celery(
         'workers.tasks.geo_enrichment',
         'workers.tasks.episode_merge_task',
         'workers.tasks.carousel_task',
+        'workers.tasks.episode_closer_task',
         'workers.tasks.closure_report_task',
         'workers.tasks.recovery',
         'workers.tasks.destruction',
@@ -100,6 +101,7 @@ celery_app.conf.update(
         'workers.tasks.clustering_task.cluster_fire_episodes_pipeline': {'queue': 'clustering'},
         'workers.tasks.geo_enrichment.enrich_recent_fire_events': {'queue': 'analysis'},
         'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
+        'workers.tasks.episode_closer_task.close_extinct_episodes': {'queue': 'analysis'},
         'workers.tasks.closure_report_task.generate_closure_reports': {'queue': 'analysis'},
         'workers.tasks.exploration_hd_task.generate_exploration_hd': {'queue': 'analysis'},
         'workers.tasks.recovery.analyze_recovery': {'queue': 'vae'},
@@ -154,6 +156,11 @@ celery_app.conf.update(
             'schedule': crontab(hour=4, minute=0),  # 04:00 UTC
             'options': {'queue': 'analysis'}
         },
+        'close-extinct-episodes-daily': {
+            'task': 'workers.tasks.episode_closer_task.close_extinct_episodes',
+            'schedule': crontab(hour=5, minute=0),  # 05:00 UTC
+            'options': {'queue': 'analysis'},
+        },
         # UC-F12: Monthly VAE recovery analysis for active fire events
         'vae-recovery-monthly': {
             'task': 'workers.tasks.recovery.batch_recovery_analysis',
@@ -166,6 +173,13 @@ celery_app.conf.update(
             'task': 'workers.tasks.destruction.batch_destruction_detection',
             'schedule': crontab(hour=6, minute=0, day_of_month=1),  # 06:00 UTC, 1st of each month
             'kwargs': {'max_events': 50},
+            'options': {'queue': 'vae'},
+        },
+        # UC-F12: Weekly VAE episode recovery analysis for carousel
+        'vae-episodes-weekly': {
+            'task': 'workers.tasks.recovery.batch_episode_recovery_analysis',
+            'schedule': crontab(hour=2, minute=0, day_of_week=1),  # Monday 02:00 UTC
+            'kwargs': {'max_episodes': 20, 'carousel_only': True},
             'options': {'queue': 'vae'},
         },
     },

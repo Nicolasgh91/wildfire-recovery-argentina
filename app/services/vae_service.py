@@ -699,44 +699,133 @@ class VAEService:
     # =========================================================================
 
     def _get_baseline_ndvi(self, bbox: Dict[str, float], fire_date: date) -> float:
-        """Obtiene NDVI pre-incendio (baseline)."""
+        """Obtiene NDVI pre-incendio (baseline) con logging mejorado."""
+        import logging
+        import time
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"🔍 [BASELINE] Starting baseline NDVI calculation")
+        logger.info(f"🔍 [BASELINE] Fire date: {fire_date}")
+        logger.info(f"🔍 [BASELINE] Bbox received: {bbox}")
+        logger.info(f"🔍 [BASELINE] Bbox type: {type(bbox)}")
+        
+        start_time = time.time()
+        
         try:
+            # Validate and convert bbox
+            from app.utils.bbox_utils import validate_and_convert_bbox
+            bbox = validate_and_convert_bbox(bbox)
+            logger.info(f"🔍 [BASELINE] Validated bbox: {bbox}")
+            
             # Buscar imagen 15-45 días antes del incendio
             pre_start = fire_date - timedelta(days=45)
-            pre_end = fire_date - timedelta(days=5)
-
+            pre_end = fire_date - timedelta(days=15)  # Changed from 5 to 15 days
+            
+            logger.info(f"🔍 [BASELINE] Searching images from {pre_start} to {pre_end}")
+            
             collection = self._gee.get_sentinel_collection(
                 bbox=bbox, start_date=pre_start, end_date=pre_end, max_cloud_cover=25
             )
+            logger.info(f"🔍 [BASELINE] Collection retrieved successfully")
 
             image = self._gee.get_best_image(
                 collection, target_date=fire_date - timedelta(days=15)
             )
+            logger.info(f"🔍 [BASELINE] Best image selected")
+            
             ndvi_result = self._gee.calculate_ndvi(image, bbox)
+            logger.info(f"🔍 [BASELINE] NDVI calculated: {ndvi_result.mean}")
+            
+            elapsed = time.time() - start_time
+            logger.info(f"🔍 [BASELINE] ✅ Baseline NDVI completed in {elapsed:.2f}s: {ndvi_result.mean}")
 
             return ndvi_result.mean
 
-        except GEEImageNotFoundError:
-            logger.warning("No pre-fire image found for baseline NDVI")
-            raise BaselineNotAvailableError(
-                "No pre-fire satellite image available to compute baseline NDVI"
-            )
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"❌ [BASELINE] Error in baseline NDVI after {elapsed:.2f}s: {e}")
+            logger.error(f"❌ [BASELINE] Bbox was: {bbox}")
+            logger.error(f"❌ [BASELINE] Fire date was: {fire_date}")
+            raise
 
     def _get_current_ndvi(self, bbox: Dict[str, float], target_date: date) -> float:
         """
-        Obtiene NDVI para una fecha específica.
-
-        Uses escalating cloud cover tolerance and temporal window
-        to handle cloudy periods (CT-UCF12-03).
+        Obtiene NDVI para una fecha específica usando ImageCollection median.
+        
+        Optimización UC-F12: Usa compuesto mediano libre de nubes en lugar de
+        búsqueda iterativa por nubosidad (reducción 3-9x en requests GEE).
         """
+        import time
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"🔍 [MEDIAN_OPT] Getting NDVI for {target_date} using median optimization")
+        start_time = time.time()
+        
+        try:
+            # Validate and convert bbox first
+            from app.utils.bbox_utils import validate_and_convert_bbox
+            bbox = validate_and_convert_bbox(bbox)
+            logger.info(f"🔍 [MEDIAN_OPT] Validated bbox: {bbox}")
+            
+            # Log parameters
+            logger.info(f"🔍 [MEDIAN_OPT] Window: ±15 days around {target_date}")
+            
+            # Usar ventana de 30 días alrededor del target_date
+            start = target_date - timedelta(days=15)
+            end = target_date + timedelta(days=15)
+            
+            logger.info(f"🔍 [MEDIAN_OPT] Fetching Sentinel collection from {start} to {end}")
+            collection = self._gee.get_sentinel_collection(
+                bbox=bbox, start_date=start, end_date=end,
+                max_cloud_cover=80,  # Permitir mayor nubosidad, median la manejará
+            )
+            
+            # Crear compuesto mediano libre de nubes
+            logger.info(f"🔍 [MEDIAN_OPT] Creating ImageCollection median composite...")
+            composite = collection.median()
+            logger.info(f"🔍 [MEDIAN_OPT] ✅ Median composite created successfully")
+            
+            # Calcular NDVI sobre el compuesto
+            logger.info(f"🔍 [MEDIAN_OPT] Calculating NDVI on composite...")
+            ndvi_result = self._gee.calculate_ndvi(composite, bbox)
+            
+            elapsed = time.time() - start_time
+            logger.info(f"🔍 [MEDIAN_OPT] ✅ Median NDVI completed in {elapsed:.2f}s: {ndvi_result.mean}")
+            return ndvi_result.mean
+            
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"🔍 [MEDIAN_OPT] ❌ Median failed after {elapsed:.2f}s: {e}")
+            logger.error(f"🔍 [MEDIAN_OPT] Bbox was: {bbox}")
+            logger.info(f"🔍 [MEDIAN_OPT] 🔄 Falling back to iterative search...")
+            return self._get_current_ndvi_fallback(bbox, target_date)
+    
+    def _get_current_ndvi_fallback(self, bbox: Dict[str, float], target_date: date) -> float:
+        """
+        Método fallback original con búsqueda iterativa por nubosidad.
+        """
+        import time
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        logger.info(f"🔍 [FALLBACK] Starting iterative search for {target_date}")
+        start_time = time.time()
+        
+        # Validate bbox first
+        from app.utils.bbox_utils import validate_and_convert_bbox
+        bbox = validate_and_convert_bbox(bbox)
+        logger.info(f"🔍 [FALLBACK] Validated bbox: {bbox}")
+        
         for max_cloud in [30, 50, 70]:
             for window_days in [30, 60, 90]:
                 try:
-                    start = target_date - timedelta(days=window_days)
-                    end = target_date + timedelta(days=window_days)
+                    logger.info(f"🔍 [FALLBACK] Trying cloud={max_cloud}%, window={window_days}days")
+                    start_date = target_date - timedelta(days=window_days)
+                    end_date = target_date + timedelta(days=window_days)
 
                     collection = self._gee.get_sentinel_collection(
-                        bbox=bbox, start_date=start, end_date=end,
+                        bbox=bbox, start_date=start_date, end_date=end_date,
                         max_cloud_cover=max_cloud,
                     )
 
@@ -744,10 +833,16 @@ class VAEService:
                         collection, target_date=target_date,
                     )
                     ndvi_result = self._gee.calculate_ndvi(image, bbox)
+                    
+                    elapsed = time.time() - start_time
+                    logger.info(f"🔍 [FALLBACK] ✅ Found image in {elapsed:.2f}s: {ndvi_result.mean}")
                     return ndvi_result.mean
                 except GEEImageNotFoundError:
+                    logger.info(f"🔍 [FALLBACK] ❌ No image for cloud={max_cloud}%, window={window_days}days")
                     continue
 
+        elapsed = time.time() - start_time
+        logger.error(f"🔍 [FALLBACK] ❌ Exhausted all options after {elapsed:.2f}s")
         raise GEEImageNotFoundError(
             f"No suitable image found for {target_date} after extended search"
         )
