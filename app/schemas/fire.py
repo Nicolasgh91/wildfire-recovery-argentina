@@ -12,11 +12,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class FireStatus(str, Enum):
-    """Estados de un evento de incendio."""
+    """Estados de un evento de incendio o episodio."""
 
     ACTIVE = "active"
     MONITORING = "monitoring"
     EXTINCT = "extinct"
+    CLOSED = "closed"  # Solo episodios: extinct_at + 30d, visible solo en historicos
 
 
 class StatusScope(str, Enum):
