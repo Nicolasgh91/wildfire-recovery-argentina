@@ -5,9 +5,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: forestguard-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     networks:
@@ -22,6 +23,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   api:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/api:latest
@@ -35,17 +41,14 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      # LEGACY (GCS) — OCI is the active storage backend
-      # GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
-      # GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
-      # GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
+      # Storage — OCI es el backend activo
       STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
       STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
 
-      # OCI Object Storage (S3-compatible — Principal)
+      # OCI Object Storage (S3-compatible — principal)
       OCI_S3_ENDPOINT_URL: ${OCI_S3_ENDPOINT_URL}
       OCI_S3_ACCESS_KEY: ${OCI_S3_ACCESS_KEY}
       OCI_S3_SECRET_KEY: ${OCI_S3_SECRET_KEY}
@@ -53,7 +56,7 @@ services:
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
       OCI_CONFIG_FILE: /home/opc/.oci/config
 
-      # Google Earth Engine (independent from storage)
+      # Google Earth Engine (independiente del storage)
       GEE_PROJECT_ID: ${GEE_PROJECT_ID:-}
       GEE_SERVICE_ACCOUNT_EMAIL: ${GEE_SERVICE_ACCOUNT_EMAIL:-}
       GEE_PRIVATE_KEY_PATH: ${GEE_PRIVATE_KEY_PATH:-/run/secrets/gee-service-account.json}
@@ -64,7 +67,7 @@ services:
       
       # Aplicación
       ENVIRONMENT: ${ENVIRONMENT:-production}
-      DEBUG: "true"
+      DEBUG: ${DEBUG:-false}
       SECRET_KEY: ${SECRET_KEY}
 
       # Auth — API Key + Supabase JWT
@@ -74,10 +77,8 @@ services:
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
     
-    # Monta credenciales de GCS (ADC local) y OCI config
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
-      - ~/.config/gcloud:/home/user/.config/gcloud:ro
       - ~/.oci:/home/opc/.oci:ro
     
     ports:
@@ -96,39 +97,36 @@ services:
           cpus: '1.5'
           memory: 1G
     
-    # Production: use image default CMD (no --reload).
-    # For local dev, add --reload via docker-compose.override.yml.
-    
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
-  # Worker 1: Ingestion (Descarga FIRMS)
+  # Worker 1: Ingestion (descarga FIRMS)
   worker-ingestion:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/worker:latest
     container_name: forestguard-worker-ingestion
+    restart: unless-stopped
     environment:
-      # Base de datos
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      # LEGACY (GCS) — OCI is the active storage backend
-      # GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
-      # GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
-      # GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
       STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
       
-      # OCI Object Storage (S3-compatible — Principal)
       OCI_S3_ENDPOINT_URL: ${OCI_S3_ENDPOINT_URL}
       OCI_S3_ACCESS_KEY: ${OCI_S3_ACCESS_KEY}
       OCI_S3_SECRET_KEY: ${OCI_S3_SECRET_KEY}
@@ -136,22 +134,17 @@ services:
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
       OCI_CONFIG_FILE: /home/opc/.oci/config
       
-      # Celery
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
       
-      # NASA FIRMS
       FIRMS_API_KEY: ${FIRMS_API_KEY}
       
-      
-      # Aplicación
       ENVIRONMENT: ${ENVIRONMENT:-production}
       SECRET_KEY: ${SECRET_KEY}
       PYTHONPATH: /app
     
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
-      - ~/.config/gcloud:/home/user/.config/gcloud:ro
       - ~/.oci:/home/opc/.oci:ro
       - ./scripts:/app/scripts:ro
     
@@ -168,18 +161,26 @@ services:
           cpus: '1.0'
           memory: 512M
     
-    command: celery -A workers.celery_app worker --loglevel=info --queues=ingestion --concurrency=2
+    command: >
+      bash -c "sleep 15 && 
+      celery -A workers.celery_app worker --loglevel=info --queues=ingestion --concurrency=2"
     healthcheck:
-      test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
+      test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Worker 2: Clustering (DBSCAN)
   worker-clustering:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/worker:latest
     container_name: forestguard-worker-clustering
+    restart: unless-stopped
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -187,17 +188,12 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      # LEGACY (GCS) — OCI is the active storage backend
-      # GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
-      # GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
-      # GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
       STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
       
-      # OCI Object Storage (S3-compatible — Principal)
       OCI_S3_ENDPOINT_URL: ${OCI_S3_ENDPOINT_URL}
       OCI_S3_ACCESS_KEY: ${OCI_S3_ACCESS_KEY}
       OCI_S3_SECRET_KEY: ${OCI_S3_SECRET_KEY}
@@ -230,18 +226,26 @@ services:
           cpus: '1.0'
           memory: 768M
     
-    command: celery -A workers.celery_app worker --loglevel=info --queues=clustering --concurrency=2
+    command: >
+      bash -c "sleep 25 && 
+      celery -A workers.celery_app worker --loglevel=info --queues=clustering --concurrency=2"
     healthcheck:
-      test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
+      test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # Worker 3: Analysis (Carousel + Recovery + Destruction)
+  # Worker 3: Analysis (carousel + recovery + destruction)
   worker-analysis:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/worker:latest
     container_name: forestguard-worker-analysis
+    restart: unless-stopped
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -249,17 +253,12 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      # LEGACY (GCS) — OCI is the active storage backend
-      # GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
-      # GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
-      # GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
       STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
       
-      # OCI Object Storage (S3-compatible — Principal)
       OCI_S3_ENDPOINT_URL: ${OCI_S3_ENDPOINT_URL}
       OCI_S3_ACCESS_KEY: ${OCI_S3_ACCESS_KEY}
       OCI_S3_SECRET_KEY: ${OCI_S3_SECRET_KEY}
@@ -267,7 +266,7 @@ services:
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
       OCI_CONFIG_FILE: /home/opc/.oci/config
       
-      # Google Earth Engine (independent from storage)
+      # Google Earth Engine (requerido para carousel)
       GEE_PROJECT_ID: ${GEE_PROJECT_ID:-}
       GEE_SERVICE_ACCOUNT_EMAIL: ${GEE_SERVICE_ACCOUNT_EMAIL:-}
       GEE_PRIVATE_KEY_PATH: ${GEE_PRIVATE_KEY_PATH:-/run/secrets/gee-service-account.json}
@@ -297,15 +296,22 @@ services:
           cpus: '1.0'
           memory: 768M
     
-    command: celery -A workers.celery_app worker --loglevel=info --queues=analysis --concurrency=1
+    command: >
+      bash -c "sleep 35 && 
+      celery -A workers.celery_app worker --loglevel=info --queues=analysis --concurrency=1 --max-tasks-per-child=50"
     healthcheck:
-      test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
+      test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # Worker 4: VAE (Recovery + Destruction via GEE)
+  # Worker 4: VAE (recovery + destruction via GEE)
   worker-vae:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/worker:latest
     container_name: forestguard-worker-vae
@@ -323,7 +329,6 @@ services:
       STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
 
-      # OCI Object Storage (S3-compatible)
       OCI_S3_ENDPOINT_URL: ${OCI_S3_ENDPOINT_URL}
       OCI_S3_ACCESS_KEY: ${OCI_S3_ACCESS_KEY}
       OCI_S3_SECRET_KEY: ${OCI_S3_SECRET_KEY}
@@ -331,7 +336,7 @@ services:
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
       OCI_CONFIG_FILE: /home/opc/.oci/config
 
-      # Google Earth Engine (required for VAE workers)
+      # Google Earth Engine (requerido para VAE)
       GEE_PROJECT_ID: ${GEE_PROJECT_ID:-}
       GEE_SERVICE_ACCOUNT_EMAIL: ${GEE_SERVICE_ACCOUNT_EMAIL:-}
       GEE_PRIVATE_KEY_PATH: ${GEE_PRIVATE_KEY_PATH:-/run/secrets/gee-service-account.json}
@@ -363,36 +368,35 @@ services:
 
     command: celery -A workers.celery_app worker --loglevel=info --queues=vae --concurrency=1 --max-tasks-per-child=100
     healthcheck:
-      test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
+      test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
 
-  # Worker 5: Reports (PDF generation)
+  # Worker 5: Reports (generación PDF)
   worker-reports:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/worker:latest
     container_name: forestguard-worker-reports
     restart: unless-stopped
     environment:
-      # Base de datos
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      # LEGACY (GCS) — OCI is the active storage backend
-      # GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/run/secrets/gcp-sa.json}
-      # GCS_SERVICE_ACCOUNT_JSON: ${GCS_SERVICE_ACCOUNT_JSON:-/run/secrets/gcp-sa.json}
-      # GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
       STORAGE_BACKEND: ${STORAGE_BACKEND:-oci}
       STORAGE_BUCKET_IMAGES: ${STORAGE_BUCKET_IMAGES}
       STORAGE_BUCKET_REPORTS: ${STORAGE_BUCKET_REPORTS}
       STORAGE_BUCKET_CERTIFICATES: ${STORAGE_BUCKET_CERTIFICATES}
       STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
 
-      # OCI Object Storage (S3-compatible — Principal)
       OCI_S3_ENDPOINT_URL: ${OCI_S3_ENDPOINT_URL}
       OCI_S3_ACCESS_KEY: ${OCI_S3_ACCESS_KEY}
       OCI_S3_SECRET_KEY: ${OCI_S3_SECRET_KEY}
@@ -400,7 +404,7 @@ services:
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
       OCI_CONFIG_FILE: /home/opc/.oci/config
       
-      # Google Earth Engine (independent from storage)
+      # Google Earth Engine (independiente del storage)
       GEE_PROJECT_ID: ${GEE_PROJECT_ID:-}
       GEE_SERVICE_ACCOUNT_EMAIL: ${GEE_SERVICE_ACCOUNT_EMAIL:-}
       GEE_PRIVATE_KEY_PATH: ${GEE_PRIVATE_KEY_PATH:-/run/secrets/gee-service-account.json}
@@ -410,6 +414,7 @@ services:
       
       ENVIRONMENT: ${ENVIRONMENT:-production}
       SECRET_KEY: ${SECRET_KEY}
+      PYTHONPATH: /app
     
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
@@ -429,18 +434,26 @@ services:
           cpus: '1.0'
           memory: 768M
     
-    command: celery -A workers.celery_app worker --loglevel=info --queues=reports,notification --concurrency=2
+    command: >
+      bash -c "sleep 55 && 
+      celery -A workers.celery_app worker --loglevel=info --queues=reports,notification --concurrency=2"
     healthcheck:
-      test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
+      test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Celery Beat (scheduler)
   celery-beat:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/worker:latest
     container_name: forestguard-celery-beat
+    restart: unless-stopped
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -469,18 +482,26 @@ services:
           cpus: '0.2'
           memory: 128M
     
-    command: celery -A workers.celery_app beat --loglevel=info -s /tmp/celerybeat-schedule
+    command: >
+      bash -c "sleep 65 && 
+      celery -A workers.celery_app beat --loglevel=info -s /tmp/celerybeat-schedule"
     healthcheck:
       test: [ "CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1" ]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 90s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Flower (monitoring dashboard)
   flower:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/worker:latest
     container_name: forestguard-flower
+    restart: unless-stopped
     environment:
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/1
@@ -495,25 +516,26 @@ services:
     networks:
       - forestguard
     
-    command: celery -A workers.celery_app flower --port=5555
+    command: >
+      bash -c "sleep 75 && 
+      celery -A workers.celery_app flower --port=5555"
     healthcheck:
       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5555/healthcheck')\" || exit 1" ]
       interval: 30s
-      timeout: 10s
+      timeout: 15s
       retries: 3
-      start_period: 60s
+      start_period: 120s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Frontend
-  # For production deployment with CI-built images:
-  # 1. Comment/remove the 'build' section below
-  # 2. Add: image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/frontend:latest
-  # 3. Remove or rename docker-compose.override.yml
-  # See: docs/deployment/ci-frontend-deployment.md
   frontend:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/frontend:latest
     container_name: forestguard-frontend
     restart: unless-stopped
-    # Runtime memory limit: nginx serving static files needs < 30 MB
     mem_limit: 64m
     depends_on:
       - api
@@ -554,11 +576,10 @@ services:
       retries: 3
       start_period: 10s
 
-  # Certbot for SSL certificates
+  # Certbot para certificados SSL
   certbot:
     image: certbot/certbot:latest
     container_name: forestguard-certbot
-    # Run on demand via `docker compose --profile ssl run --rm certbot ...`
     profiles:
       - ssl
     networks:
