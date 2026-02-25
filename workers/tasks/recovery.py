@@ -132,7 +132,7 @@ def analyze_recovery(self, fire_event_id, months_after=None):
         logger.info(f" [RECOVERY]  Persisting to database...")
         persist_start = time.time()
         
-        db.execute(text("""
+        upsert_query = text("""
             INSERT INTO vegetation_monitoring (
                 fire_event_id, monitoring_date, ndvi_mean, baseline_ndvi,
                 recovery_percentage, human_activity_detected, activity_type
