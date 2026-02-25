@@ -47,18 +47,16 @@ def test_median_optimization():
         finally:
             db.close()
         
-        # Create bbox in GEE format
+        # Create bbox
         bbox = {
-            'west': lon - 0.01,
-            'east': lon + 0.01,
-            'south': lat - 0.01,
-            'north': lat + 0.01,
+            'min_lon': lon - 0.01,
+            'max_lon': lon + 0.01,
+            'min_lat': lat - 0.01,
+            'max_lat': lat + 0.01,
         }
-        logger.info(f"📍 Created bbox: {bbox}")
         
         # Test VAE service
         vae = VAEService()
-        logger.info(f"🔧 VAE service created")
         
         # Test baseline NDVI
         logger.info("📊 Testing baseline NDVI...")

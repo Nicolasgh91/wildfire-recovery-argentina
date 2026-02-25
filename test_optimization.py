@@ -1,8 +1,8 @@
 from workers.tasks.recovery import analyze_recovery
 
 # Test the optimized VAE service with ImageCollection.median()
-# Use the original test event that we know exists
-test_event_id = "eee06dee-f626-4c4e-a1da-12bb3a4d3480"  # Original test event
+# Use a recent event to validate the optimization works
+test_event_id = "2eafa3c6-2e8a-4c4e-a1da-12bb3a4d3480"  # Recent event from our batch
 
 result = analyze_recovery.delay(test_event_id)
 print(f'Test Task ID: {result.id}')

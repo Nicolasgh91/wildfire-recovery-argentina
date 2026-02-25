@@ -332,31 +332,21 @@ def analyze_episode_recovery(self, episode_id, months_after=None):
 )
 def batch_episode_recovery_analysis(self, max_episodes=50, recent_only=False, carousel_only=False):
     """
-    Enhanced batch processing with comprehensive monitoring and logging.
+    Ejecuta análisis de recuperación para múltiples episodios en batch.
+    
+    Args:
+        max_episodes: Máximo número de episodios a procesar
+        recent_only: Solo episodios recientes (últimos 12 meses)
+        carousel_only: Solo episodios activos/monitoreo (para carrusel)
     """
-    import time
-    import logging
-    import subprocess
-    from datetime import datetime
     from app.db.session import SessionLocal
     from sqlalchemy import text
-    
-    logger = logging.getLogger(__name__)
-    
-    # Initialize monitoring
-    start_time = time.time()
-    batch_start = datetime.now()
-    episodes_processed = 0
-    episodes_failed = 0
-    gee_requests_start = _get_current_gee_requests()
-    
-    logger.info(f"🚀 [BACKFILL] === STARTING HISTORICAL BACKFILL ===")
-    logger.info(f"🚀 [BACKFILL] Task ID: {self.request.id}")
-    logger.info(f"🚀 [BACKFILL] Parameters: max_episodes={max_episodes}, recent_only={recent_only}, carousel_only={carousel_only}")
-    logger.info(f"🚀 [BACKFILL] Start time: {batch_start}")
+    from celery import group
     
     db = SessionLocal()
     try:
+        logger.info(f"Starting batch episode recovery analysis (max_episodes={max_episodes})")
+        
         # Build query based on parameters
         where_conditions = ["fe.centroid IS NOT NULL"]
         if recent_only:
@@ -369,10 +359,6 @@ def batch_episode_recovery_analysis(self, max_episodes=50, recent_only=False, ca
         # Get episodes for processing
         episodes_query = text(f"""
             SELECT ep.id, ep.status, ep.created_at,
-                   COUNT(fe.id) as event_count,
-                   MAX(fe.start_date) as latest_fire_date,
-                   ST_Y(ep.centroid::geometry) as lat,
-                   ST_X(ep.centroid::geometry) as lon,
                    CASE WHEN ep.status = 'active' THEN 1
                         WHEN ep.status = 'monitoring' THEN 2
                         ELSE 3 END as status_priority
@@ -380,117 +366,44 @@ def batch_episode_recovery_analysis(self, max_episodes=50, recent_only=False, ca
             JOIN fire_episode_events fee ON ep.id = fee.episode_id
             JOIN fire_events fe ON fee.event_id = fe.id
             WHERE {where_clause}
-            GROUP BY ep.id, ep.status, ep.created_at, ep.centroid
+            GROUP BY ep.id, ep.status, ep.created_at
             ORDER BY status_priority, ep.created_at DESC
             LIMIT :max_episodes
         """)
         
         episodes = db.execute(episodes_query, {"max_episodes": max_episodes}).fetchall()
         
-        total_episodes = len(episodes)
-        logger.info(f"🚀 [BACKFILL] Found {total_episodes} episodes to process")
-        
-        if total_episodes == 0:
-            logger.info(f"🚀 [BACKFILL] No episodes found for processing")
+        if not episodes:
+            logger.info("No episodes found for batch processing")
             return {
-                'task_id': self.request.id,
-                'episodes_found': 0,
-                'episodes_processed': 0,
+                'total_episodes': 0,
                 'status': 'completed',
-                'message': 'No episodes found'
+                'message': 'no_episodes_found'
             }
         
-        # Process episodes with progress tracking
-        logger.info(f"🚀 [BACKFILL] Starting episode processing...")
+        episode_ids = [str(ep[0]) for ep in episodes]
+        logger.info(f"Found {len(episode_ids)} episodes for batch processing")
         
-        for i, episode_row in enumerate(episodes, 1):
-            episode_id = str(episode_row[0])
-            
-            # Progress logging every 10 episodes
-            if i % 10 == 0 or i == total_episodes:
-                progress_pct = (i / total_episodes) * 100
-                elapsed = time.time() - start_time
-                avg_time_per_episode = elapsed / i
-                remaining_episodes = total_episodes - i
-                eta_seconds = remaining_episodes * avg_time_per_episode
-                eta_minutes = eta_seconds / 60
-                
-                current_gee_requests = _get_current_gee_requests()
-                requests_used = current_gee_requests - gee_requests_start
-                
-                logger.info(f"🚀 [BACKFILL] 📊 Progress: {i}/{total_episodes} ({progress_pct:.1f}%)")
-                logger.info(f"🚀 [BACKFILL] ⏱️  Elapsed: {elapsed/60:.1f}min, ETA: {eta_minutes:.1f}min")
-                logger.info(f"🚀 [BACKFILL] 📡 GEE requests used: {requests_used}")
-                logger.info(f"🚀 [BACKFILL] ✅ Success: {episodes_processed}, ❌ Failed: {episodes_failed}")
-            
-            try:
-                # Process individual episode
-                logger.info(f"🚀 [BACKFILL] Processing episode {i}/{total_episodes}: {episode_id}")
-                
-                episode_start = time.time()
-                result = analyze_episode_recovery.apply_async(args=[episode_id])
-                
-                # Wait for completion (sync for monitoring)
-                episode_result = result.get(timeout=300)  # 5 minute timeout
-                episode_time = time.time() - episode_start
-                
-                episodes_processed += 1
-                
-                logger.info(f"🚀 [BACKFILL] ✅ Episode {episode_id} completed in {episode_time:.2f}s: {episode_result.get('status', 'unknown')}")
-                
-            except Exception as e:
-                episodes_failed += 1
-                logger.error(f"🚀 [BACKFILL] ❌ Episode {episode_id} failed: {e}")
-                
-                # Continue processing other episodes
-                continue
+        # Create group of episode recovery tasks
+        signatures = [
+            analyze_episode_recovery.s(episode_id) 
+            for episode_id in episode_ids
+        ]
         
-        # Final statistics
-        total_time = time.time() - start_time
-        final_gee_requests = _get_current_gee_requests()
-        total_requests = final_gee_requests - gee_requests_start
+        group_result = group(*signatures).apply_async()
         
-        logger.info(f"🚀 [BACKFILL] 🎉 === BACKFILL COMPLETED ===")
-        logger.info(f"🚀 [BACKFILL] 📊 Final Results:")
-        logger.info(f"🚀 [BACKFILL]    Episodes processed: {episodes_processed}/{total_episodes}")
-        logger.info(f"🚀 [BACKFILL]    Episodes failed: {episodes_failed}")
-        logger.info(f"🚀 [BACKFILL]    Success rate: {(episodes_processed/total_episodes)*100:.1f}%")
-        logger.info(f"🚀 [BACKFILL]    Total time: {total_time/60:.1f} minutes")
-        logger.info(f"🚀 [BACKFILL]    Avg time per episode: {total_time/total_episodes:.2f}s")
-        logger.info(f"🚀 [BACKFILL]    GEE requests used: {total_requests}")
-        logger.info(f"🚀 [BACKFILL]    Avg requests per episode: {total_requests/total_episodes:.1f}")
+        logger.info(f"Queued {len(signatures)} episode recovery tasks")
         
         return {
-            'task_id': self.request.id,
-            'episodes_found': total_episodes,
-            'episodes_processed': episodes_processed,
-            'episodes_failed': episodes_failed,
-            'success_rate': (episodes_processed/total_episodes)*100,
-            'total_time_minutes': total_time/60,
-            'gee_requests_used': total_requests,
-            'status': 'completed'
+            'total_episodes': len(episode_ids),
+            'total_tasks_enqueued': len(signatures),
+            'episode_ids': episode_ids,
+            'status': 'queued',
+            'group_id': group_result.id if group_result else None,
         }
         
     except Exception as exc:
-        total_time = time.time() - start_time
-        logger.error(f"🚀 [BACKFILL] ❌ Backfill failed after {total_time/60:.1f} minutes: {exc}")
+        logger.error(f"Error in batch episode recovery analysis: {exc}")
         raise self.retry(exc=exc, countdown=60)
     finally:
         db.close()
-
-def _get_current_gee_requests():
-    """Get current GEE request count from worker logs."""
-    try:
-        result = subprocess.run(
-            ["docker", "logs", "forestguard-worker-vae", "--tail", "50"],
-            capture_output=True, text=True, timeout=10
-        )
-        
-        lines = result.stdout.split('\n')
-        for line in reversed(lines):
-            if "GEE requests hoy:" in line:
-                return int(line.split(':')[-1].strip())
-        
-        return 0
-    except:
-        return 0

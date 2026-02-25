@@ -99,7 +99,6 @@ celery_app.conf.update(
         'workers.tasks.clustering.cluster_detections': {'queue': 'clustering'},
         'workers.tasks.clustering_task.cluster_fire_episodes': {'queue': 'clustering'},
         'workers.tasks.clustering_task.cluster_fire_episodes_pipeline': {'queue': 'clustering'},
-        'workers.tasks.event_status_task.update_event_statuses': {'queue': 'clustering'},
         'workers.tasks.geo_enrichment.enrich_recent_fire_events': {'queue': 'analysis'},
         'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
         'workers.tasks.episode_closer_task.close_extinct_episodes': {'queue': 'analysis'},
@@ -113,7 +112,6 @@ celery_app.conf.update(
         'workers.tasks.export_task.export_fires_async': {'queue': 'analysis'},
         'workers.tasks.pdf_generation_task.generate_pdf_for_job': {'queue': 'reports'},
         'workers.tasks.cleanup_assets_task.cleanup_expired_assets': {'queue': 'analysis'},
-        'workers.tasks.episode_closer_task.close_extinct_episodes': {'queue': 'analysis'},
     },
     
     # Retry policy
@@ -135,21 +133,10 @@ celery_app.conf.update(
             'kwargs': {'days_back': 1},
             'options': {'queue': 'clustering'}
         },
-        'update-event-statuses-daily': {
-            'task': 'workers.tasks.event_status_task.update_event_statuses',
-            'schedule': crontab(hour=1, minute=30),  # 01:30 UTC (post clustering, pre enrichment)
-            'options': {'queue': 'clustering'}
-        },
-        'enrich-events-daily': {
-            'task': 'workers.tasks.geo_enrichment.enrich_recent_fire_events',
-            'schedule': crontab(hour=1, minute=45),  # 01:45 UTC (post clustering, pre episodes)
-            'kwargs': {'lookback_hours': 72, 'max_events': 5000},
-            'options': {'queue': 'analysis'}
-        },
         'cluster-episodes-daily': {
             'task': 'workers.tasks.clustering_task.cluster_fire_episodes_pipeline',
-            'schedule': crontab(hour=2, minute=0),  # 02:00 UTC (post enrichment 01:45)
-            'kwargs': {'days_back': 90, 'max_events': 5000},
+            'schedule': crontab(hour=2, minute=0),  # 02:00 UTC
+            'kwargs': {'days_back': 90, 'max_events': 5000, 'geo_lookback_hours': 96},
             'options': {'queue': 'clustering'}
         },
         'carousel-daily': {
