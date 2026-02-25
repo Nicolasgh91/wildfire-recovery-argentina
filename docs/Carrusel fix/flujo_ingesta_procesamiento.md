@@ -338,6 +338,152 @@ El home muestra **episodios** como tarjetas (FireCards) con imágenes satelitale
 | Información en tooltip/popup | Provincia, área estimada, cantidad de eventos, fecha de inicio, severidad si disponible |
 | Diferenciación visual | Por estado (color), por `severity_class` (tamaño/ícono), y potencialmente por `is_potential_violation` (ícono de alerta) si hay cambios de uso detectados |
 
+### 4.3 Diagrama de ciclo de vida de estados
+
+El siguiente diagrama muestra el flujo completo de estados desde la ingesta de detecciones satelitales hasta la visualización en el carrusel e históricos. Incluye los flujos principales y alternativos confirmados como comportamiento canónico.
+
+```mermaid
+flowchart TD
+
+    subgraph FIRMS["FIRMS / NASA"]
+        CSV["CSV detecciones\n(lat, lon, frp, acq_date)"]
+    end
+
+    subgraph DET["fire_detections"]
+        D_NEW["is_processed = false\nfire_event_id = NULL"]
+        D_NOISE["Ruido DBSCAN\nis_processed = true\nfire_event_id = NULL"]
+        D_DONE["is_processed = true\nfire_event_id = id"]
+    end
+
+    CSV -->|"download_firms_daily · 00:00 UTC"| D_NEW
+    D_NEW -->|"cluster_detections · 01:00 UTC\nST-DBSCAN epsilon=2km · delta_t=48h"| D_NOISE
+    D_NEW -->|"epsilon=2km → asigna a evento\nnuevo o existente"| D_DONE
+
+    MERGE["MERGE de episodios\nSi una deteccion de EP-A esta\na menos de 2km de una deteccion de EP-B\nY dentro de los ultimos 7 dias\n→ los episodios se fusionan"]
+    D_DONE -.->|"evaluado en\ncluster_fire_episodes"| MERGE
+
+    subgraph EVT["fire_events"]
+        E_A["ACTIVE\ndias 0 a 7 desde last_seen_at"]
+        E_M["MONITORING\ndias 7 a 14 · ventana de evaluacion espacial"]
+        E_X["EXTINCT\n14d sin deteccion en menos de 2km"]
+    end
+
+    D_DONE -->|"crea evento status=active\no actualiza last_seen_at"| E_A
+
+    E_A -->|"7d sin redeteccion\nlast_seen_at + 7d menor que NOW"| E_M
+    E_M -->|"nueva deteccion en menos de 2km\n→ reset del ciclo completo"| E_A
+    E_M -->|"sin deteccion en menos de 2km\ndurante ventana 7-14d"| E_X
+
+    subgraph EPI["fire_episodes  (estado heredado de sus eventos)"]
+        EP_A["ACTIVE\n1 o mas eventos active"]
+        EP_M["MONITORING\n0 eventos active\n1 o mas eventos monitoring"]
+        EP_X["EXTINCT\ntodos los eventos → extinct\nextinct_at = NOW()  ·  dura 30 dias"]
+        EP_C["CLOSED\nextinct_at + 30d\nsolo visible en historicos"]
+    end
+
+    E_A  -->|"1 o mas eventos active"| EP_A
+    E_M  -->|"todos los eventos\nabandonan active"| EP_M
+    E_X  -->|"ultimo evento monitoring\npasa a extinct"| EP_X
+    EP_X -->|"extinct_at + 30 dias\ntask episode_closer · 05:00 UTC"| EP_C
+
+    E_A  -.->|"nueva deteccion reactiva\nun evento → active\n→ episodio vuelve a active\nautomaticamente en cascada"| EP_A
+
+    SCHEMA["Cambios de schema requeridos\n① FireStatus enum: agregar closed\n② fire_episodes: agregar extinct_at\n③ Nuevo task: episode_closer diario"]
+    EP_X -.->|"requiere"| SCHEMA
+    EP_C -.->|"requiere"| SCHEMA
+
+    CAR["Carrusel\nactive · monitoring · extinct"]
+    HIST["Historicos\nclosed"]
+
+    EP_A --> CAR
+    EP_M --> CAR
+    EP_X --> CAR
+    EP_C --> HIST
+```
+
+---
+
+### 4.4 Flujos de transición de estados
+
+Esta sección describe en detalle todos los flujos posibles (principales y alternativos) entre los estados de cada entidad del pipeline.
+
+#### Detecciones (`fire_detections`)
+
+Cada fila insertada por `download_firms_daily` nace con `is_processed = false` y `fire_event_id = NULL`. A partir del clustering, existen dos caminos posibles:
+
+| Flujo | Resultado | Condición |
+|-------|-----------|-----------|
+| **Principal** | `is_processed = true`, `fire_event_id = <id>` | La detección forma parte de un cluster de densidad suficiente (≥ `min_points`) |
+| **Alternativo — ruido** | `is_processed = true`, `fire_event_id = NULL` | La detección queda aislada: no tiene vecinos dentro del radio `epsilon_km` en la ventana temporal `temporal_window_hours` |
+
+Las detecciones son **inmutables** una vez insertadas, salvo esos dos campos y `h3_index`.
+
+#### Eventos (`fire_events`)
+
+El estado de un evento sigue un ciclo de tres fases con posibilidad de reactivación:
+
+**Flujo principal (extinción sin rebrote):**
+
+```
+Dia 0    : deteccion asignada → evento creado con status = 'active'
+Dias 0-7 : status = 'active'  (last_seen_at se actualiza con cada nueva deteccion)
+Dia 7    : sin redeteccion → status = 'monitoring'  (ventana de evaluacion abierta)
+Dias 7-14: evaluacion espacial: hay detecciones en ≤2km despues de last_seen_at?
+Dia 14   : NO hay detecciones en ≤2km → status = 'extinct'
+```
+
+**Flujo alternativo — reactivacion (rebrote dentro de la ventana):**
+
+```
+Dias 7-14: nueva fire_detection aparece en ≤2km del centroide del evento
+           → last_seen_at se actualiza
+           → status vuelve a 'active'
+           → el ciclo de 7 dias se reinicia desde el nuevo last_seen_at
+```
+
+**Flujo alternativo — merge de eventos/episodios:**
+
+Si dos detecciones de eventos distintos se encuentran a ≤2km de distancia **y** dentro de una ventana temporal de ≤7 días, `cluster_fire_episodes_pipeline` fusiona los episodios correspondientes. El episodio absorbido queda con `status = 'closed'` y sus eventos pasan al episodio absorbente. La fusión queda registrada en `episode_mergers`.
+
+**Parámetros que gobiernan las transiciones de eventos:**
+
+| Parámetro (`system_parameters`) | Valor | Controla |
+|---------------------------------|-------|---------|
+| `event_monitoring_window_hours` | 168 (7 días) | Umbral `active → monitoring` |
+| `event_extinction_window_hours` | 336 (14 días) | Umbral temporal mínimo `monitoring → extinct` |
+| `event_spatial_epsilon_meters` | 2000 (2 km) | Radio del check espacial de reactivación/extinción |
+
+#### Episodios (`fire_episodes`)
+
+El estado del episodio **se hereda directamente de los estados de sus eventos**. No existe ventana temporal propia a nivel de episodio para las transiciones `active → monitoring → extinct`.
+
+**Flujo principal (sin rebrotes):**
+
+```
+Mientras ≥1 evento sea 'active'   → episodio en 'active'
+Cuando 0 eventos active, ≥1 monitoring → episodio en 'monitoring'
+Cuando todos los eventos son 'extinct' → episodio pasa a 'extinct' (extinct_at = NOW())
+A los 30 dias de extinct_at        → episodio pasa a 'closed' (task episode_closer)
+```
+
+**Flujo alternativo — reactivacion en cascada:**
+
+No requiere trigger independiente a nivel de episodio. Si una nueva `fire_detection` aparece en el área del episodio:
+1. El clustering crea un nuevo evento (o reasigna la detección a uno existente) con `status = 'active'`
+2. `cluster_fire_episodes_pipeline` asigna ese evento al episodio correspondiente
+3. El episodio detecta `≥1 evento active` y transiciona automáticamente a `'active'`
+
+Este mecanismo funciona incluso si el episodio estaba en `'extinct'`, siempre que no haya pasado a `'closed'`. Los episodios `closed` no se reabren.
+
+**Visibilidad en la UI:**
+
+| Estado | Carrusel (home) | Mapa | Históricos |
+|--------|-----------------|------|-----------|
+| `active` | Si | Si | No |
+| `monitoring` | Si | Si | No |
+| `extinct` | Si (durante 30 días) | No | No |
+| `closed` | No | No | Si |
+
 ---
 
 ## 5. Scripts y componentes involucrados
@@ -420,13 +566,21 @@ El home muestra **episodios** como tarjetas (FireCards) con imágenes satelitale
 ```
 21:00 ART (D-1)  │  Ingestion: descarga FIRMS → fire_detections
                   │
-22:00 ART (D-1)  │  Clustering: ST-DBSCAN → fire_events + actualiza fire_detections
+22:00 ART (D-1)  │  Clustering: ST-DBSCAN → fire_events (status='active')
+                  │
+22:30 ART (D-1)  │  Event status: persiste active→monitoring→extinct en fire_events
+                  │                (ventana 7d + check espacial 2km)
+                  │
+22:45 ART (D-1)  │  Geo-enrichment: province + áreas protegidas en fire_events
                   │
 23:00 ART (D-1)  │  Episode aggregation → fire_episodes + fire_episode_events + fusiones
+                  │                        (lee eventos ya enriquecidos y con status fresco)
                   │
 00:00 ART (D)    │  Carousel: GEE → satellite_images + fire_episodes.slides_data + OCI Storage
                   │
 01:00 ART (D)    │  Cleanup: limpieza de assets temporales
+                  │
+02:00 ART (D)    │  Episode closer: extinct → closed para episodios con extinct_at + 30d
                   │
 05:00 ART (D)    │  Closure reports: generación de PDFs para episodios con dNBR
                   │
