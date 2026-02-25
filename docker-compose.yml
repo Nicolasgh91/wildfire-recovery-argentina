@@ -94,7 +94,8 @@ services:
       resources:
         limits:
           cpus: '1.5'
-          memory: 1G
+          memory: 1536M
+    mem_limit: 1536m
     
     # Production: use image default CMD (no --reload).
     # For local dev, add --reload via docker-compose.override.yml.
@@ -168,7 +169,7 @@ services:
           cpus: '1.0'
           memory: 512M
     
-    command: celery -A workers.celery_app worker --loglevel=info --queues=ingestion --concurrency=2 --max-tasks-per-child=50
+    command: celery -A workers.celery_app worker --loglevel=info --queues=ingestion --concurrency=1 --max-tasks-per-child=50
     healthcheck:
       test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
@@ -230,7 +231,7 @@ services:
           cpus: '1.0'
           memory: 768M
     
-    command: celery -A workers.celery_app worker --loglevel=info --queues=clustering --concurrency=2 --max-tasks-per-child=50
+    command: celery -A workers.celery_app worker --loglevel=info --queues=clustering --concurrency=1 --max-tasks-per-child=50
     healthcheck:
       test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
@@ -310,6 +311,8 @@ services:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/worker:latest
     container_name: forestguard-worker-vae
     restart: unless-stopped
+    profiles:
+      - workers-heavy
     environment:
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
@@ -429,7 +432,7 @@ services:
           cpus: '1.0'
           memory: 768M
     
-    command: celery -A workers.celery_app worker --loglevel=info --queues=reports,notification --concurrency=2 --max-tasks-per-child=50
+    command: celery -A workers.celery_app worker --loglevel=info --queues=reports,notification --concurrency=1 --max-tasks-per-child=50
     healthcheck:
       test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
