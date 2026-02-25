@@ -130,16 +130,16 @@ jobs:
           echo "Docker daemon OK"
 
           echo "=== Cleanup (dangling only) ==="
-          docker container prune -f
+          timeout 30 docker container prune -f || echo "WARNING: docker container prune timed out"
           # 2. Remove dangling (untagged) images
-          docker image prune -f
+          timeout 30 docker image prune -f || echo "WARNING: docker image prune timed out"
 
           # Limpieza agresiva solo si hay presión de disco real
           DISK_USE=$(df / | awk 'NR==2 {gsub("%","",$5); print $5}')
           if [[ "$DISK_USE" -gt 85 ]]; then
             echo "Disk pressure — aggressive cleanup..."
-            docker builder prune -af
-            docker image prune -af
+            timeout 60 docker builder prune -af || echo "WARNING: docker builder prune timed out"
+            timeout 60 docker image prune -af || echo "WARNING: docker image prune timed out"
           fi
 
           timeout 30 docker system df 2>/dev/null || echo "WARNING: docker system df timed out"

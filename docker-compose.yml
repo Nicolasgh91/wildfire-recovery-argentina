@@ -12,6 +12,11 @@ services:
       - redis_data:/data
     networks:
       - forestguard
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -84,6 +89,12 @@ services:
     
     networks:
       - forestguard
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
     
     # Production: use image default CMD (no --reload).
     # For local dev, add --reload via docker-compose.override.yml.
@@ -150,6 +161,12 @@ services:
     
     networks:
       - forestguard
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
     
     command: celery -A workers.celery_app worker --loglevel=info --queues=ingestion --concurrency=2
     healthcheck:
@@ -206,6 +223,12 @@ services:
     
     networks:
       - forestguard
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
     
     command: celery -A workers.celery_app worker --loglevel=info --queues=clustering --concurrency=2
     healthcheck:
@@ -267,6 +290,12 @@ services:
     
     networks:
       - forestguard
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
     
     command: celery -A workers.celery_app worker --loglevel=info --queues=analysis --concurrency=1
     healthcheck:
@@ -325,6 +354,12 @@ services:
 
     networks:
       - forestguard
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
 
     command: celery -A workers.celery_app worker --loglevel=info --queues=vae --concurrency=1 --max-tasks-per-child=100
     healthcheck:
@@ -387,6 +422,12 @@ services:
     
     networks:
       - forestguard
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
     
     command: celery -A workers.celery_app worker --loglevel=info --queues=reports,notification --concurrency=2
     healthcheck:
@@ -421,6 +462,12 @@ services:
     
     networks:
       - forestguard
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
     
     command: celery -A workers.celery_app beat --loglevel=info -s /tmp/celerybeat-schedule
     healthcheck:
