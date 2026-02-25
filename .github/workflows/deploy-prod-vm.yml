@@ -142,7 +142,7 @@ jobs:
             docker image prune -af
           fi
 
-          docker system df 2>/dev/null || true
+          timeout 30 docker system df 2>/dev/null || echo "WARNING: docker system df timed out"
           REMOTE_SCRIPT
 
       - name: Deploy via SSH
