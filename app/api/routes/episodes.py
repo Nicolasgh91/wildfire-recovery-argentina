@@ -140,11 +140,21 @@ def list_fire_episodes(
         raise HTTPException(status_code=400, detail="Invalid mode. Use active or recent.")
 
     if mode_value == "active":
+        # Politica de visibilidad alineada con el carousel worker:
+        # - active y monitoring: siempre visibles
+        # - extinct recientes (<= 30 dias post extinct_at): visibles hasta transicion a closed
+        # Esto garantiza que la API muestre exactamente los episodios para los que
+        # el carousel worker genera thumbnails.
         query = query.filter(
-            FireEpisode.status.in_(["active", "monitoring"]),
             FireEpisode.gee_candidate == True,
             FireEpisode.slides_data.isnot(None),
-            text("jsonb_array_length(fire_episodes.slides_data) > 0")
+            text("jsonb_array_length(fire_episodes.slides_data) > 0"),
+            text(
+                "(fire_episodes.status IN ('active', 'monitoring')"
+                " OR (fire_episodes.status = 'extinct'"
+                "     AND fire_episodes.extinct_at IS NOT NULL"
+                "     AND fire_episodes.extinct_at > NOW() - INTERVAL '30 days'))"
+            ),
         )
     elif mode_value == "recent":
         query = query.filter(

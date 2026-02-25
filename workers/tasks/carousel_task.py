@@ -6,6 +6,7 @@ import logging
 
 from app.db.session import SessionLocal
 from app.services.imagery_service import ImageryService
+from app.services.redis_service import redis_client
 from workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -24,11 +25,11 @@ def generate_carousel(self, max_fires: int | None = None, force_refresh: bool = 
     Generate daily carousel thumbnails for active episodes.
     Guaranteed single execution at a time via Redis distributed lock.
     """
-    from app.services.redis_service import redis_client
-
     lock_key = "carousel:generation_lock"
-    # Timeout after 30 mins to avoid infinite stale locks if worker crashes hard.
-    acquired = redis_client.set(lock_key, "locked", nx=True, ex=1800)
+    # DT-003: aumentado a 60 min (3600s). Con batch_size=20 y ~5-7 GEE calls/episodio
+    # a 1 req/s el batch completo puede tomar ~10 min; con errores/retries Celery se
+    # acerca a 30 min. El lock de 60 min da margen suficiente sin riesgo de stale lock.
+    acquired = redis_client.set(lock_key, "locked", nx=True, ex=3600)
 
     if not acquired:
         logger.info("Carousel generation already running. Skipping this invocation.")
@@ -38,7 +39,7 @@ def generate_carousel(self, max_fires: int | None = None, force_refresh: bool = 
     try:
         service = ImageryService(db)
         result = service.run_carousel(max_fires=max_fires, force_refresh=force_refresh)
-        logger.info("Carousel generation completed: %s", result)
+        logger.info("Carousel generation completed: %s", str(result))
         return {"success": True, **result}
     except Exception as exc:
         db.rollback()

@@ -63,6 +63,11 @@ class FireEpisode(Base):
         back_populates="episode",
         cascade="all, delete-orphan",
     )
+    satellite_images = relationship(
+        "SatelliteImage",
+        back_populates="episode",
+        primaryjoin="FireEpisode.id == foreign(SatelliteImage.episode_id)",
+    )
 
 
 class FireEpisodeEvent(Base):
