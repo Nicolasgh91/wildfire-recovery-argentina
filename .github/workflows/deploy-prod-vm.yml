@@ -103,29 +103,28 @@ jobs:
 
           echo "=== Docker daemon health ==="
           if ! timeout 15 docker info > /dev/null 2>&1; then
-            echo "ERROR: Docker daemon is not responding."
-            echo "=== DIAGNOSTIC: User/Group context ==="
-            timeout 5 id || true
-            timeout 5 groups || true
-            
-            echo "=== DIAGNOSTIC: Docker daemon status ==="
-            timeout 10 systemctl is-active docker || true
-            timeout 10 systemctl status docker --no-pager -l || true
-            
-            echo "=== DIAGNOSTIC: Docker daemon logs ==="
-            timeout 10 journalctl -u docker -n 200 --no-pager || true
-            
-            echo "=== DIAGNOSTIC: Containerd status ==="
-            timeout 10 systemctl status containerd --no-pager -l || true
-            timeout 10 journalctl -u containerd -n 200 --no-pager || true
-            
+            echo "WARNING: Docker daemon is not responding. Attempting auto-remediation..."
             echo "=== DIAGNOSTIC: System resources ==="
-            timeout 5 df -h || true
-            timeout 5 df -i || true
             timeout 5 free -m || true
+            timeout 5 df -h || true
             
-            echo "Run: sudo systemctl restart docker"
-            exit 1
+            echo "Restarting Docker daemon..."
+            sudo systemctl restart docker || true
+            sleep 10
+            
+            echo "Aggressively killing all running containers to free memory..."
+            timeout 20 docker ps -q | xargs -r docker kill || true
+            
+            # Wait for memory to reclaim
+            sleep 5
+            
+            if ! timeout 15 docker info > /dev/null 2>&1; then
+              echo "ERROR: Auto-remediation failed! Docker is still a zombie."
+              timeout 10 journalctl -u docker -n 200 --no-pager || true
+              timeout 5 free -m || true
+              exit 1
+            fi
+            echo "Auto-remediation succeeded. Docker is breathing again."
           fi
           echo "Docker daemon OK"
 
