@@ -57,7 +57,7 @@ case "${1:-}" in
         ;;
     --stop)
         echo "Deteniendo servicios..."
-        docker compose -f "$COMPOSE_FILE" down
+        docker compose -f "$COMPOSE_FILE" stop
         echo "Servicios detenidos"
         ;;
     --restart)

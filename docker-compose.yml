@@ -99,6 +99,9 @@ services:
           memory: 256M
     mem_limit: 256m
     
+    # Production: use image default CMD (no --reload).
+    # For local dev, add --reload via docker-compose.override.yml.
+    
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
@@ -109,7 +112,7 @@ services:
       driver: "json-file"
       options:
         max-size: "10m"
-        max-file: "5"
+        max-file: "3"
 
   # Worker 1: Fast (ingestion, clustering, reports, notification, default)
   worker-fast:
@@ -285,7 +288,7 @@ services:
     mem_limit: 96m
     
     command: >
-      bash -c "sleep 65 && 
+      bash -c "sleep 40 && 
       celery -A workers.celery_app beat --loglevel=info -s /tmp/celerybeat-schedule"
     healthcheck:
       test: [ "CMD", "celery", "-A", "workers.celery_app", "inspect", "ping" ]
@@ -347,7 +350,7 @@ services:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/frontend:latest
     container_name: forestguard-frontend
     restart: unless-stopped
-    mem_limit: 64m
+    mem_limit: 32m
     depends_on:
       - api
     networks:
@@ -395,7 +398,16 @@ services:
       - ./certbot/www:/var/www/certbot
     entrypoint: [ "certbot" ]
     restart: "no"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   forestguard:
     driver: bridge
+
+volumes:
+  redis_data:
+    driver: local

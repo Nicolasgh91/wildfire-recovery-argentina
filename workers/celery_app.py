@@ -148,7 +148,7 @@ celery_app.conf.update(
             'task': 'workers.tasks.closure_report_task.generate_closure_reports',
             'schedule': crontab(hour=8, minute=0),  # 08:00 UTC
             'kwargs': {'max_fires': None},
-            'options': {'queue': 'analysis'}
+            'options': {'queue': 'reports'}
         },
         'cleanup-expired-assets': {
             'task': 'workers.tasks.cleanup_assets_task.cleanup_expired_assets',

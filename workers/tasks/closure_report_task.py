@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 @celery_app.task(
     bind=True,
     name="workers.tasks.closure_report_task.generate_closure_reports",
-    queue="analysis",
+    queue="reports",
     max_retries=3,
 )
 def generate_closure_reports(self, max_fires: int | None = None):
