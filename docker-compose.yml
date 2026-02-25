@@ -13,6 +13,11 @@ services:
       - redis_data:/data
     networks:
       - forestguard
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -85,6 +90,12 @@ services:
     
     networks:
       - forestguard
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1G
     
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
@@ -143,6 +154,12 @@ services:
     
     networks:
       - forestguard
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
     
     command: >
       bash -c "sleep 15 && 
@@ -202,6 +219,12 @@ services:
     
     networks:
       - forestguard
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
     
     command: >
       bash -c "sleep 25 && 
@@ -266,6 +289,12 @@ services:
     
     networks:
       - forestguard
+      
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
     
     command: >
       bash -c "sleep 35 && 
@@ -331,9 +360,13 @@ services:
     networks:
       - forestguard
 
-    command: >
-      bash -c "sleep 45 && 
-      celery -A workers.celery_app worker --loglevel=info --queues=vae --concurrency=1 --max-tasks-per-child=50 --soft-time-limit=600 --time-limit=900"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+
+    command: celery -A workers.celery_app worker --loglevel=info --queues=vae --concurrency=1 --max-tasks-per-child=100
     healthcheck:
       test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
@@ -394,6 +427,12 @@ services:
     
     networks:
       - forestguard
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M
     
     command: >
       bash -c "sleep 55 && 
@@ -436,6 +475,12 @@ services:
     
     networks:
       - forestguard
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
     
     command: >
       bash -c "sleep 65 && 
