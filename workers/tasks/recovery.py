@@ -236,3 +236,160 @@ def batch_recovery_analysis(self, fire_event_ids=None, max_events=50, months_lis
     except Exception as exc:
         logger.error(f"Error in batch recovery analysis: {exc}")
         raise self.retry(exc=exc, countdown=60)
+
+
+@celery_app.task(
+    bind=True,
+    name='workers.tasks.recovery.analyze_episode_recovery',
+    queue='vae',
+    max_retries=2,
+)
+def analyze_episode_recovery(self, episode_id, months_after=None):
+    """
+    Analiza recuperación de vegetación para un episodio completo.
+    
+    Selecciona el evento representativo del episodio (más reciente o mayor FRP)
+    y ejecuta el análisis de recuperación sobre ese evento.
+    
+    Args:
+        episode_id: UUID del episodio
+        months_after: Cuántos meses después analizar (None = auto-detect)
+    """
+    from app.db.session import SessionLocal
+    from sqlalchemy import text
+    
+    db = SessionLocal()
+    try:
+        logger.info(f"Analyzing episode recovery for episode {episode_id}...")
+        
+        # 1. Get representative event from episode
+        event_row = db.execute(text("""
+            SELECT fe.id, fe.start_date, 
+                   ST_Y(fe.centroid::geometry) as lat,
+                   ST_X(fe.centroid::geometry) as lon,
+                   fe.estimated_area_hectares,
+                   fe.avg_frp, fe.max_frp
+            FROM fire_events fe
+            JOIN fire_episode_events fee ON fe.id = fee.event_id
+            WHERE fee.episode_id = :episode_id
+            AND fe.centroid IS NOT NULL
+            ORDER BY fe.max_frp DESC, fe.start_date DESC
+            LIMIT 1
+        """), {"episode_id": str(episode_id)}).fetchone()
+        
+        if not event_row:
+            logger.warning(f"No representative event found for episode {episode_id}")
+            return {
+                'episode_id': str(episode_id),
+                'status': 'skipped',
+                'reason': 'no_representative_event'
+            }
+        
+        representative_event_id = event_row[0]
+        logger.info(f"Selected representative event {representative_event_id} for episode {episode_id}")
+        
+        # 2. Execute recovery analysis on representative event
+        from .recovery import analyze_recovery
+        result = analyze_recovery.delay(representative_event_id, months_after)
+        
+        # 3. Store episode-level recovery status (optional enhancement)
+        # This could be added later to cache recovery status at episode level
+        
+        return {
+            'episode_id': str(episode_id),
+            'representative_event_id': str(representative_event_id),
+            'recovery_task_id': result.id,
+            'status': 'queued',
+            'event_frp': float(event_row[5]) if event_row[5] else None,
+        }
+        
+    except Exception as exc:
+        logger.error(f"Error analyzing episode recovery for {episode_id}: {exc}")
+        raise self.retry(exc=exc, countdown=60)
+    finally:
+        db.close()
+
+
+@celery_app.task(
+    bind=True,
+    name='workers.tasks.recovery.batch_episode_recovery_analysis',
+    queue='vae',
+    max_retries=2,
+)
+def batch_episode_recovery_analysis(self, max_episodes=50, recent_only=False, carousel_only=False):
+    """
+    Ejecuta análisis de recuperación para múltiples episodios en batch.
+    
+    Args:
+        max_episodes: Máximo número de episodios a procesar
+        recent_only: Solo episodios recientes (últimos 12 meses)
+        carousel_only: Solo episodios activos/monitoreo (para carrusel)
+    """
+    from app.db.session import SessionLocal
+    from sqlalchemy import text
+    from celery import group
+    
+    db = SessionLocal()
+    try:
+        logger.info(f"Starting batch episode recovery analysis (max_episodes={max_episodes})")
+        
+        # Build query based on parameters
+        where_conditions = ["fe.centroid IS NOT NULL"]
+        if recent_only:
+            where_conditions.append("fe.start_date >= NOW() - INTERVAL '12 months'")
+        if carousel_only:
+            where_conditions.append("ep.status IN ('active', 'monitoring')")
+        
+        where_clause = " AND ".join(where_conditions)
+        
+        # Get episodes for processing
+        episodes_query = text(f"""
+            SELECT ep.id, ep.status, ep.created_at,
+                   CASE WHEN ep.status = 'active' THEN 1
+                        WHEN ep.status = 'monitoring' THEN 2
+                        ELSE 3 END as status_priority
+            FROM fire_episodes ep
+            JOIN fire_episode_events fee ON ep.id = fee.episode_id
+            JOIN fire_events fe ON fee.event_id = fe.id
+            WHERE {where_clause}
+            GROUP BY ep.id, ep.status, ep.created_at
+            ORDER BY status_priority, ep.created_at DESC
+            LIMIT :max_episodes
+        """)
+        
+        episodes = db.execute(episodes_query, {"max_episodes": max_episodes}).fetchall()
+        
+        if not episodes:
+            logger.info("No episodes found for batch processing")
+            return {
+                'total_episodes': 0,
+                'status': 'completed',
+                'message': 'no_episodes_found'
+            }
+        
+        episode_ids = [str(ep[0]) for ep in episodes]
+        logger.info(f"Found {len(episode_ids)} episodes for batch processing")
+        
+        # Create group of episode recovery tasks
+        signatures = [
+            analyze_episode_recovery.s(episode_id) 
+            for episode_id in episode_ids
+        ]
+        
+        group_result = group(*signatures).apply_async()
+        
+        logger.info(f"Queued {len(signatures)} episode recovery tasks")
+        
+        return {
+            'total_episodes': len(episode_ids),
+            'total_tasks_enqueued': len(signatures),
+            'episode_ids': episode_ids,
+            'status': 'queued',
+            'group_id': group_result.id if group_result else None,
+        }
+        
+    except Exception as exc:
+        logger.error(f"Error in batch episode recovery analysis: {exc}")
+        raise self.retry(exc=exc, countdown=60)
+    finally:
+        db.close()
