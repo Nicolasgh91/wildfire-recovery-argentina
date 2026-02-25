@@ -61,29 +61,20 @@ def cluster_fire_episodes_pipeline(
     self,
     days_back: int = 90,
     max_events: int = 5000,
-    geo_lookback_hours: int | None = None,
 ):
     """
-    Enqueue non-blocking post-clustering pipeline using Celery canvas.
+    Enqueue episode clustering pipeline using Celery canvas.
 
     Chain:
       1) cluster_fire_episodes
-      2) geo_enrichment.enrich_recent_fire_events (immutable signature)
+
+    Nota: el geo-enrichment (province + áreas protegidas) fue movido a un
+    beat entry independiente a las 01:45 UTC (enrich-events-daily), que corre
+    antes que este pipeline (02:00 UTC). Así los episodios leen eventos ya
+    enriquecidos desde el primer momento.
     """
-    from workers.tasks.geo_enrichment import enrich_recent_fire_events
-
-    effective_geo_lookback = (
-        int(geo_lookback_hours)
-        if geo_lookback_hours is not None
-        else max(int(days_back) * 24, 24)
-    )
-
     workflow = chain(
         cluster_fire_episodes.s(days_back=days_back, max_events=max_events),
-        enrich_recent_fire_events.si(
-            lookback_hours=effective_geo_lookback,
-            max_events=max_events,
-        ),
     )
     async_result = workflow.apply_async()
     return {
@@ -91,7 +82,6 @@ def cluster_fire_episodes_pipeline(
         "workflow_id": async_result.id,
         "days_back": days_back,
         "max_events": max_events,
-        "geo_lookback_hours": effective_geo_lookback,
     }
 
 
