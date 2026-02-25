@@ -97,6 +97,9 @@ services:
           cpus: '1.5'
           memory: 1G
     
+    # Production: use image default CMD (no --reload).
+    # For local dev, add --reload via docker-compose.override.yml.
+    
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
@@ -161,9 +164,7 @@ services:
           cpus: '1.0'
           memory: 512M
     
-    command: >
-      bash -c "sleep 15 && 
-      celery -A workers.celery_app worker --loglevel=info --queues=ingestion --concurrency=2"
+    command: celery -A workers.celery_app worker --loglevel=info --queues=ingestion --concurrency=2 --max-tasks-per-child=50
     healthcheck:
       test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
@@ -226,9 +227,7 @@ services:
           cpus: '1.0'
           memory: 768M
     
-    command: >
-      bash -c "sleep 25 && 
-      celery -A workers.celery_app worker --loglevel=info --queues=clustering --concurrency=2"
+    command: celery -A workers.celery_app worker --loglevel=info --queues=clustering --concurrency=2 --max-tasks-per-child=50
     healthcheck:
       test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
@@ -296,9 +295,7 @@ services:
           cpus: '1.0'
           memory: 768M
     
-    command: >
-      bash -c "sleep 35 && 
-      celery -A workers.celery_app worker --loglevel=info --queues=analysis --concurrency=1 --max-tasks-per-child=50"
+    command: celery -A workers.celery_app worker --loglevel=info --queues=analysis --concurrency=1 --max-tasks-per-child=50
     healthcheck:
       test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
@@ -366,7 +363,7 @@ services:
           cpus: '1.0'
           memory: 1G
 
-    command: celery -A workers.celery_app worker --loglevel=info --queues=vae --concurrency=1 --max-tasks-per-child=100
+    command: celery -A workers.celery_app worker --loglevel=info --queues=vae --concurrency=1 --max-tasks-per-child=10
     healthcheck:
       test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
@@ -434,9 +431,7 @@ services:
           cpus: '1.0'
           memory: 768M
     
-    command: >
-      bash -c "sleep 55 && 
-      celery -A workers.celery_app worker --loglevel=info --queues=reports,notification --concurrency=2"
+    command: celery -A workers.celery_app worker --loglevel=info --queues=reports,notification --concurrency=2 --max-tasks-per-child=50
     healthcheck:
       test: [ "CMD-SHELL", "celery -A workers.celery_app inspect ping --timeout=10 2>/dev/null || pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s
