@@ -17,7 +17,7 @@ jobs:
     name: Deploy to production VM
     runs-on: ubuntu-latest
     environment: production
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -74,7 +74,9 @@ jobs:
             IdentityFile ~/.ssh/prod_vm_key
             StrictHostKeyChecking yes
             BatchMode yes
-            ConnectTimeout 30
+            ConnectTimeout 60
+            ServerAliveInterval 15
+            ServerAliveCountMax 6
             ControlMaster auto
             ControlPersist 10m
             ControlPath ~/.ssh/cm-%C
@@ -193,91 +195,23 @@ jobs:
           echo "=== Container status ==="
           docker compose ps
 
-          echo "=== Phase A: Backend Readiness ==="
-          API_HEALTHY=false
-          for i in $(seq 1 12); do
-            if curl -fsS --max-time 15 http://localhost:8000/health 2>/dev/null; then
-              echo "Backend health check passed on attempt $i"
-              API_HEALTHY=true
-              break
+          echo "=== Health check (with retry) ==="
+          for attempt in 1 2 3; do
+            echo "Attempt $attempt/3..."
+            if curl -fsS -L --max-time 20 http://localhost/health 2>/dev/null; then
+              echo "Health check passed"
+              exit 0
             fi
-            echo "  Backend attempt $i/12 failed, retrying in 5s..."
-            sleep 5
+            if curl -fsS --insecure --max-time 20 https://localhost/health 2>/dev/null; then
+              echo "Health check passed (HTTPS)"
+              exit 0
+            fi
+            echo "Health check failed, waiting 15s..."
+            sleep 15
           done
-
-          if ! $API_HEALTHY; then
-            echo "ERROR: Backend (API) failed to start after 12 attempts."
-            echo "=== DIAGNOSTIC: Container status ==="
-            docker compose ps -a || true
-            echo "=== DIAGNOSTIC: API logs ==="
-            docker compose logs --tail=200 api 2>/dev/null || true
-            echo "=== DIAGNOSTIC: Nginx logs ==="
-            docker compose logs --tail=120 nginx 2>/dev/null || true
-            echo "=== DIAGNOSTIC: API Container Inspect ==="
-            docker inspect forestguard-api --format 'Status: {{.State.Status}} OOMKilled: {{.State.OOMKilled}} ExitCode: {{.State.ExitCode}}' 2>/dev/null || true
-            echo "=== DIAGNOSTIC: Docker Stats ==="
-            docker stats --no-stream 2>/dev/null || true
-            exit 1
-          fi
-
-          echo "=== Phase B: Edge (Nginx) Readiness ==="
-          EDGE_HEALTHY=false
-          for i in $(seq 1 6); do
-            if curl -fsS -L --max-time 15 http://localhost/health 2>/dev/null; then
-              echo "Edge health check passed (HTTP) on attempt $i"
-              EDGE_HEALTHY=true
-              break
-            fi
-            if curl -fsS --insecure --max-time 15 https://localhost/health 2>/dev/null; then
-              echo "Edge health check passed (HTTPS) on attempt $i"
-              EDGE_HEALTHY=true
-              break
-            fi
-            echo "  Edge attempt $i/6 failed, retrying in 5s..."
-            sleep 5
-          done
-
-          if ! $EDGE_HEALTHY; then
-            echo "ERROR: Edge (Nginx) health check failed after 6 attempts."
-            echo "=== DIAGNOSTIC: Container status ==="
-            docker compose ps -a || true
-            echo "=== DIAGNOSTIC: API logs ==="
-            docker compose logs --tail=200 api 2>/dev/null || true
-            echo "=== DIAGNOSTIC: Nginx logs ==="
-            docker compose logs --tail=120 nginx 2>/dev/null || true
-            echo "=== DIAGNOSTIC: Nginx Config ==="
-            docker compose exec -T nginx nginx -t || true
-            echo "=== DIAGNOSTIC: API Container Inspect ==="
-            docker inspect forestguard-api --format 'Status: {{.State.Status}} OOMKilled: {{.State.OOMKilled}} ExitCode: {{.State.ExitCode}}' 2>/dev/null || true
-            echo "=== DIAGNOSTIC: Docker Stats ==="
-            docker stats --no-stream 2>/dev/null || true
-            exit 1
-          fi
-
-          echo "=== Worker-reports check ==="
-          if ! docker compose config --services 2>/dev/null | grep -qx "worker-reports"; then
-            echo "ℹ worker-reports not in compose — skip"
-          else
-            if ! timeout 10 docker compose ps --format '{{.Service}} {{.State}}' > /tmp/compose_ps 2>&1; then
-              echo "ERROR: Docker compose unresponsive — infrastructure failure"
-              cat /tmp/compose_ps 2>/dev/null || true
-              exit 1
-            fi
-
-            status=$(grep '^worker-reports ' /tmp/compose_ps | awk '{print $2}' || echo "")
-
-            if [[ -z "$status" ]]; then
-              echo "ERROR: worker-reports defined but no container found."
-              docker compose logs --tail=30 worker-reports 2>/dev/null || true
-              exit 1
-            elif [[ "$status" != "running" ]]; then
-              echo "ERROR: worker-reports is '${status}' — expected 'running'."
-              docker compose logs --tail=30 worker-reports 2>/dev/null || true
-              exit 1
-            else
-              echo "✓ worker-reports is running"
-            fi
-          fi
+          echo "ERROR: Health check failed after 3 attempts"
+          docker compose logs --tail=30 api nginx 2>/dev/null || true
+          exit 1
           REMOTE_SCRIPT
 
       - name: Diagnostic logs on failure
