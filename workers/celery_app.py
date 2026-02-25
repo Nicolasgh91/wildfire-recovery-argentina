@@ -109,6 +109,7 @@ celery_app.conf.update(
         'workers.tasks.notification.send_contact_email': {'queue': 'notification'},
         'workers.tasks.export_task.export_fires_async': {'queue': 'analysis'},
         'workers.tasks.pdf_generation_task.generate_pdf_for_job': {'queue': 'reports'},
+        'workers.tasks.cleanup_assets_task.cleanup_expired_assets': {'queue': 'analysis'},
     },
     
     # Retry policy
@@ -151,7 +152,7 @@ celery_app.conf.update(
         'cleanup-expired-assets': {
             'task': 'workers.tasks.cleanup_assets_task.cleanup_expired_assets',
             'schedule': crontab(hour=4, minute=0),  # 04:00 UTC
-            'options': {'queue': 'default'}
+            'options': {'queue': 'analysis'}
         },
         # UC-F12: Monthly VAE recovery analysis for active fire events
         'vae-recovery-monthly': {

@@ -1,3 +1,6 @@
+"""
+[DEPRECATED] - Codigo Legacy o Manual. Usar el flujo de Celery en su lugar.
+"""
 #!/usr/bin/env python3
 """
 Parallel backfill for fire_detections.h3_index (UC-F08R).
@@ -291,3 +294,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

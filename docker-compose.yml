@@ -388,7 +388,7 @@ services:
     networks:
       - forestguard
     
-    command: celery -A workers.celery_app worker --loglevel=info --queues=reports --concurrency=2
+    command: celery -A workers.celery_app worker --loglevel=info --queues=reports,notification --concurrency=2
     healthcheck:
       test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
       interval: 30s

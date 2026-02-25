@@ -1,4 +1,7 @@
 """
+[DEPRECATED] - Codigo Legacy o Manual. Usar el flujo de Celery en su lugar.
+"""
+"""
 Generate Carousel Thumbnails for Missing Episodes
 =================================================
 
@@ -150,3 +153,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

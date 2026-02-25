@@ -3,6 +3,9 @@
 =============================================================================
 FORESTGUARD - AGREGACIÓN DE EPISODIOS (UC-17)
 =============================================================================
+[DEPRECATED] - Código Legacy o Manual. Peligro de pérdida de datos.
+Usar el flujo de Celery / Clustering Task en su lugar.
+=============================================================================
 
 Agrupa 'Fire Events' (micro) en 'Fire Episodes' (macro) para optimizar
 el procesamiento en Google Earth Engine y la visualización en frontend.

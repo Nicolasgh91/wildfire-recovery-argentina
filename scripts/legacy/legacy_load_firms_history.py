@@ -1,4 +1,7 @@
 """
+[DEPRECATED] - Codigo Legacy o Manual. Usar el flujo de Celery en su lugar.
+"""
+"""
 Descarga datos históricos de NASA FIRMS y los carga en la base de datos.
 Soporta carga desde archivo local o descarga automática.
 
