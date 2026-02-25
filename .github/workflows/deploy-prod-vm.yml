@@ -103,46 +103,45 @@ jobs:
 
           echo "=== Docker daemon health ==="
           if ! timeout 15 docker info > /dev/null 2>&1; then
-            echo "ERROR: Docker daemon is not responding."
-            echo "=== DIAGNOSTIC: User/Group context ==="
-            timeout 5 id || true
-            timeout 5 groups || true
-            
-            echo "=== DIAGNOSTIC: Docker daemon status ==="
-            timeout 10 systemctl is-active docker || true
-            timeout 10 systemctl status docker --no-pager -l || true
-            
-            echo "=== DIAGNOSTIC: Docker daemon logs ==="
-            timeout 10 journalctl -u docker -n 200 --no-pager || true
-            
-            echo "=== DIAGNOSTIC: Containerd status ==="
-            timeout 10 systemctl status containerd --no-pager -l || true
-            timeout 10 journalctl -u containerd -n 200 --no-pager || true
-            
+            echo "WARNING: Docker daemon is not responding. Attempting auto-remediation..."
             echo "=== DIAGNOSTIC: System resources ==="
-            timeout 5 df -h || true
-            timeout 5 df -i || true
             timeout 5 free -m || true
+            timeout 5 df -h || true
             
-            echo "Run: sudo systemctl restart docker"
-            exit 1
+            echo "Restarting Docker daemon..."
+            sudo systemctl restart docker || true
+            sleep 10
+            
+            echo "Aggressively killing all running containers to free memory..."
+            timeout 20 docker ps -q | xargs -r docker kill || true
+            
+            # Wait for memory to reclaim
+            sleep 5
+            
+            if ! timeout 15 docker info > /dev/null 2>&1; then
+              echo "ERROR: Auto-remediation failed! Docker is still a zombie."
+              timeout 10 journalctl -u docker -n 200 --no-pager || true
+              timeout 5 free -m || true
+              exit 1
+            fi
+            echo "Auto-remediation succeeded. Docker is breathing again."
           fi
           echo "Docker daemon OK"
 
           echo "=== Cleanup (dangling only) ==="
-          docker container prune -f
+          timeout 30 docker container prune -f || echo "WARNING: docker container prune timed out"
           # 2. Remove dangling (untagged) images
-          docker image prune -f
+          timeout 30 docker image prune -f || echo "WARNING: docker image prune timed out"
 
           # Limpieza agresiva solo si hay presión de disco real
           DISK_USE=$(df / | awk 'NR==2 {gsub("%","",$5); print $5}')
           if [[ "$DISK_USE" -gt 85 ]]; then
             echo "Disk pressure — aggressive cleanup..."
-            docker builder prune -af
-            docker image prune -af
+            timeout 60 docker builder prune -af || echo "WARNING: docker builder prune timed out"
+            timeout 60 docker image prune -af || echo "WARNING: docker image prune timed out"
           fi
 
-          docker system df 2>/dev/null || true
+          timeout 30 docker system df 2>/dev/null || echo "WARNING: docker system df timed out"
           REMOTE_SCRIPT
 
       - name: Deploy via SSH
@@ -194,27 +193,64 @@ jobs:
           echo "=== Container status ==="
           docker compose ps
 
-          echo "=== Health check (up to 12 attempts) ==="
-          HEALTHY=false
+          echo "=== Phase A: Backend Readiness ==="
+          API_HEALTHY=false
           for i in $(seq 1 12); do
-            if curl -fsS -L --max-time 15 http://localhost/health 2>/dev/null; then
-              echo "Health check passed (HTTP) on attempt $i"
-              HEALTHY=true
+            if curl -fsS --max-time 15 http://localhost:8000/health 2>/dev/null; then
+              echo "Backend health check passed on attempt $i"
+              API_HEALTHY=true
               break
             fi
-            if curl -fsS --insecure --max-time 15 https://localhost/health 2>/dev/null; then
-              echo "Health check passed (HTTPS) on attempt $i"
-              HEALTHY=true
-              break
-            fi
-            echo "  Attempt $i/12 failed, retrying in 5s..."
+            echo "  Backend attempt $i/12 failed, retrying in 5s..."
             sleep 5
           done
 
-          if ! $HEALTHY; then
-            echo "ERROR: Health check failed after 12 attempts."
-            docker compose logs --tail=80 api nginx 2>/dev/null || true
-            docker compose ps || true
+          if ! $API_HEALTHY; then
+            echo "ERROR: Backend (API) failed to start after 12 attempts."
+            echo "=== DIAGNOSTIC: Container status ==="
+            docker compose ps -a || true
+            echo "=== DIAGNOSTIC: API logs ==="
+            docker compose logs --tail=200 api 2>/dev/null || true
+            echo "=== DIAGNOSTIC: Nginx logs ==="
+            docker compose logs --tail=120 nginx 2>/dev/null || true
+            echo "=== DIAGNOSTIC: API Container Inspect ==="
+            docker inspect forestguard-api --format 'Status: {{.State.Status}} OOMKilled: {{.State.OOMKilled}} ExitCode: {{.State.ExitCode}}' 2>/dev/null || true
+            echo "=== DIAGNOSTIC: Docker Stats ==="
+            docker stats --no-stream 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "=== Phase B: Edge (Nginx) Readiness ==="
+          EDGE_HEALTHY=false
+          for i in $(seq 1 6); do
+            if curl -fsS -L --max-time 15 http://localhost/health 2>/dev/null; then
+              echo "Edge health check passed (HTTP) on attempt $i"
+              EDGE_HEALTHY=true
+              break
+            fi
+            if curl -fsS --insecure --max-time 15 https://localhost/health 2>/dev/null; then
+              echo "Edge health check passed (HTTPS) on attempt $i"
+              EDGE_HEALTHY=true
+              break
+            fi
+            echo "  Edge attempt $i/6 failed, retrying in 5s..."
+            sleep 5
+          done
+
+          if ! $EDGE_HEALTHY; then
+            echo "ERROR: Edge (Nginx) health check failed after 6 attempts."
+            echo "=== DIAGNOSTIC: Container status ==="
+            docker compose ps -a || true
+            echo "=== DIAGNOSTIC: API logs ==="
+            docker compose logs --tail=200 api 2>/dev/null || true
+            echo "=== DIAGNOSTIC: Nginx logs ==="
+            docker compose logs --tail=120 nginx 2>/dev/null || true
+            echo "=== DIAGNOSTIC: Nginx Config ==="
+            docker compose exec -T nginx nginx -t || true
+            echo "=== DIAGNOSTIC: API Container Inspect ==="
+            docker inspect forestguard-api --format 'Status: {{.State.Status}} OOMKilled: {{.State.OOMKilled}} ExitCode: {{.State.ExitCode}}' 2>/dev/null || true
+            echo "=== DIAGNOSTIC: Docker Stats ==="
+            docker stats --no-stream 2>/dev/null || true
             exit 1
           fi
 
@@ -250,9 +286,15 @@ jobs:
           ssh prod bash -s << 'REMOTE_SCRIPT' || true
           set -uo pipefail
           echo "=== DIAGNOSTIC: Container status ==="
-          docker compose -f /home/opc/docker-compose.yml ps 2>/dev/null || true
-          echo "=== DIAGNOSTIC: API + Nginx logs ==="
-          docker compose -f /home/opc/docker-compose.yml logs --tail=120 api nginx 2>/dev/null || true
+          docker compose -f /home/opc/docker-compose.yml ps -a 2>/dev/null || true
+          echo "=== DIAGNOSTIC: API logs ==="
+          docker compose -f /home/opc/docker-compose.yml logs --tail=200 api 2>/dev/null || true
+          echo "=== DIAGNOSTIC: Nginx logs ==="
+          docker compose -f /home/opc/docker-compose.yml logs --tail=120 nginx 2>/dev/null || true
+          echo "=== DIAGNOSTIC: API Container Inspect ==="
+          docker inspect forestguard-api --format 'Status: {{.State.Status}} OOMKilled: {{.State.OOMKilled}} ExitCode: {{.State.ExitCode}}' 2>/dev/null || true
+          echo "=== DIAGNOSTIC: Docker Stats ==="
+          docker stats --no-stream 2>/dev/null || true
           echo "=== DIAGNOSTIC: Docker daemon ==="
           systemctl status docker --no-pager -l 2>/dev/null || true
           REMOTE_SCRIPT
