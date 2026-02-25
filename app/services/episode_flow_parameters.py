@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 CANONICAL_EPISODE_FLOW_DEFAULTS: dict[str, float | int] = {
     "event_spatial_epsilon_meters": 2000.0,
     "event_temporal_window_hours": 48,
-    "event_monitoring_window_hours": 168,
+    "event_monitoring_window_hours": 168,   # 7d: umbral active -> monitoring
+    "event_extinction_window_hours": 336,   # 14d: umbral monitoring -> extinct (+ spatial check 2km)
     "episode_spatial_epsilon_meters": 6000.0,
     "episode_temporal_window_hours": 720,
 }
