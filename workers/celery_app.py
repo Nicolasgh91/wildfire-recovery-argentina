@@ -95,23 +95,22 @@ celery_app.conf.update(
     
     # Routing
     task_routes={
-        'workers.tasks.ingestion.download_firms_daily': {'queue': 'ingestion'},
-        'workers.tasks.clustering.cluster_detections': {'queue': 'clustering'},
-        'workers.tasks.clustering_task.cluster_fire_episodes': {'queue': 'clustering'},
-        'workers.tasks.clustering_task.cluster_fire_episodes_pipeline': {'queue': 'clustering'},
-        'workers.tasks.geo_enrichment.enrich_recent_fire_events': {'queue': 'analysis'},
-        'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
-        'workers.tasks.episode_closer_task.close_extinct_episodes': {'queue': 'analysis'},
-        'workers.tasks.closure_report_task.generate_closure_reports': {'queue': 'analysis'},
-        'workers.tasks.exploration_hd_task.generate_exploration_hd': {'queue': 'analysis'},
-        'workers.tasks.recovery.analyze_recovery': {'queue': 'vae'},
-        'workers.tasks.recovery.batch_recovery_analysis': {'queue': 'vae'},
-        'workers.tasks.destruction.detect_destruction': {'queue': 'vae'},
-        'workers.tasks.destruction.batch_destruction_detection': {'queue': 'vae'},
-        'workers.tasks.notification.send_contact_email': {'queue': 'notification'},
-        'workers.tasks.export_task.export_fires_async': {'queue': 'analysis'},
-        'workers.tasks.pdf_generation_task.generate_pdf_for_job': {'queue': 'reports'},
-        'workers.tasks.cleanup_assets_task.cleanup_expired_assets': {'queue': 'analysis'},
+        'workers.tasks.ingestion.*': {'queue': 'ingestion'},
+        'workers.tasks.clustering.*': {'queue': 'clustering'},
+        'workers.tasks.clustering_task.*': {'queue': 'clustering'},
+        'workers.tasks.recovery.*': {'queue': 'vae'},
+        'workers.tasks.destruction.*': {'queue': 'vae'},
+        'workers.tasks.carousel_task.*': {'queue': 'analysis'},
+        'workers.tasks.closure_report_task.*': {'queue': 'reports'},
+        'workers.tasks.notification.*': {'queue': 'notification'},
+        
+        # Remaining existing tasks
+        'workers.tasks.geo_enrichment.*': {'queue': 'analysis'},
+        'workers.tasks.episode_closer_task.*': {'queue': 'analysis'},
+        'workers.tasks.exploration_hd_task.*': {'queue': 'analysis'},
+        'workers.tasks.export_task.*': {'queue': 'analysis'},
+        'workers.tasks.cleanup_assets_task.*': {'queue': 'analysis'},
+        'workers.tasks.pdf_generation_task.*': {'queue': 'reports'},
     },
     
     # Retry policy

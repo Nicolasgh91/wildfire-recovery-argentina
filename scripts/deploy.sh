@@ -91,20 +91,6 @@ case "${1:-}" in
         PRIVKEY_PATH="${CERT_DIR}/privkey.pem"
         CHAIN_PATH="${CERT_DIR}/chain.pem"
 
-        # Pull de imagenes de GHCR
-        echo "=== Pulling images ==="
-        if ! docker compose -f "$COMPOSE_FILE" pull; then
-            echo "ERROR: Failed to pull images from GHCR."
-            echo "  Check that the backend-build workflow completed successfully."
-            exit 1
-        fi
-
-        # Cleanup before building new images
-        echo "=== Pre-build cleanup ==="
-        docker container prune -f
-        docker image prune -f
-        docker builder prune -af
-
         # Auto-bootstrap SSL para primer deploy
         if [ ! -f "$FULLCHAIN_PATH" ] || [ ! -f "$PRIVKEY_PATH" ] || [ ! -f "$CHAIN_PATH" ]; then
             echo "No se encontraron certificados SSL para ${SSL_DOMAIN}. Ejecutando bootstrap automatico..."
@@ -118,99 +104,41 @@ case "${1:-}" in
             echo "Certificados SSL encontrados en ${CERT_DIR}"
         fi
 
-        # Levantar servicios core primero (Redis, API, Frontend, Nginx)
-        echo "=== Iniciando servicios core ==="
-        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans redis api frontend nginx
+        echo "=== Phase 0: Pull images (before stopping anything) ==="
+        docker compose -f "$COMPOSE_FILE" pull --quiet
 
-        # Esperar a que nginx inicie
-        echo "Waiting for Nginx to start..."
+        echo "=== Phase 1: Stop workers gracefully ==="
+        docker compose -f "$COMPOSE_FILE" stop worker-gee worker-fast celery-beat 2>/dev/null || true
+        sleep 5
+
+        echo "=== Phase 2: Restart infrastructure ==="
+        docker compose -f "$COMPOSE_FILE" up -d redis
+        echo "Waiting for Redis..."
+        timeout 30 bash -c "until docker compose -f $COMPOSE_FILE exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; do sleep 2; done"
+
+        echo "=== Phase 3: Start API ==="
+        docker compose -f "$COMPOSE_FILE" up -d api
+        echo "Waiting for API health..."
+        timeout 120 bash -c "until curl -sf http://localhost:8000/health >/dev/null 2>&1; do sleep 5; done"
+
+        echo "=== Phase 4: Start frontend + nginx ==="
+        docker compose -f "$COMPOSE_FILE" up -d frontend nginx
+        sleep 5
+
+        echo "=== Phase 5: Start workers (staggered) ==="
+        docker compose -f "$COMPOSE_FILE" up -d worker-fast
         sleep 10
+        docker compose -f "$COMPOSE_FILE" up -d worker-gee
+        sleep 10
+        docker compose -f "$COMPOSE_FILE" up -d celery-beat
 
-        # Validacion segura de nginx
-        echo "Testing Nginx configuration..."
-        if ! nginx_is_running; then
-            echo "Nginx container is not running. Showing logs..."
-            docker compose -f "$COMPOSE_FILE" logs nginx --tail=100 || true
-            exit 1
-        fi
+        echo "=== Phase 6: Cleanup ==="
+        docker image prune -f --filter "until=24h" 2>/dev/null || true
+        docker builder prune -f --keep-storage=500MB 2>/dev/null || true
 
-        if ! docker compose -f "$COMPOSE_FILE" exec -T nginx nginx -t; then
-            echo "Nginx configuration has errors"
-            docker compose -f "$COMPOSE_FILE" logs nginx --tail=100 || true
-            exit 1
-        fi
+        echo "=== Phase 7: Verify ==="
+        docker compose -f "$COMPOSE_FILE" ps --format "table {{.Name}}\t{{.Status}}"
 
-        # Fase A: Backend Readiness (API directa)
-        echo "=== Fase A: Backend Readiness ==="
-        API_READY=false
-        for i in $(seq 1 12); do
-            if curl -fsS --max-time 5 http://localhost:8000/health >/dev/null 2>&1; then
-                echo "Backend listo en el intento $i"
-                API_READY=true
-                break
-            fi
-            echo "  Backend intento $i/12 falló, reintentando en 5s..."
-            sleep 5
-        done
-
-        if ! $API_READY; then
-            echo "ERROR: Backend (API) falló en iniciar tras 12 intentos."
-            echo "=== Diagnostic Logs: API ==="
-            docker compose -f "$COMPOSE_FILE" logs --tail=100 api || true
-            echo "=== Diagnostic Logs: Contenedores ==="
-            docker compose -f "$COMPOSE_FILE" ps -a || true
-            exit 1
-        fi
-
-        # Fase B: Edge Readiness (Nginx Proxy)
-        echo "=== Fase B: Edge Readiness ==="
-        EDGE_READY=false
-        for i in $(seq 1 6); do
-            if curl -fsS -L --max-time 5 http://localhost/health >/dev/null 2>&1; then
-                echo "Edge (HTTP) listo en el intento $i"
-                EDGE_READY=true
-                break
-            fi
-            if curl -fsS --insecure --max-time 5 https://localhost/health >/dev/null 2>&1; then
-                echo "Edge (HTTPS) listo en el intento $i"
-                EDGE_READY=true
-                break
-            fi
-            echo "  Edge intento $i/6 falló, reintentando en 5s..."
-            sleep 5
-        done
-        
-        if $EDGE_READY; then
-            # Fase C: Iniciar Workers (ligueros + pesados)
-            echo "=== Fase C: Iniciando Workers ==="
-            docker compose -f "$COMPOSE_FILE" --profile workers-heavy up -d \
-                worker-ingestion \
-                worker-clustering \
-                worker-analysis \
-                worker-vae \
-                worker-reports \
-                celery-beat \
-                flower || true
-
-            echo "Deploy completado exitosamente"
-            echo ""
-            echo "Estado final:"
-            docker compose -f "$COMPOSE_FILE" --profile workers-heavy ps
-            echo ""
-            echo "URLs:"
-            echo "  - Health: http://$(curl -s ifconfig.me)/health"
-            echo "  - Docs:   http://$(curl -s ifconfig.me)/docs"
-            echo "  - API:    http://$(curl -s ifconfig.me)/api/v1/"
-            echo "  - Flower: http://$(curl -s ifconfig.me):5555"
-        else
-            echo "ERROR: Edge (Nginx) health check falló tras 6 intentos."
-            echo "=== Diagnostic Logs: Nginx ==="
-            docker compose -f "$COMPOSE_FILE" logs --tail=100 nginx || true
-            echo "=== Diagnostic Logs: Nginx Config ==="
-            docker compose -f "$COMPOSE_FILE" exec -T nginx nginx -t || true
-            echo "=== Diagnostic Logs: Contenedores ==="
-            docker compose -f "$COMPOSE_FILE" ps -a || true
-            exit 1
-        fi
+        echo "=== Deploy complete ==="
         ;;
 esac

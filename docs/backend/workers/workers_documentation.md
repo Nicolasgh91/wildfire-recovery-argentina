@@ -145,14 +145,26 @@ Uses temporal and spatial proximity rules.
 
 ---
 
-## Queue Configuration
+## Worker topology (production — Oracle Cloud micro VM)
 
-| Queue | Purpose | Tasks |
-|-------|---------|-------|
-| `ingestion` | Data ingestion from external sources | download_firms_daily |
-| `clustering` | Geospatial clustering operations | cluster_detections, run_clustering |
-| `analysis` | CPU-intensive analysis tasks | analyze_recovery, detect_destruction |
-| `default` | General purpose tasks | closure reports, carousel updates, merges |
+| Container | Queues | Concurrency | mem_limit | Use case |
+|-----------|--------|-------------|-----------|----------|
+| worker-fast | ingestion, clustering, reports, notification, default | 1 | 192m | Tareas rápidas (< 60s): FIRMS download, DBSCAN, PDF reports |
+| worker-gee | analysis, vae | 1 | 256m | Tareas GEE (1-15 min): carousel, NDVI recovery, destruction |
+
+### Decisión arquitectónica (ADR-001)
+
+La consolidación de 5 workers en 2 responde a la restricción de memoria de la
+VM Oracle Cloud micro (947 MB RAM). El criterio de separación es **latencia de
+tarea**, no dominio funcional:
+
+- **worker-fast**: tareas que completan en < 60s y no dependen de servicios
+  externos lentos.
+- **worker-gee**: tareas que dependen de Google Earth Engine, con time-limit
+  de 15 minutos por tarea.
+
+Flower está disponible bajo profile `debug` para diagnóstico bajo demanda:
+`docker compose --profile debug up -d flower`
 
 ## Scheduled Tasks (Beat)
 
