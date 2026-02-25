@@ -66,7 +66,11 @@ from app.services.gee_service import (
     GEEService,
 )
 from app.core.gee_semaphore import gee_semaphore
-from app.services.gee_scene_cache import find_cached_scene, should_regenerate_thumbnail
+from app.services.gee_scene_cache import (
+    find_all_cached_scenes,
+    find_cached_scene,
+    should_regenerate_thumbnail,
+)
 from app.services.storage_service import StorageService
 from app.utils.watermark import apply_watermark
 
@@ -364,7 +368,21 @@ class ImageryService:
             "north": lat + buffer_degrees,
         }
 
+    def _resolve_extinct_grace_days(self) -> int:
+        """
+        Dias post-extinct donde el episodio sigue recibiendo thumbnails.
+        Lee 'carousel_extinct_grace_days' desde system_parameters (fallback: 30).
+        """
+        raw = self._get_system_param("carousel_extinct_grace_days")
+        if isinstance(raw, dict):
+            raw = raw.get("value")
+        try:
+            return max(1, int(raw))  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return 30
+
     def _fetch_priority_episodes(self, limit: int) -> List[CarouselEpisodeRow]:
+        grace_days = self._resolve_extinct_grace_days()
         query = text(
             """
             SELECT id,
@@ -374,13 +392,20 @@ class ImageryService:
                    last_gee_image_id,
                    gee_priority
               FROM fire_episodes
-             WHERE status IN ('active', 'monitoring')
+             WHERE (
+                     status IN ('active', 'monitoring')
+                     OR (
+                         status = 'extinct'
+                         AND extinct_at IS NOT NULL
+                         AND extinct_at > NOW() - MAKE_INTERVAL(days => :grace_days)
+                     )
+                   )
                AND gee_candidate = true
              ORDER BY gee_priority DESC NULLS LAST, start_date DESC NULLS LAST
              LIMIT :limit
             """
         )
-        rows = self.db.execute(query, {"limit": limit}).mappings().all()
+        rows = self.db.execute(query, {"limit": limit, "grace_days": grace_days}).mappings().all()
 
         results: List[CarouselEpisodeRow] = []
         for row in rows:
@@ -591,10 +616,15 @@ class ImageryService:
                     return self._gee.download_thumbnail(image, bbox, **kwargs)
             raise
 
-    def _delete_existing_carousel_images(self, event_id: str) -> None:
-        event_key = self._normalize_fire_id(event_id)
+    def _delete_existing_carousel_images(self, episode_id: str) -> None:
+        """Elimina imagenes carousel previas del episodio por episode_id.
+
+        Usa episode_id como clave de limpieza para evitar que la rotacion del
+        evento representativo genere imagenes huerfanas.
+        """
+        episode_key = self._normalize_fire_id(episode_id)
         self.db.query(SatelliteImage).filter(
-            SatelliteImage.fire_event_id == event_key,
+            SatelliteImage.episode_id == episode_key,
             SatelliteImage.image_type == CAROUSEL_IMAGE_TYPE,
         ).delete(synchronize_session=False)
 
@@ -634,25 +664,36 @@ class ImageryService:
         if not representative:
             return {"status": "skipped", "reason": "missing_event"}
 
-        # Cache check: skip GEE if all vis_types have cached scenes
-        if not force_refresh:
-            fire_event_id = str(self._normalize_fire_id(representative.id))
+        # Cache check: skip GEE si todos los vis_types tienen escenas cacheadas
+        # Se usa episode_id como clave primaria (estable ante rotacion de evento representativo)
+        if not force_refresh and episode.last_gee_image_id:
+            cached_scenes = find_all_cached_scenes(
+                db=self.db,
+                gee_system_index=episode.last_gee_image_id,
+                episode_id=episode.id,
+            )
+            cached_by_vis = {
+                s.visualization_params.get("bands", [None])[0]: s
+                for s in cached_scenes
+                if s.visualization_params
+            }
             cached_slides = []
             for vis_type, vis_params in VISUALS.items():
-                cached = find_cached_scene(
-                    db=self.db,
-                    gee_system_index=episode.last_gee_image_id or "",
-                    visualization_params=vis_params,
-                    fire_event_id=fire_event_id,
+                match = next(
+                    (
+                        s for s in cached_scenes
+                        if (s.visualization_params or {}) == vis_params and s.thumbnail_url
+                    ),
+                    None,
                 )
-                if cached and cached.thumbnail_url:
+                if match:
                     cached_slides.append(
                         {
                             "type": vis_type.lower(),
-                            "thumbnail_url": cached.thumbnail_url,
-                            "satellite_image_id": str(cached.id),
-                            "generated_at": cached.created_at.isoformat()
-                            if cached.created_at
+                            "thumbnail_url": match.thumbnail_url,
+                            "satellite_image_id": str(match.id),
+                            "generated_at": match.created_at.isoformat()
+                            if match.created_at
                             else None,
                         }
                     )
@@ -680,9 +721,10 @@ class ImageryService:
                 "image_id": metadata.image_id,
             }
 
-        self._delete_existing_carousel_images(representative.id)
+        self._delete_existing_carousel_images(episode.id)
 
         slides: List[Dict[str, Any]] = []
+        uploaded_keys: List[str] = []  # para limpieza de huerfanos en rollback (T-07)
         generated_at = datetime.now(timezone.utc).isoformat()
         dimensions = self._resolve_thumb_dimensions()
         resample = self._resolve_gee_resample()
@@ -720,6 +762,7 @@ class ImageryService:
                 processed_bytes,
                 watermark_meta,
             )
+            uploaded_keys.append(upload_result.key)
 
             quality = self._quality_score(float(metadata.cloud_cover_percent))
             days_after_fire = None
@@ -729,6 +772,7 @@ class ImageryService:
 
             satellite_image = SatelliteImage(
                 fire_event_id=self._normalize_fire_id(representative.id),
+                episode_id=self._normalize_fire_id(episode.id),
                 satellite=metadata.satellite,
                 tile_id=metadata.tile_id,
                 product_id=metadata.image_id,
@@ -766,7 +810,18 @@ class ImageryService:
 
         if len(slides) != len(VISUALS):
             self.db.rollback()
-            logger.error("Atomic check failed for episode %s: expected %d slides, got %d", episode.id, len(VISUALS), len(slides))
+            logger.error(
+                "Atomic check failed for episode %s: expected %d slides, got %d — cleaning orphan assets",
+                episode.id, len(VISUALS), len(slides),
+            )
+            # T-07: limpiar assets ya subidos a OCI para no dejar huerfanos
+            bucket = os.environ.get("STORAGE_BUCKET_IMAGES", "forestguard-images")
+            for orphan_key in uploaded_keys:
+                try:
+                    self._storage.delete_object(key=orphan_key, bucket=bucket)
+                    logger.info("Orphan asset deleted: %s", orphan_key)
+                except Exception as cleanup_exc:
+                    logger.warning("Failed to delete orphan asset %s: %s", orphan_key, cleanup_exc)
             return {"status": "skipped", "reason": "partial_generation"}
 
         self._update_episode(episode.id, metadata.image_id, slides)

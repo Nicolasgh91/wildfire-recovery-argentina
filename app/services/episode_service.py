@@ -143,16 +143,22 @@ class EpisodeService:
         start_date: datetime | None = None,
         window_hours: int | None = None,
     ) -> str:
-        """Resuelve el estado de un episodio basándose en sus eventos y ventana temporal.
+        """Resuelve el estado de un episodio usando modelo de doble condicion para extinct.
 
-        Reglas (en orden de prioridad):
-            1. Si al menos 1 evento está activo → 'active'
-            2. Si pasó más tiempo que la ventana desde last_seen_at → 'extinct'
+        Reglas canonicas (en orden de prioridad):
+            1. Si al menos 1 evento esta 'active'  → 'active'
+            2. Si elapsed >= ventana Y todos los eventos estan 'extinct' → 'extinct'
             3. En cualquier otro caso → 'monitoring'
+
+        La regla 2 requiere la conjuncion de ambas condiciones:
+          - Condicion temporal: now() - last_seen_at >= episode_temporal_window_hours (720h)
+          - Condicion de eventos: no hay eventos en estado distinto a 'extinct'
+        Esto protege contra fallas del event_status_task (que dejaria eventos en
+        'monitoring' aunque se supero la ventana temporal del episodio).
 
         Args:
             event_statuses: conjunto de estados de los eventos asociados al episodio.
-            last_seen_at: timestamp de la última actividad detectada.
+            last_seen_at: timestamp de la ultima actividad detectada.
             start_date: fallback si last_seen_at es None.
             window_hours: ventana temporal en horas. Si None, lee de system_parameters.
 
@@ -179,7 +185,14 @@ class EpisodeService:
         elapsed = now - reference_date
         window = timedelta(hours=window_hours)
 
-        if elapsed >= window:
+        # Condicion temporal: se supero la ventana de inactividad
+        temporal_condition = elapsed >= window
+        # Condicion de eventos: todos los eventos estan extintos (no hay monitoring vivos)
+        all_events_extinct = bool(event_statuses) and all(
+            s == "extinct" for s in event_statuses
+        )
+
+        if temporal_condition and all_events_extinct:
             return "extinct"
 
         return "monitoring"
@@ -389,7 +402,7 @@ class EpisodeService:
             self.db.execute(
                 text(
                     """
-                    SELECT status, end_date, last_seen_at
+                    SELECT status, end_date, last_seen_at, extinct_at
                       FROM fire_episodes
                      WHERE id = :episode_id
                     """
@@ -403,6 +416,7 @@ class EpisodeService:
         existing_status = (existing.get("status") if existing else None) or "active"
         existing_end_date = existing.get("end_date") if existing else None
         existing_last_seen = existing.get("last_seen_at") if existing else None
+        existing_extinct_at = existing.get("extinct_at") if existing else None
 
         if isinstance(existing_end_date, datetime):
             existing_end_date = self._ensure_tz(existing_end_date)
@@ -526,6 +540,17 @@ class EpisodeService:
         else:
             end_date_value = None
 
+        # Seteo automatico de extinct_at (T-04):
+        # - Transicion a 'extinct': registrar el timestamp si no estaba ya extinot
+        # - Reactivacion a 'active' o 'monitoring': limpiar extinct_at
+        # - Ya era 'extinct': preservar el valor original (no sobreescribir)
+        if status == "extinct" and existing_status != "extinct":
+            extinct_at_value: Optional[datetime] = datetime.now(timezone.utc)
+        elif status in ("active", "monitoring"):
+            extinct_at_value = None
+        else:
+            extinct_at_value = existing_extinct_at
+
         self.db.execute(
             text(
                 """
@@ -546,6 +571,7 @@ class EpisodeService:
                        frp_max = :frp_max,
                        estimated_area_hectares = :estimated_area_hectares,
                        status = :status,
+                       extinct_at = :extinct_at,
                        gee_candidate = :gee_candidate,
                        gee_priority = :gee_priority,
                        clustering_version_id = :clustering_version_id,
@@ -572,6 +598,7 @@ class EpisodeService:
                 "frp_max": row["frp_max"],
                 "estimated_area_hectares": row["estimated_area_hectares"],
                 "status": status,
+                "extinct_at": extinct_at_value,
                 "gee_candidate": gee_candidate,
                 "gee_priority": gee_priority,
                 "clustering_version_id": str(clustering_version_id),

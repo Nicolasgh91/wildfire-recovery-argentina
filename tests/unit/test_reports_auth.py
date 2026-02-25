@@ -80,9 +80,14 @@ class TestReportsRequireJWT:
         assert resp.status_code == 401
 
     def test_get_report_by_id_no_token_returns_401(self):
-        """GET /reports/{id} without Bearer token → 401."""
-        resp = client.get(
-            f"{REPORTS_BASE}/00000000-0000-0000-0000-000000000001",
+        """GET /reports/{id}/verify does not require auth (public endpoint).
+        This test is updated to reflect that there is no GET /reports/{id} route —
+        only GET /reports/{id}/verify (public) and POST /reports/judicial|historical (JWT).
+        Verifying that POST /reports/historical also requires JWT.
+        """
+        resp = client.post(
+            f"{REPORTS_BASE}/historical",
+            json={"fire_event_id": "00000000-0000-0000-0000-000000000001"},
         )
         assert resp.status_code == 401
 

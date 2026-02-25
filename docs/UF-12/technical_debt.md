@@ -1,9 +1,37 @@
 # UC-F12 VAE — Technical Debt & Deviations
 
-> **Date:** 2026-02-24
-> **Context:** Implementation of UC-F12 tasks from `3_UC_F12_technical_tasks_claude_code.md`
+-> **Date:** 2026-02-25 (Updated during testing execution)
+-> **Context:** Implementation of UC-F12 tasks from `3_UC_F12_technical_tasks_claude_code.md` and testing execution
 
----
+----
+
+## Critical Issues Found During Testing
+
+### ISSUE: UC-F12 Migration Not Applied (2026-02-25) - ✅ RESOLVED 
+- **Problem**: UNIQUE constraints `uq_vm_event_date` and `uq_luc_event_date` do not exist in production database
+- **Impact**: Worker tasks failing with `psycopg2.errors.InvalidColumnReference: there is no unique or exclusion constraint matching the ON CONFLICT specification`
+- **Root Cause**: Migration `2026_02_23_uc_f12_vae_monitoring.sql` not executed on production
+- **Resolution Applied**: Manually applied UNIQUE constraints using Python script
+- **Status**: RESOLVED - Workers now processing successfully
+- **Result**: Single event processing completed successfully
+
+### ISSUE: Historical Data Scale Underestimated (2026-02-25)
+- **Problem**: Expected "thousands" of events, actual count is 35,000 eligible events (2015-2025)
+- **Impact**: Processing will take 3+ days instead of hours, requires careful quota management
+- **Data Breakdown**: 
+  - 2020 peak: 6,395 events
+  - Average: ~3,180 events/year
+  - Total GEE requests needed: ~105,000
+- **Status**: INFO - Adjusting processing strategy accordingly
+- **Action**: Implementing conservative batch processing (15-20 events per batch)
+
+### ISSUE: Worker Container Unhealthy Status
+- **Problem**: All worker containers showing as "unhealthy" in docker ps
+- **Impact**: May affect monitoring and alerting
+- **Status**: MINOR - Workers appear functional despite unhealthy status
+- **Action Required**: Investigate health check configuration
+
+----
 
 ## Deviations from Task List
 
@@ -62,7 +90,7 @@
 ### TAREA 4.1: Batch functions redesigned
 - **Deviation:** The original `batch_recovery_analysis` accepted only `fire_event_ids` as a required param. Redesigned to accept optional IDs — when None/empty, the function self-queries the DB for active events within 36 months. This makes it compatible with Celery Beat scheduling without external orchestration.
 
----
+----
 
 ## Items Already Correct (Pre-existing)
 
@@ -81,7 +109,7 @@
 | 3.2 NdviChart | OK | Compatible with API format |
 | 3.4 Violation markers | OK | Icon + type already present |
 
----
+----
 
 ## Changes Applied
 

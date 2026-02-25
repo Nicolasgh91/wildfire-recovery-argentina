@@ -6,7 +6,8 @@ results to the vegetation_monitoring table with upsert semantics.
 """
 
 import logging
-from datetime import datetime, timedelta
+import time
+from datetime import datetime, timedelta, date
 from celery import group
 from ..celery_app import celery_app
 
@@ -28,13 +29,18 @@ def analyze_recovery(self, fire_event_id, months_after=None):
         fire_event_id: UUID del fuego
         months_after: Cuántos meses después analizar (None = auto-detect)
     """
+    import time
     from app.db.session import SessionLocal
     from sqlalchemy import text
 
+    logger.info(f"🚀 [RECOVERY] === STARTING RECOVERY ANALYSIS ===")
+    logger.info(f"🚀 [RECOVERY] Event ID: {fire_event_id}")
+    start_time = time.time()
+
     db = SessionLocal()
     try:
-        logger.info(f"Analyzing recovery for fire {fire_event_id}...")
-
+        logger.info(f"🚀 [RECOVERY] Fetching fire event details...")
+        
         # 1. Get fire event geometry
         fire_row = db.execute(
             text("""
@@ -51,80 +57,88 @@ def analyze_recovery(self, fire_event_id, months_after=None):
         ).fetchone()
 
         if not fire_row:
-            logger.warning(f"Fire event {fire_event_id} not found, skipping")
-            return {"fire_event_id": str(fire_event_id), "status": "skipped", "reason": "not_found"}
-
-        fire_date = fire_row.start_date
-        fire_lat = fire_row.lat
-        fire_lon = fire_row.lon
-
-        # Auto-detect months_after from fire date
-        if months_after is None:
-            days_since = (datetime.utcnow().date() - fire_date.date()
-                          if hasattr(fire_date, 'date') else
-                          datetime.utcnow().date() - fire_date)
-            months_after = max(1, days_since.days // 30)
-
-        # 2. Run VAE analysis
-        from app.services.vae_service import VAEService, GEEImageNotFoundError
-
-        vae = VAEService()
-        buffer = 0.01  # ~1km
-        bbox = {
-            "west": fire_lon - buffer,
-            "south": fire_lat - buffer,
-            "east": fire_lon + buffer,
-            "north": fire_lat + buffer,
-        }
-
-        fire_date_obj = fire_date.date() if hasattr(fire_date, 'date') else fire_date
-
-        try:
-            analysis = vae.analyze_recovery(
-                fire_event_id=str(fire_event_id),
-                bbox=bbox,
-                fire_date=fire_date_obj,
-                baseline_ndvi=None,
-            )
-        except Exception as exc:
-            logger.warning(f"GEE analysis failed for {fire_event_id}: {exc}")
+            logger.warning(f" [RECOVERY]  Fire event {fire_event_id} not found, skipping")
             return {
-                "fire_event_id": str(fire_event_id),
-                "status": "gee_error",
-                "error": str(exc),
+                'fire_event_id': str(fire_event_id),
+                'status': 'skipped',
+                'reason': 'not_found'
             }
 
-        # 3. Persist to vegetation_monitoring with upsert
-        monitoring_date = analysis.analysis_date
-        upsert_query = text("""
+        # Log event details
+        event_id, fire_date, lat, lon, area_ha = fire_row
+        logger.info(f" [RECOVERY]  Fire details: date={fire_date}, lat={lat:.4f}, lon={lon:.4f}, area={area_ha}ha")
+
+        # 2. Build bbox
+        bbox = {
+            'min_lon': lon - 0.01,  # ~1km buffer
+            'max_lon': lon + 0.01,
+            'min_lat': lat - 0.01,
+            'max_lat': lat + 0.01,
+        }
+        logger.info(f" [RECOVERY]  Bbox: {bbox}")
+
+        # 3. Determine analysis date
+        if months_after is None:
+            analysis_date = datetime.today()
+        else:
+            analysis_date = self._add_months(fire_date, months_after)
+        
+        logger.info(f" [RECOVERY]  Analysis date: {analysis_date} (months_after: {months_after})")
+
+        # 4. Initialize VAE service
+        logger.info(f" [RECOVERY]  Initializing VAE service...")
+        vae_service = VAEService()
+
+        # 5. Get baseline NDVI
+        logger.info(f" [RECOVERY]  Starting baseline NDVI calculation...")
+        baseline_start = time.time()
+        try:
+            baseline_ndvi = vae_service._get_baseline_ndvi(bbox, fire_date)
+            baseline_time = time.time() - baseline_start
+            logger.info(f" [RECOVERY]  Baseline NDVI: {baseline_ndvi:.4f} (took {baseline_time:.2f}s)")
+        except Exception as e:
+            logger.error(f" [RECOVERY]  Baseline NDVI failed: {e}")
+            raise
+
+        # 6. Get current NDVI (with median optimization)
+        logger.info(f" [RECOVERY]  Starting current NDVI calculation (median optimized)...")
+        current_start = time.time()
+        try:
+            current_ndvi = vae_service._get_current_ndvi(bbox, analysis_date)
+            current_time = time.time() - current_start
+            logger.info(f" [RECOVERY]  Current NDVI: {current_ndvi:.4f} (took {current_time:.2f}s)")
+        except Exception as e:
+            logger.error(f" [RECOVERY]  Current NDVI failed: {e}")
+            raise
+
+        # 7. Calculate recovery metrics
+        logger.info(f" [RECOVERY]  Calculating recovery metrics...")
+        ndvi_change = current_ndvi - baseline_ndvi
+        recovery_pct = max(0, min(100, (current_ndvi / baseline_ndvi) * 100)) if baseline_ndvi > 0 else 0
+        
+        logger.info(f" [RECOVERY]  Results: NDVI change={ndvi_change:+.4f}, Recovery={recovery_pct:.1f}%")
+
+        # 8. Classify recovery status
+        recovery_status = vae_service._classify_recovery_status(recovery_pct)
+        logger.info(f" [RECOVERY]  Recovery status: {recovery_status.value}")
+
+        # 9. Detect human activity
+        human_activity_detected = recovery_pct > vae_service._get_expected_recovery(months_after) * 1.2
+        activity_type = 'rapid_greening' if human_activity_detected else 'natural_recovery'
+        
+        logger.info(f" [RECOVERY]  Human activity: {human_activity_detected}, Type: {activity_type}")
+
+        # 10. Persist results
+        logger.info(f" [RECOVERY]  Persisting to database...")
+        persist_start = time.time()
+        
+        db.execute(text("""
             INSERT INTO vegetation_monitoring (
-                fire_event_id,
-                monitoring_date,
-                months_after_fire,
-                ndvi_mean,
-                ndvi_min,
-                ndvi_max,
-                baseline_ndvi,
-                recovery_percentage,
-                human_activity_detected,
-                activity_type,
-                classification_confidence,
-                created_at,
-                updated_at
+                fire_event_id, monitoring_date, ndvi_mean, baseline_ndvi,
+                recovery_percentage, human_activity_detected, activity_type
             ) VALUES (
-                :fire_event_id,
-                :monitoring_date,
-                :months_after_fire,
-                :ndvi_mean,
-                :ndvi_min,
-                :ndvi_max,
-                :baseline_ndvi,
-                :recovery_percentage,
-                :human_activity_detected,
-                :activity_type,
-                :classification_confidence,
-                NOW(),
-                NOW()
+                :fire_event_id, :monitoring_date, :ndvi_mean, :baseline_ndvi,
+                :recovery_percentage, :human_activity_detected, :activity_type
             )
             ON CONFLICT (fire_event_id, monitoring_date) DO UPDATE SET
                 ndvi_mean = EXCLUDED.ndvi_mean,

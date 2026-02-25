@@ -141,7 +141,7 @@ celery_app.conf.update(
         },
         'carousel-daily': {
             'task': 'workers.tasks.carousel_task.generate_carousel',
-            'schedule': crontab(hour=3, minute=0),  # 03:00 UTC
+            'schedule': crontab(hour=17, minute=20),  # TEMPORAL: forzar ejecucion 14:20 ART, restaurar a crontab(hour=3, minute=0)
             'kwargs': {'max_fires': None, 'force_refresh': False},
             'options': {'queue': 'analysis'}
         },

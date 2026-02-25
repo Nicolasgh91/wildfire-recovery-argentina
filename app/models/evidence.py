@@ -25,11 +25,20 @@ class SatelliteImage(Base, UUIDMixin, TimestampMixin):
 
     __tablename__ = "satellite_images"
 
-    # Foreign key
+    # Foreign keys
+    # DT-004: cambiado de CASCADE a SET NULL para evitar borrado accidental de thumbnails
+    # cuando un fire_event es absorbido en un merge de episodios.
     fire_event_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("fire_events.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("fire_events.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # FK al episodio dueno de la imagen (T-02). Nullable para compatibilidad con registros legacy.
+    # ON DELETE SET NULL: si se elimina el episodio, el thumbnail no se borra en cascada.
+    episode_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("fire_episodes.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Image identification
@@ -69,6 +78,7 @@ class SatelliteImage(Base, UUIDMixin, TimestampMixin):
 
     # Relationships
     fire_event = relationship("FireEvent", back_populates="satellite_images")
+    episode = relationship("FireEpisode", back_populates="satellite_images")
     vegetation_monitoring = relationship(
         "VegetationMonitoring", back_populates="satellite_image"
     )

@@ -1,75 +1,74 @@
 """
-Episode closer task (EVT-006).
+Episode closer task (DT-001 / EVT-006).
 
-Promueve fire_episodes de 'extinct' a 'closed' cuando extinct_at + 30d < NOW().
-Los episodios 'closed' dejan de mostrarse en el carrusel/mapa y solo
-aparecen en la grilla de historicos.
+Transiciona episodios de 'extinct' a 'closed' cuando ya pasaron 30 dias
+desde que se extinguieron (extinct_at + 30d < NOW()).
 
-Schedule: 05:00 UTC diario (despues de cleanup 04:00, antes de reports 08:00).
-Cola: analysis (worker-analysis).
+Al cerrar el episodio:
+  - status = 'closed'
+  - slides_data = '[]'  (DT-001: limpiar slides stale para evitar URLs rotas)
 
-Prerequisitos:
-  - fire_episodes.extinct_at (EVT-007 migration)
-  - FireStatus.CLOSED en app/schemas/fire.py (EVT-007)
-
-Fuente de verdad: docs/Carrusel fix/fix_event_status_lifecycle.md (EVT-006)
+Schedule: 05:00 UTC diario, despues del carousel (03:00) y cleanup (04:00).
+Cola: analysis
 """
 
 import logging
-import time
-
-from sqlalchemy import text
+import os
 
 from app.db.session import SessionLocal
+from sqlalchemy import text
 from workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
-CLOSE_AFTER_DAYS = 30
+CLOSE_AFTER_DAYS = int(os.environ.get("EPISODE_CLOSE_AFTER_DAYS", "30"))
 
 
 @celery_app.task(
     bind=True,
     name="workers.tasks.episode_closer_task.close_extinct_episodes",
     queue="analysis",
-    max_retries=3,
+    max_retries=2,
+    retry_backoff=True,
 )
 def close_extinct_episodes(self):
     """
-    Promueve episodios extinct -> closed cuando extinct_at + 30d < NOW().
+    Cierra episodios extintos que superaron la ventana de gracia.
 
-    Solo actua sobre episodios con extinct_at NOT NULL (seteado por
-    update_episode_metrics cuando el episodio transiciona a 'extinct').
+    Criterios:
+      - status = 'extinct'
+      - extinct_at IS NOT NULL
+      - extinct_at < NOW() - INTERVAL '{CLOSE_AFTER_DAYS} days'
+
+    Acciones:
+      - status = 'closed'
+      - slides_data = '[]'   (DT-001: limpiar URLs stale)
+      - updated_at = NOW()
     """
-    t0 = time.monotonic()
     db = SessionLocal()
     try:
         result = db.execute(
             text(f"""
                 UPDATE fire_episodes
                    SET status = 'closed',
+                       slides_data = '[]'::jsonb,
                        updated_at = NOW()
                  WHERE status = 'extinct'
                    AND extinct_at IS NOT NULL
                    AND extinct_at < NOW() - INTERVAL '{CLOSE_AFTER_DAYS} days'
-            """),
+            """)
         )
-
+        closed_count = result.rowcount
         db.commit()
-
-        elapsed_ms = int((time.monotonic() - t0) * 1000)
-        outcome = {
-            "success": True,
-            "episodes_closed": result.rowcount,
-            "close_after_days": CLOSE_AFTER_DAYS,
-            "elapsed_ms": elapsed_ms,
-        }
-        logger.info("Episode closer complete: %s", outcome)
-        return outcome
-
+        logger.info(
+            "episode_closer: closed %d episodes (extinct_at > %d days ago)",
+            closed_count,
+            CLOSE_AFTER_DAYS,
+        )
+        return {"closed": closed_count, "close_after_days": CLOSE_AFTER_DAYS}
     except Exception as exc:
         db.rollback()
-        logger.exception("Episode closer failed: %s", exc)
-        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+        logger.error("episode_closer failed: %s", exc, exc_info=True)
+        raise self.retry(exc=exc)
     finally:
         db.close()
