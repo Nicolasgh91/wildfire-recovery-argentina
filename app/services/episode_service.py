@@ -69,7 +69,14 @@ logger = logging.getLogger(__name__)
 
 
 class EpisodeService:
-    """Service for managing fire episodes."""
+    """
+    Servicio de orquestamiento de Episodios (Clustering de Eventos).
+    
+    Gestiona el ciclo de vida de los `fire_episodes` (Activo -> Monitoreo -> Extinto -> Cerrado).
+    Provee métodos para resolver estados basados en `episode_temporal_window_hours`,
+    asignar eventos calculados por DBSCAN a la tabla pivot `fire_episode_events` y
+    recalcular los agregados (área, contadores, frp top) del episodio.
+    """
     def __init__(self, db: Session):
         self.db = db
         self._episode_flow_params_cache: Optional[dict[str, float | int]] = None
@@ -166,6 +173,8 @@ class EpisodeService:
         now = datetime.now(timezone.utc)
         if reference_date.tzinfo is None:
             reference_date = reference_date.replace(tzinfo=timezone.utc)
+        else:
+            reference_date = reference_date.astimezone(timezone.utc)
 
         elapsed = now - reference_date
         window = timedelta(hours=window_hours)

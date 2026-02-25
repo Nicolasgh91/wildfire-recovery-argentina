@@ -82,7 +82,16 @@ def _compute_h3_index(lat: float, lon: float, resolution: int) -> Optional[int]:
 
 
 class DetectionClusteringService:
-    """Service for clustering detections into fire events."""
+    """
+    Servicio encargado de agrupar detecciones termicas sueltas (FireDetection)
+    en eventos de incendios localizados (FireEvent).
+    
+    Flujo Principal:
+    1. Obtiene las detecciones termicas pendientes y los `clustering_versions` 
+       activos (epsilon y min_points).
+    2. Utiliza DBSCAN espacial-temporal para identificar clusters o ruidos aislados.
+    3. Retorna un reporte de asignacion (`ClusteringResult`) para la base de datos.
+    """
     def __init__(self, db: Session):
         self.db = db
 

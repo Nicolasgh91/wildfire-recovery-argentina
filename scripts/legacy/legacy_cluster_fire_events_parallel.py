@@ -1,4 +1,7 @@
 """
+[DEPRECATED] - Codigo Legacy o Manual. Usar el flujo de Celery en su lugar.
+"""
+"""
 Agrupa detecciones de incendios en eventos únicos usando clustering espacial.
 VERSIÓN OPTIMIZADA CON MULTIPROCESSING.
 
@@ -468,3 +471,4 @@ if __name__ == '__main__':
     # Necesario para multiprocessing en Windows
     mp.freeze_support()
     main()
+

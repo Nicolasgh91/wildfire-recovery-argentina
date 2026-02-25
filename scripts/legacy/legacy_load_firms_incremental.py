@@ -1,3 +1,6 @@
+"""
+[DEPRECATED] - Codigo Legacy o Manual. Usar el flujo de Celery en su lugar.
+"""
 #!/usr/bin/env python3
 """
 =============================================================================
@@ -906,3 +909,4 @@ Configuración cron (ejecutar diario a las 6 AM):
 
 if __name__ == "__main__":
     main()
+

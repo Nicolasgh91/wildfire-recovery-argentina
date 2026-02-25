@@ -1,3 +1,6 @@
+"""
+[DEPRECATED] - Codigo Legacy o Manual. Usar el flujo de Celery en su lugar.
+"""
 #!/usr/bin/env python3
 import sys
 import csv
@@ -6,7 +9,7 @@ from pathlib import Path
 base_dir = Path(__file__).resolve().parent.parent
 sys.path.append(str(base_dir))
 
-from scripts.load_firms_incremental import (
+from scripts.maintenance.load_firms_incremental import (
     get_engine, get_fire_detection_columns, resolve_h3_resolution,
     filter_and_transform, insert_detections, run_clustering_for_dates, 
     run_area_calculation, run_legal_crossing
@@ -94,3 +97,4 @@ if __name__ == "__main__":
     parser.add_argument("csv_path", help="Ruta al archivo CSV de FIRMS")
     args = parser.parse_args()
     process_csv(args.csv_path)
+

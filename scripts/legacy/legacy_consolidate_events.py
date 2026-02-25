@@ -1,3 +1,6 @@
+"""
+[DEPRECATED] - Codigo Legacy o Manual. Usar el flujo de Celery en su lugar.
+"""
 #!/usr/bin/env python3
 """
 =============================================================================

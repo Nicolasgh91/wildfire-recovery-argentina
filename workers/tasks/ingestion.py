@@ -27,7 +27,7 @@ def download_firms_daily(self, days: int = 2, dry_run: bool = False):
         logger.info("Starting FIRMS ingestion (days=%s, dry_run=%s)", days, dry_run)
 
         # Lazy import keeps worker module import-time lightweight.
-        from scripts.load_firms_incremental import run_incremental_pipeline
+        from scripts.maintenance.load_firms_incremental import run_incremental_pipeline
 
         pipeline_result = run_incremental_pipeline(days=days, dry_run=dry_run)
         if not isinstance(pipeline_result, dict):
@@ -44,7 +44,7 @@ def download_firms_daily(self, days: int = 2, dry_run: bool = False):
             "areas_calculated": int(pipeline_result.get("areas_calculated", 0)),
             "intersections": int(pipeline_result.get("intersections", 0)),
             "dry_run": bool(dry_run),
-            "source": "scripts.load_firms_incremental.run_incremental_pipeline",
+            "source": "scripts.maintenance.load_firms_incremental.run_incremental_pipeline",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 

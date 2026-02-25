@@ -1,3 +1,6 @@
+"""
+[DEPRECATED] - Codigo Legacy o Manual. Usar el flujo de Celery en su lugar.
+"""
 #!/usr/bin/env python3
 """
 Download high-resolution imagery from GEE for one episode and generate local size variants.
@@ -248,3 +251,4 @@ def main() -> None:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     main()
+

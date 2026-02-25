@@ -1,4 +1,7 @@
 """
+[DEPRECATED] - Codigo Legacy o Manual. Usar el flujo de Celery en su lugar.
+"""
+"""
 Refresh Current Carousel Images
 ===============================
 
@@ -122,3 +125,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

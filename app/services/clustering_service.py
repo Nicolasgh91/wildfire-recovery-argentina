@@ -41,7 +41,17 @@ class EventRecord:
 
 
 class ClusteringService:
-    """Service for clustering fire events into episodes."""
+    """
+    Servicio de macro-agrupamiento: Consolida Eventos de Fuego (FireEvent)
+    en Episodios Mayores (FireEpisode).
+    
+    Flujo Principal:
+    1. Obtiene los `fire_events` validados o pendientes de reclustering.
+    2. Aplica logica espacial-temporal DBSCAN para adjuntar eventos cercanos 
+       a un episodio preexistente o iniciar uno nuevo.
+    3. Delega la escritura de los enlaces pivot a la tabla 
+       `fire_episode_events` via EpisodeService.assign_event.
+    """
     def __init__(self, db: Session):
         self.db = db
         self.episodes = EpisodeService(db)

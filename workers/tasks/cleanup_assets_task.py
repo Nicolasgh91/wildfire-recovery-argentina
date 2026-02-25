@@ -36,6 +36,7 @@ def _read_param(db, param_key: str, default):
 
 @celery_app.task(
     name="workers.tasks.cleanup_assets_task.cleanup_expired_assets",
+    queue="analysis",
 )
 def cleanup_expired_assets() -> dict:
     """Delete expired assets from storage and update DB."""
