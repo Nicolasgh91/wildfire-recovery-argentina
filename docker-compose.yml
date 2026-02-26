@@ -171,9 +171,9 @@ services:
       bash -c "sleep 15 && 
       celery -A workers.celery_app worker --loglevel=info --queues=ingestion,clustering,reports,notification,default --concurrency=1 --max-tasks-per-child=200"
     healthcheck:
-      test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
+      test: [ "CMD", "celery", "-A", "workers.celery_app", "inspect", "ping" ]
       interval: 30s
-      timeout: 15s
+      timeout: 20s
       retries: 5
       start_period: 90s
     logging:
@@ -242,9 +242,9 @@ services:
       bash -c "sleep 30 && 
       celery -A workers.celery_app worker --loglevel=info --queues=analysis,vae --concurrency=1 --max-tasks-per-child=50 --soft-time-limit=600 --time-limit=900"
     healthcheck:
-      test: [ "CMD-SHELL", "pgrep -f 'celery.*worker' || exit 1" ]
+      test: [ "CMD", "celery", "-A", "workers.celery_app", "inspect", "ping" ]
       interval: 30s
-      timeout: 15s
+      timeout: 20s
       retries: 5
       start_period: 90s
     logging:
@@ -291,7 +291,7 @@ services:
       bash -c "sleep 40 && 
       celery -A workers.celery_app beat --loglevel=info -s /tmp/celerybeat-schedule"
     healthcheck:
-      test: [ "CMD", "celery", "-A", "workers.celery_app", "inspect", "ping" ]
+      test: [ "CMD-SHELL", "pgrep -f 'celery.*beat' || exit 1" ]
       interval: 30s
       timeout: 10s
       retries: 5
