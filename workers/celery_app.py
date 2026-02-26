@@ -90,8 +90,8 @@ celery_app.conf.update(
     task_serializer='json',
     accept_content=['json'],
     result_serializer='json',
-    timezone='UTC',
-    enable_utc=True,
+    timezone='America/Argentina/Buenos_Aires',  # UTC-3 (ART)
+    enable_utc=False,
     
     # Routing
     task_routes={
@@ -123,61 +123,61 @@ celery_app.conf.update(
     beat_schedule={
         'download-firms-daily': {
             'task': 'workers.tasks.ingestion.download_firms_daily',
-            'schedule': crontab(hour=0, minute=0),  # 00:00 UTC
+            'schedule': crontab(hour=0, minute=0),  # 00:00 ART (UTC-3)
             'options': {'queue': 'ingestion'}
         },
         'cluster-daily': {
             'task': 'workers.tasks.clustering.cluster_detections',
-            'schedule': crontab(hour=1, minute=0),  # 01:00 UTC
+            'schedule': crontab(hour=1, minute=0),  # 01:00 ART
             'kwargs': {'days_back': 1},
             'options': {'queue': 'clustering'}
         },
         'cluster-episodes-daily': {
             'task': 'workers.tasks.clustering_task.cluster_fire_episodes_pipeline',
-            'schedule': crontab(hour=2, minute=0),  # 02:00 UTC
+            'schedule': crontab(hour=2, minute=0),  # 02:00 ART
             'kwargs': {'days_back': 90, 'max_events': 5000, 'geo_lookback_hours': 96},
             'options': {'queue': 'clustering'}
         },
         'carousel-daily': {
             'task': 'workers.tasks.carousel_task.generate_carousel',
-            'schedule': crontab(hour=0, minute=33),  # TEMPORAL: forzar ejecucion en ~10min, restaurar a crontab(hour=3, minute=0)
+            'schedule': crontab(hour=21, minute=50),  # TEMPORAL: hoy 21:50 ART. Restaurar a crontab(hour=0, minute=0) para 00:00 ART
             'kwargs': {'max_fires': None, 'force_refresh': False},
             'options': {'queue': 'analysis'}
         },
         'closure-reports-daily': {
             'task': 'workers.tasks.closure_report_task.generate_closure_reports',
-            'schedule': crontab(hour=8, minute=0),  # 08:00 UTC
+            'schedule': crontab(hour=8, minute=0),  # 08:00 ART
             'kwargs': {'max_fires': None},
             'options': {'queue': 'reports'}
         },
         'cleanup-expired-assets': {
             'task': 'workers.tasks.cleanup_assets_task.cleanup_expired_assets',
-            'schedule': crontab(hour=4, minute=0),  # 04:00 UTC
+            'schedule': crontab(hour=4, minute=0),  # 04:00 ART
             'options': {'queue': 'analysis'}
         },
         'close-extinct-episodes-daily': {
             'task': 'workers.tasks.episode_closer_task.close_extinct_episodes',
-            'schedule': crontab(hour=5, minute=0),  # 05:00 UTC
+            'schedule': crontab(hour=5, minute=0),  # 05:00 ART
             'options': {'queue': 'analysis'},
         },
         # UC-F12: Monthly VAE recovery analysis for active fire events
         'vae-recovery-monthly': {
             'task': 'workers.tasks.recovery.batch_recovery_analysis',
-            'schedule': crontab(hour=5, minute=0, day_of_month=1),  # 05:00 UTC, 1st of each month
+            'schedule': crontab(hour=5, minute=0, day_of_month=1),  # 05:00 ART, día 1
             'kwargs': {'max_events': 50},
             'options': {'queue': 'vae'},
         },
         # UC-F12: Monthly VAE destruction detection for active fire events
         'vae-destruction-monthly': {
             'task': 'workers.tasks.destruction.batch_destruction_detection',
-            'schedule': crontab(hour=6, minute=0, day_of_month=1),  # 06:00 UTC, 1st of each month
+            'schedule': crontab(hour=6, minute=0, day_of_month=1),  # 06:00 ART, día 1
             'kwargs': {'max_events': 50},
             'options': {'queue': 'vae'},
         },
         # UC-F12: Weekly VAE episode recovery analysis for carousel
         'vae-episodes-weekly': {
             'task': 'workers.tasks.recovery.batch_episode_recovery_analysis',
-            'schedule': crontab(hour=2, minute=0, day_of_week=1),  # Monday 02:00 UTC
+            'schedule': crontab(hour=2, minute=0, day_of_week=1),  # Lunes 02:00 ART
             'kwargs': {'max_episodes': 20, 'carousel_only': True},
             'options': {'queue': 'vae'},
         },
