@@ -10,12 +10,12 @@ export const BRAND = {
      * The visible name of the application.
      * Displayed in the Navbar, Page Titles, and Footer.
      */
-    name: "Vestigia",
+    name: "Estado de incendios en Argentina",
 
     /**
      * The application's tagline or short description.
      */
-    tagline: "Wildfire Recovery & Monitoring",
+    tagline: "Monitoreo y recuperación de incendios forestales",
 
     /**
      * URLs for the application logos.

@@ -1,7 +1,8 @@
-import { Suspense, lazy, type ReactNode } from 'react'
+import { Suspense, lazy, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { ThemeProvider } from '@/components/theme-provider'
+import { BRAND } from '@/config/brand'
 import { Footer } from '@/components/layout/footer'
 import { Navbar } from '@/components/layout/navbar'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
@@ -88,6 +89,10 @@ function AppShell({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
+  useEffect(() => {
+    document.title = `${BRAND.name} | Monitoreo de incendios forestales`
+  }, [])
+
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <I18nProvider>

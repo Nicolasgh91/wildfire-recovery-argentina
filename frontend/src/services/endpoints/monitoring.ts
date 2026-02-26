@@ -20,6 +20,8 @@ export interface RecoveryResponse {
   anomaly_detected: string | null
   monitoring_data: MonthlyNDVI[]
   query_duration_ms: number
+  /** Mensaje opcional, p. ej. cuando recovery_status es "pending" */
+  message?: string | null
 }
 
 export interface LandUseChangeItem {
@@ -48,6 +50,18 @@ export async function getRecoveryTimeline(
 ): Promise<RecoveryResponse> {
   const { data } = await apiClient.get<RecoveryResponse>(
     `/monitoring/recovery/${fireEventId}`,
+    { signal },
+  )
+  return data
+}
+
+/** Fase 6: recovery agregado por episodio (todos los eventos del episodio). */
+export async function getRecoveryByEpisode(
+  episodeId: string,
+  signal?: AbortSignal,
+): Promise<RecoveryResponse> {
+  const { data } = await apiClient.get<RecoveryResponse>(
+    `/monitoring/recovery/by-episode/${episodeId}`,
     { signal },
   )
   return data

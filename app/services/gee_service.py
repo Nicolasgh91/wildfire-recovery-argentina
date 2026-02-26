@@ -203,6 +203,14 @@ class GEERateLimitError(GEEError):
     pass
 
 
+class GEEServiceUnavailableError(GEEError):
+    """GEE no disponible (p. ej. circuit breaker abierto). Incluye retry_after para 503."""
+
+    def __init__(self, message: str, retry_after: Optional[int] = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 # =============================================================================
 # SERVICIO PRINCIPAL
 # =============================================================================
@@ -672,6 +680,20 @@ class GEEService:
             )
 
         return self._rate_limited_request(_calc_ndvi)
+
+    def get_image_cloud_cover(self, image) -> float:
+        """
+        Obtiene el porcentaje de nubosidad de una imagen (CLOUDY_PIXEL_PERCENTAGE).
+        Útil para _get_current_ndvi_with_cloud en VAE.
+        """
+        self._ensure_authenticated()
+
+        def _get_cloud():
+            info = image.getInfo()
+            props = info.get("properties", {}) if info else {}
+            return float(props.get("CLOUDY_PIXEL_PERCENTAGE", 0))
+
+        return self._rate_limited_request(_get_cloud)
 
     def calculate_nbr(
         self, image: ee.Image, bbox: Dict[str, float], scale: int = 20

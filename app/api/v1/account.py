@@ -53,7 +53,7 @@ async def delete_account(
 ):
     if payload.confirmation_text.strip().upper() != DELETE_CONFIRM_TEXT:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid confirmation text",
         )
 

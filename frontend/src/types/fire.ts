@@ -208,6 +208,13 @@ export type FireDetail = FireEventListItem & {
   updated_at?: string | null
 }
 
+/** Snapshot público de recuperación (GET /fires/:id), sin llamar a /monitoring. */
+export type RecoverySnapshot = {
+  recovery_status: string
+  recovery_percentage?: number | null
+  last_monitoring_date?: string | null
+}
+
 export type FireDetailResponse = {
   source_type?: 'event' | 'episode'
   episode_id?: string | null
@@ -216,6 +223,7 @@ export type FireDetailResponse = {
   related_fires_count: number
   event_count?: number | null
   last_seen_at?: string | null
+  recovery_snapshot?: RecoverySnapshot | null
 }
 
 type SeverityConfig = {

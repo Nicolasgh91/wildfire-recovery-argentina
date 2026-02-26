@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css'
 import './index.css'
 import App from './App.tsx'
 import { Toaster } from '@/components/ui/sonner'
+import { Toaster as RadixToaster } from '@/components/ui/toaster'
 import { queryClient } from '@/lib/queryClient'
 import { initSentry } from '@/lib/sentry'
 import { ErrorBoundary } from '@/components/error/ErrorBoundary'
@@ -18,6 +19,7 @@ createRoot(document.getElementById('root')!).render(
       <ErrorBoundary>
         <App />
         <Toaster />
+        <RadixToaster />
         <ReactQueryDevtools initialIsOpen={false} />
       </ErrorBoundary>
     </QueryClientProvider>

@@ -15,6 +15,17 @@ const DEFAULT_TIMEOUT = 30000
 const MAX_RETRIES = 3
 const RETRYABLE_STATUS_CODES = [408, 429, 500, 502, 503, 504]
 
+// Log environment configuration for debugging
+console.log('🔧 API Configuration:', {
+  API_BASE_URL,
+  SUPABASE_URL: SUPABASE_URL ? '[SET]' : '[NOT SET]',
+  SUPABASE_ANON_KEY: SUPABASE_ANON_KEY ? '[SET]' : '[NOT SET]',
+  API_KEY: API_KEY ? '[SET]' : '[NOT SET]',
+  USE_SUPABASE_JWT,
+  DEFAULT_TIMEOUT,
+  NODE_ENV: import.meta.env.MODE
+})
+
 type HeaderBag = InternalAxiosRequestConfig['headers']
 
 let cachedAuthToken: string | null = null
@@ -75,6 +86,15 @@ export function setAuthToken(token: string | null) {
 }
 
 export function requestInterceptor(config: InternalAxiosRequestConfig) {
+  console.log('🔍 Axios Request Interceptor:', {
+    method: config.method,
+    url: config.url,
+    baseURL: config.baseURL,
+    hasData: !!config.data,
+    dataType: config.data instanceof FormData ? 'FormData' : typeof config.data,
+    headers: config.headers
+  })
+  
   const headers = config.headers ?? {}
 
   if (API_KEY) {
@@ -93,6 +113,14 @@ export function requestInterceptor(config: InternalAxiosRequestConfig) {
   }
 
   config.headers = headers
+  console.log('✅ Request prepared:', {
+    method: config.method,
+    url: config.url,
+    hasAuth: !!token,
+    hasApiKey: !!API_KEY,
+    contentType: getHeaderValue(headers, 'Content-Type')
+  })
+  
   return config
 }
 
@@ -146,6 +174,16 @@ export function handleHttpError(
 }
 
 export async function responseErrorInterceptor(error: AxiosError) {
+  console.error('🚨 Axios Response Error Interceptor:', {
+    message: error.message,
+    code: error.code,
+    status: error.response?.status,
+    statusText: error.response?.statusText,
+    url: error.config?.url,
+    method: error.config?.method,
+    responseData: error.response?.data
+  })
+  
   const config = error.config as
     | (InternalAxiosRequestConfig & { _retryCount?: number; _authRetried?: boolean })
     | undefined
@@ -204,7 +242,19 @@ export function createApiClient(): AxiosInstance {
   })
 
   client.interceptors.request.use(requestInterceptor)
-  client.interceptors.response.use((response) => response, responseErrorInterceptor)
+  client.interceptors.response.use(
+    (response) => {
+      console.log('✅ Axios Response Success:', {
+        status: response.status,
+        statusText: response.statusText,
+        url: response.config.url,
+        method: response.config.method,
+        hasData: !!response.data
+      })
+      return response
+    },
+    responseErrorInterceptor
+  )
 
   return client
 }

@@ -74,6 +74,7 @@ from app.schemas.fire import (
     PaginationMeta,
     ProtectedAreaBrief,
     ProvinceStats,
+    RecoverySnapshot,
     SavedFilterCreate,
     SavedFilterResponse,
     SortField,
@@ -933,10 +934,58 @@ class FireService:
             updated_at=fire.updated_at,
         )
 
+        snapshot = self._get_recovery_snapshot(fire.id, fire)
         return FireDetailResponse(
             fire=detail,
             detections=detection_briefs,
             related_fires_count=0,
+            recovery_snapshot=snapshot,
+        )
+
+    def _get_recovery_snapshot(
+        self,
+        fire_event_id: UUID,
+        fire_row: Optional[FireEvent] = None,
+    ) -> Optional[RecoverySnapshot]:
+        """
+        Build RecoverySnapshot from fire_events columns (G3-2 trigger) or fallback
+        to latest row in vegetation_monitoring. Used by GET /fires/:id (V1-1).
+        """
+        if fire_row is not None:
+            status = getattr(fire_row, "recovery_status", None)
+            pct = getattr(fire_row, "recovery_percentage", None)
+            last_date = getattr(fire_row, "last_monitoring_date", None)
+            if status is not None or pct is not None or last_date is not None:
+                return RecoverySnapshot(
+                    recovery_status=status or "pending",
+                    recovery_percentage=float(pct) if pct is not None else None,
+                    last_monitoring_date=last_date,
+                )
+        try:
+            row = self.db.execute(
+                text(
+                    "SELECT recovery_status, recovery_percentage, monitoring_date "
+                    "FROM vegetation_monitoring WHERE fire_event_id = :id "
+                    "ORDER BY monitoring_date DESC LIMIT 1"
+                ),
+                {"id": str(fire_event_id)},
+            ).first()
+        except SQLAlchemyError as exc:
+            logger.warning(
+                "Fallback recovery_snapshot from vegetation_monitoring failed: %s",
+                exc,
+            )
+            return None
+        if not row:
+            return None
+        return RecoverySnapshot(
+            recovery_status=(row.recovery_status if hasattr(row, "recovery_status") else None) or "pending",
+            recovery_percentage=(
+                float(row.recovery_percentage)
+                if getattr(row, "recovery_percentage", None) is not None
+                else None
+            ),
+            last_monitoring_date=getattr(row, "monitoring_date", None),
         )
 
     def get_fire_detail_by_episode(self, episode_id: UUID) -> Optional[FireDetailResponse]:
@@ -975,6 +1024,17 @@ class FireService:
         )
         if not episode:
             return None
+
+        rep_event_id = (
+            self.db.query(FireEvent.id)
+            .join(FireEpisodeEvent, FireEpisodeEvent.event_id == FireEvent.id)
+            .filter(FireEpisodeEvent.episode_id == episode_id)
+            .order_by(desc(FireEvent.end_date), desc(FireEvent.start_date))
+            .first()
+        )
+        snapshot = (
+            self._get_recovery_snapshot(rep_event_id[0]) if rep_event_id else None
+        )
 
         centroid = None
         if episode.centroid_lat is not None and episode.centroid_lon is not None:
@@ -1056,6 +1116,7 @@ class FireService:
             episode_id=episode.id,
             event_count=episode.event_count,
             last_seen_at=episode.last_seen_at,
+            recovery_snapshot=snapshot,
         )
 
     def _summary_query(self, filters: List[Any]):

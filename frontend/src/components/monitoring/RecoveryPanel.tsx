@@ -6,15 +6,32 @@ import { NdviChart } from '@/components/ndvi-chart'
 import { RecoveryStatusBadge } from './RecoveryStatusBadge'
 import { LandUseChangeCard } from './LandUseChangeCard'
 import { useRecovery } from '@/hooks/queries/useRecovery'
+import { useRecoveryByEpisode } from '@/hooks/queries/useRecoveryByEpisode'
 import { useLandUseChanges } from '@/hooks/queries/useLandUseChanges'
+import type { MonthlyNDVI } from '@/services/endpoints/monitoring'
 
 interface RecoveryPanelProps {
+  /** ID del evento (vista evento). Obligatorio si no se pasa episodeId. */
   fireEventId: string
+  /** ID del episodio (vista episodio, Fase 6). Si se pasa, se usa recovery agregado por episodio. */
+  episodeId?: string
+  /** Fecha del incendio del detalle del evento (p. ej. fire.start_date). Si no se pasa, se usa recovery.fire_date. */
+  fireDate?: string
 }
 
-export function RecoveryPanel({ fireEventId }: RecoveryPanelProps) {
-  const { data: recovery, isLoading: recoveryLoading, error: recoveryError } = useRecovery(fireEventId)
-  const { data: landUse, isLoading: landUseLoading } = useLandUseChanges(fireEventId)
+export function RecoveryPanel({
+  fireEventId,
+  episodeId,
+  fireDate: fireDateFromDetail,
+}: RecoveryPanelProps) {
+  const byEvent = useRecovery(fireEventId, !episodeId)
+  const byEpisode = useRecoveryByEpisode(episodeId ?? '', !!episodeId)
+  const recoveryResult = episodeId ? byEpisode : byEvent
+  const { data: recovery, isLoading: recoveryLoading, error: recoveryError } = recoveryResult
+  const { data: landUse, isLoading: landUseLoading } = useLandUseChanges(
+    fireEventId,
+    !episodeId,
+  )
 
   if (recoveryLoading) {
     return (
@@ -69,19 +86,16 @@ export function RecoveryPanel({ fireEventId }: RecoveryPanelProps) {
           Analisis de recuperacion pendiente
         </h3>
         <p className="text-xs text-muted-foreground max-w-xs">
-          El monitoreo de vegetacion se ejecuta mensualmente. Los datos estaran disponibles
-          una vez que se procese el primer analisis NDVI para este evento.
+          {recovery.message ||
+            'El monitoreo de vegetacion se ejecuta mensualmente. Los datos estaran disponibles una vez que se procese el primer analisis NDVI.'}
         </p>
       </div>
     )
   }
 
-  const chartData = recovery.monitoring_data.map((d) => ({
-    month: d.date,
-    value: d.ndvi_mean,
-    recovery_percentage: d.recovery_percentage,
-    cloud_cover_pct: d.cloud_cover_pct,
-  }))
+  const baselineNdvi = recovery.baseline_ndvi ?? 0.5
+  const fireDate = fireDateFromDetail ?? recovery.fire_date
+  const monitoringData: MonthlyNDVI[] = recovery.monitoring_data
 
   return (
     <div className="space-y-6">
@@ -118,8 +132,12 @@ export function RecoveryPanel({ fireEventId }: RecoveryPanelProps) {
         </Card>
       </div>
 
-      {chartData.length > 0 ? (
-        <NdviChart data={chartData} baselineNdvi={recovery.baseline_ndvi} />
+      {monitoringData.length > 0 ? (
+        <NdviChart
+          data={monitoringData}
+          baselineNdvi={baselineNdvi}
+          fireDate={fireDate}
+        />
       ) : (
         <Card>
           <CardContent className="flex items-center justify-center py-12 text-sm text-muted-foreground">

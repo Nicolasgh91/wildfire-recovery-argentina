@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
-import { ExternalLink, Trees } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import {
   Tooltip,
   TooltipContent,
@@ -10,6 +10,7 @@ import {
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import { BRAND } from '@/config/brand'
+import { BrandLogo } from '@/components/brand/BrandLogo'
 import {
   type ExternalNavigationItem,
   getExternalItems,
@@ -200,9 +201,8 @@ export function Footer() {
         <div className="container mx-auto px-6 py-12">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-5">
             <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-2">
-                <Trees className="h-8 w-8 text-primary" />
-                <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
+              <div>
+                <BrandLogo size="md" />
               </div>
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {t('footerBrandLine1')} {t('footerBrandLine2')}
@@ -223,6 +223,17 @@ export function Footer() {
           </div>
 
           <div className="mt-12 border-t border-border pt-8">
+            <div className="mb-8">
+              <h3 className="mb-3 text-xs font-semibold tracking-wider text-foreground uppercase">
+                {t('footerLegalTitle')}
+              </h3>
+              <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
+                {t('footerLegalP1')}
+              </p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {t('footerLegalP2')}
+              </p>
+            </div>
             <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
               <p className="text-sm text-muted-foreground">
                 &copy; {new Date().getFullYear()} {BRAND.name} Argentina. {t('footerCopyright')}

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { translations, type Language, type TranslationKey } from '@/data/translations'
+import { BRAND } from '@/config/brand'
 
 const LANGUAGE_STORAGE_KEY = 'fg:language'
 
@@ -30,7 +31,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback(
     (key: TranslationKey): string => {
-      return translations[language][key] || key
+      const raw = translations[language][key] || key
+      return (raw as string)
+        .replace(/\{appName\}/g, BRAND.name)
+        .replace(/\{appSlug\}/g, BRAND.slug)
     },
     [language]
   )

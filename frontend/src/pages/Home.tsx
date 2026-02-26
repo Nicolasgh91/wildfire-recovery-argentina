@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { AlertTriangle, ArrowRight, RefreshCcw, Trees } from 'lucide-react'
+import { BrandLogo } from '@/components/brand/BrandLogo'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/context/LanguageContext'
@@ -140,12 +141,8 @@ export default function HomePage() {
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <Trees className="h-8 w-8 text-primary sm:hidden" />
-            <h1 className="text-2xl font-bold text-foreground sm:hidden">{t('fireFeed')}</h1>
-            <h1 className="hidden text-2xl font-bold text-foreground sm:block">
-              {t('activeFiresArgentina')}
-            </h1>
+          <div className="flex items-center sm:hidden">
+            <BrandLogo size="sm" />
           </div>
 
           <div className="flex flex-wrap items-center gap-3">

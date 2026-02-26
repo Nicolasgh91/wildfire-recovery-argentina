@@ -29,12 +29,21 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Importar servicios base
 if __package__:
-    from .gee_service import GEEImageNotFoundError, GEEService, NDVIResult
+    from .gee_service import (
+        GEEImageNotFoundError,
+        GEEService,
+        GEEServiceUnavailableError,
+        NDVIResult,
+    )
     from .storage_service import StorageService
+    from app.core.circuit_breaker import GEECircuitOpenError, gee_circuit
 else:
     # Para testing standalone
     from gee_service import GEEImageNotFoundError, GEEService, NDVIResult
     from storage_service import StorageService
+    gee_circuit = None  # type: ignore
+    GEECircuitOpenError = Exception  # type: ignore
+    GEEServiceUnavailableError = Exception  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -306,14 +315,13 @@ class VAEService:
         # Recovery percentage (0-100)
         # Fórmula: (current_ndvi / baseline_ndvi) * 100
         #
-        # NOTA: esta fórmula mide el "porcentaje del NDVI baseline alcanzado",
-        # NO el "porcentaje recuperado desde el nadir post-incendio".
-        # Ejemplo: baseline=0.6, nadir=0.1, actual=0.35 → resultado=58%
-        # (la recuperación real desde el nadir sería 50%)
-        #
-        # Se mantiene esta fórmula por consistencia con datos existentes.
-        # Si se desea cambiar a la fórmula de recuperación real, usar:
-        #   recovery_pct = (current - nadir) / (baseline - nadir) * 100
+        # IMPORTANTE (gee_spec §1.3): Esta fórmula mide el "porcentaje del baseline
+        # alcanzado", NO el "porcentaje recuperado desde el nadir post-incendio".
+        # En la UI debe mostrarse como tal para evitar malinterpretaciones.
+        # Ejemplo: baseline=0.6, nadir=0.1, actual=0.35 → 58% (baseline alcanzado);
+        # recuperación real desde nadir sería (0.35-0.1)/(0.6-0.1)*100 = 50%.
+        # Corrección de fórmula queda como deuda documentada para siguiente ciclo.
+        # Si se cambia a recuperación desde nadir: (current - nadir) / (baseline - nadir) * 100
         if baseline_ndvi > 0:
             recovery_pct = min(100, max(0, (current_ndvi / baseline_ndvi) * 100))
         else:
@@ -699,107 +707,99 @@ class VAEService:
     # =========================================================================
 
     def _get_baseline_ndvi(self, bbox: Dict[str, float], fire_date: date) -> float:
-        """Obtiene NDVI pre-incendio (baseline) con logging mejorado."""
-        import logging
-        import time
-        logger = logging.getLogger(__name__)
-        
-        logger.info(f"🔍 [BASELINE] Starting baseline NDVI calculation")
-        logger.info(f"🔍 [BASELINE] Fire date: {fire_date}")
-        logger.info(f"🔍 [BASELINE] Bbox received: {bbox}")
-        logger.info(f"🔍 [BASELINE] Bbox type: {type(bbox)}")
-        
-        start_time = time.time()
-        
-        try:
-            # Validate and convert bbox
+        """Obtiene NDVI pre-incendio (baseline) con logging mejorado. GEE envuelto en circuit breaker."""
+
+        def _do() -> float:
+            import time
             from app.utils.bbox_utils import validate_and_convert_bbox
-            bbox = validate_and_convert_bbox(bbox)
-            logger.info(f"🔍 [BASELINE] Validated bbox: {bbox}")
-            
-            # Buscar imagen 15-45 días antes del incendio
-            pre_start = fire_date - timedelta(days=45)
-            pre_end = fire_date - timedelta(days=15)  # Changed from 5 to 15 days
-            
-            logger.info(f"🔍 [BASELINE] Searching images from {pre_start} to {pre_end}")
-            
-            collection = self._gee.get_sentinel_collection(
-                bbox=bbox, start_date=pre_start, end_date=pre_end, max_cloud_cover=25
-            )
-            logger.info(f"🔍 [BASELINE] Collection retrieved successfully")
 
-            image = self._gee.get_best_image(
-                collection, target_date=fire_date - timedelta(days=15)
-            )
-            logger.info(f"🔍 [BASELINE] Best image selected")
-            
-            ndvi_result = self._gee.calculate_ndvi(image, bbox)
-            logger.info(f"🔍 [BASELINE] NDVI calculated: {ndvi_result.mean}")
-            
-            elapsed = time.time() - start_time
-            logger.info(f"🔍 [BASELINE] ✅ Baseline NDVI completed in {elapsed:.2f}s: {ndvi_result.mean}")
+            bbox_val = validate_and_convert_bbox(bbox)
+            logger.info("🔍 [BASELINE] Starting baseline NDVI calculation (fire_date=%s)", fire_date)
+            start_time = time.time()
+            try:
+                pre_start = fire_date - timedelta(days=45)
+                pre_end = fire_date - timedelta(days=15)
+                collection = self._gee.get_sentinel_collection(
+                    bbox=bbox_val, start_date=pre_start, end_date=pre_end, max_cloud_cover=25
+                )
+                image = self._gee.get_best_image(
+                    collection, target_date=fire_date - timedelta(days=15)
+                )
+                ndvi_result = self._gee.calculate_ndvi(image, bbox_val)
+                logger.info(
+                    "🔍 [BASELINE] ✅ Baseline NDVI completed in %.2fs: %s",
+                    time.time() - start_time,
+                    ndvi_result.mean,
+                )
+                return ndvi_result.mean
+            except GEEImageNotFoundError as e:
+                logger.warning(
+                    "baseline_not_available: no pre-fire image",
+                    extra={"fire_date": str(fire_date)},
+                )
+                raise BaselineNotAvailableError(
+                    f"No hay imagen pre-incendio disponible para {fire_date}"
+                ) from e
+            except Exception as e:
+                logger.error(
+                    "❌ [BASELINE] Error in baseline NDVI: %s (bbox=%s)",
+                    e,
+                    bbox_val,
+                    exc_info=True,
+                )
+                raise
 
-            return ndvi_result.mean
-
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"❌ [BASELINE] Error in baseline NDVI after {elapsed:.2f}s: {e}")
-            logger.error(f"❌ [BASELINE] Bbox was: {bbox}")
-            logger.error(f"❌ [BASELINE] Fire date was: {fire_date}")
-            raise
+        if gee_circuit is None:
+            return _do()
+        try:
+            return gee_circuit.call(_do)
+        except GEECircuitOpenError as e:
+            raise GEEServiceUnavailableError(
+                str(e), retry_after=getattr(e, "retry_after", None)
+            ) from e
 
     def _get_current_ndvi(self, bbox: Dict[str, float], target_date: date) -> float:
         """
         Obtiene NDVI para una fecha específica usando ImageCollection median.
-        
-        Optimización UC-F12: Usa compuesto mediano libre de nubes en lugar de
-        búsqueda iterativa por nubosidad (reducción 3-9x en requests GEE).
+        GEE envuelto en circuit breaker. Fallback iterativo se ejecuta dentro del mismo call.
         """
-        import time
-        import logging
-        logger = logging.getLogger(__name__)
-        
-        logger.info(f"🔍 [MEDIAN_OPT] Getting NDVI for {target_date} using median optimization")
-        start_time = time.time()
-        
+        from app.utils.bbox_utils import validate_and_convert_bbox
+
+        def _do() -> float:
+            import time
+
+            bbox_val = validate_and_convert_bbox(bbox)
+            logger.info("🔍 [MEDIAN_OPT] Getting NDVI for %s", target_date)
+            start_time = time.time()
+            try:
+                start = target_date - timedelta(days=15)
+                end = target_date + timedelta(days=15)
+                collection = self._gee.get_sentinel_collection(
+                    bbox=bbox_val, start_date=start, end_date=end, max_cloud_cover=80
+                )
+                composite = collection.median()
+                ndvi_result = self._gee.calculate_ndvi(composite, bbox_val)
+                logger.info(
+                    "🔍 [MEDIAN_OPT] ✅ Median NDVI completed in %.2fs: %s",
+                    time.time() - start_time,
+                    ndvi_result.mean,
+                )
+                return ndvi_result.mean
+            except Exception as e:
+                logger.warning(
+                    "🔍 [MEDIAN_OPT] Median failed, falling back to iterative search: %s",
+                    e,
+                )
+                return self._get_current_ndvi_fallback(bbox_val, target_date)
+
+        if gee_circuit is None:
+            return _do()
         try:
-            # Validate and convert bbox first
-            from app.utils.bbox_utils import validate_and_convert_bbox
-            bbox = validate_and_convert_bbox(bbox)
-            logger.info(f"🔍 [MEDIAN_OPT] Validated bbox: {bbox}")
-            
-            # Log parameters
-            logger.info(f"🔍 [MEDIAN_OPT] Window: ±15 days around {target_date}")
-            
-            # Usar ventana de 30 días alrededor del target_date
-            start = target_date - timedelta(days=15)
-            end = target_date + timedelta(days=15)
-            
-            logger.info(f"🔍 [MEDIAN_OPT] Fetching Sentinel collection from {start} to {end}")
-            collection = self._gee.get_sentinel_collection(
-                bbox=bbox, start_date=start, end_date=end,
-                max_cloud_cover=80,  # Permitir mayor nubosidad, median la manejará
-            )
-            
-            # Crear compuesto mediano libre de nubes
-            logger.info(f"🔍 [MEDIAN_OPT] Creating ImageCollection median composite...")
-            composite = collection.median()
-            logger.info(f"🔍 [MEDIAN_OPT] ✅ Median composite created successfully")
-            
-            # Calcular NDVI sobre el compuesto
-            logger.info(f"🔍 [MEDIAN_OPT] Calculating NDVI on composite...")
-            ndvi_result = self._gee.calculate_ndvi(composite, bbox)
-            
-            elapsed = time.time() - start_time
-            logger.info(f"🔍 [MEDIAN_OPT] ✅ Median NDVI completed in {elapsed:.2f}s: {ndvi_result.mean}")
-            return ndvi_result.mean
-            
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"🔍 [MEDIAN_OPT] ❌ Median failed after {elapsed:.2f}s: {e}")
-            logger.error(f"🔍 [MEDIAN_OPT] Bbox was: {bbox}")
-            logger.info(f"🔍 [MEDIAN_OPT] 🔄 Falling back to iterative search...")
-            return self._get_current_ndvi_fallback(bbox, target_date)
+            return gee_circuit.call(_do)
+        except GEECircuitOpenError as e:
+            raise GEEServiceUnavailableError(
+                str(e), retry_after=getattr(e, "retry_after", None)
+            ) from e
     
     def _get_current_ndvi_fallback(self, bbox: Dict[str, float], target_date: date) -> float:
         """
@@ -846,6 +846,38 @@ class VAEService:
         raise GEEImageNotFoundError(
             f"No suitable image found for {target_date} after extended search"
         )
+
+    def _get_current_ndvi_with_cloud(
+        self, bbox: Dict[str, float], target_date: date
+    ) -> Tuple[float, float]:
+        """
+        Obtiene NDVI actual y porcentaje de nubes para una fecha.
+        Variante que devuelve (ndvi_mean, cloud_cover_pct). GEE envuelto en circuit breaker.
+        """
+        from app.utils.bbox_utils import validate_and_convert_bbox
+
+        def _do() -> Tuple[float, float]:
+            bbox_val = validate_and_convert_bbox(bbox)
+            start = target_date - timedelta(days=15)
+            end = target_date + timedelta(days=15)
+            collection = self._gee.get_sentinel_collection(
+                bbox=bbox_val, start_date=start, end_date=end, max_cloud_cover=80
+            )
+            image = self._gee.get_best_image(
+                collection, target_date=target_date, max_cloud_cover=80
+            )
+            ndvi_result = self._gee.calculate_ndvi(image, bbox_val)
+            cloud_pct = self._gee.get_image_cloud_cover(image)
+            return (float(ndvi_result.mean), float(cloud_pct))
+
+        if gee_circuit is None:
+            return _do()
+        try:
+            return gee_circuit.call(_do)
+        except GEECircuitOpenError as e:
+            raise GEEServiceUnavailableError(
+                str(e), retry_after=getattr(e, "retry_after", None)
+            ) from e
 
     def _months_between(self, date1: date, date2: date) -> int:
         """Calcula meses entre dos fechas."""

@@ -27,6 +27,8 @@ export const queryKeys = {
   },
   monitoring: {
     recovery: (fireEventId: string) => ['monitoring', 'recovery', fireEventId] as const,
+    recoveryByEpisode: (episodeId: string) =>
+      ['monitoring', 'recovery', 'by-episode', episodeId] as const,
     landUseChanges: (fireEventId: string) => ['monitoring', 'land-use-changes', fireEventId] as const,
   },
   explorations: {

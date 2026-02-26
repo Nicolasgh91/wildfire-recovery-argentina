@@ -569,7 +569,7 @@ def make_payments_rate_limiter():
 def make_generation_rate_limiter():
     """
     Rate limiter for heavy generation endpoints like satellites or modeling.
-    
+
     Limits:
     - Authenticated User/Admin: 5/6 hours
     - Anonymous IP: 0 (Auth required)
@@ -583,7 +583,7 @@ def make_generation_rate_limiter():
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication required.",
             )
-            
+
         key = f"rl:generation:key:{user.key}"
         count = _backend.increment(key, 6 * 3600)  # 6 hours
         if count > 5:
@@ -592,5 +592,37 @@ def make_generation_rate_limiter():
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Rate limit exceeded (5 requests per 6 hours).",
             )
-            
+
+    return _limit
+
+
+# Recovery trigger: 10 requests/hour per IP (GEE quota protection, spec §3.4)
+RECOVERY_TRIGGER_WINDOW_SECONDS = 3600
+RECOVERY_TRIGGER_LIMIT_PER_IP = 10
+
+
+def make_recovery_trigger_rate_limiter():
+    """
+    Rate limiter for POST /monitoring/recovery/trigger: 10 requests/hour per IP.
+    Returns 429 with retry_after (seconds) in response body when exceeded.
+    """
+    async def _limit(request: Request) -> None:
+        client_ip = get_client_ip(request)
+        key = f"rl:trigger_recovery:ip:{client_ip}"
+        count = _backend.increment(key, RECOVERY_TRIGGER_WINDOW_SECONDS)
+        if count > RECOVERY_TRIGGER_LIMIT_PER_IP:
+            logger.warning(
+                "Recovery trigger rate limit exceeded for IP %s (%d/%d)",
+                client_ip,
+                count,
+                RECOVERY_TRIGGER_LIMIT_PER_IP,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "detail": "Límite de solicitudes de análisis por hora alcanzado. Reintente más tarde.",
+                    "retry_after": RECOVERY_TRIGGER_WINDOW_SECONDS,
+                },
+            )
+
     return _limit

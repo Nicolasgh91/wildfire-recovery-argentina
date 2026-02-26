@@ -16,6 +16,7 @@ import {
 import type { TranslationKey } from '@/data/translations'
 import { isFeatureEnabled } from '@/lib/featureFlags'
 import { HOME_PATH, LOGIN_PATH } from '@/lib/routing'
+import { BRAND } from '@/config/brand'
 
 export type NavigationActiveMatch = 'exact' | 'prefix'
 export type NavigationSection = 'explore' | 'tools' | 'account' | 'help'
@@ -207,7 +208,7 @@ export const NAVIGATION_ITEMS: readonly NavigationItem[] = [
     kind: 'external',
     id: 'api-docs',
     section: 'help',
-    href: 'https://forestguard.freedynamicdns.org/docs',
+    href: `${BRAND.links.publicUrl}/docs`,
     labelKey: 'footerLinkApiDocs',
     icon: ExternalLink,
     requiresExitConfirm: true,
