@@ -762,6 +762,13 @@ class ImageryService:
                 processed_bytes,
                 watermark_meta,
             )
+            url = (upload_result.url or "").strip()
+            if not upload_result.success or not url:
+                logger.error(
+                    "Carousel upload failed for episode %s %s: success=%s url=%r",
+                    episode.id, vis_type, getattr(upload_result, "success", True), upload_result.url,
+                )
+                break
             uploaded_keys.append(upload_result.key)
 
             quality = self._quality_score(float(metadata.cloud_cover_percent))
@@ -784,8 +791,8 @@ class ImageryService:
                 usable_for_analysis=quality != "unusable",
                 r2_bucket=os.environ.get("STORAGE_BUCKET_IMAGES", "forestguard-images"),
                 r2_key=upload_result.key,
-                r2_url=upload_result.url,
-                thumbnail_url=upload_result.url,
+                r2_url=url,
+                thumbnail_url=url,
                 file_size_mb=round(upload_result.size_bytes / (1024 * 1024), 4),
                 bands_included=vis_params.get("bands"),
                 processing_level=metadata.processing_level
@@ -802,7 +809,7 @@ class ImageryService:
             slides.append(
                 {
                     "type": vis_type.lower(),
-                    "thumbnail_url": upload_result.url,
+                    "thumbnail_url": url,
                     "satellite_image_id": str(satellite_image.id),
                     "generated_at": generated_at,
                 }
