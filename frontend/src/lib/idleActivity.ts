@@ -1,4 +1,6 @@
-export const IDLE_ACTIVITY_STORAGE_KEY = 'forestguard_lastActivityAt'
+import { BRAND } from '@/config/brand'
+
+export const IDLE_ACTIVITY_STORAGE_KEY = `${BRAND.slug}_lastActivityAt`
 
 export function touchIdleActivity(timestamp = Date.now()) {
   if (typeof window === 'undefined') return

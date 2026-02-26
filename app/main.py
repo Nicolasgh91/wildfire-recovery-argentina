@@ -233,7 +233,9 @@ app.include_router(
 )
 
 # UC-06 / UC-F12: Vegetation Recovery Monitoring (VAE)
-# Endpoints are secured via get_current_user
+# All GET/POST under /monitoring are private (require JWT). Public recovery info
+# is served only via GET /fires/:id in the response field recovery_snapshot
+# (from fire_events columns, no call to monitoring).
 app.include_router(
     monitoring.router,
     prefix=f"{settings.API_V1_PREFIX}/monitoring",

@@ -33,7 +33,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, Generic, Optional, TypeVar
 
@@ -73,6 +73,14 @@ class CircuitBreakerError(Exception):
     ):
         super().__init__(message)
         self.circuit_name = circuit_name
+        self.retry_after = retry_after
+
+
+class GEECircuitOpenError(Exception):
+    """Raised when GEE circuit is open; message includes retry_after (no GEE internals)."""
+
+    def __init__(self, message: str, retry_after: Optional[int] = None):
+        super().__init__(message)
         self.retry_after = retry_after
 
 
@@ -120,7 +128,7 @@ class CircuitBreaker:
 
         self._state = CircuitState.CLOSED
         self._state_lock = threading.RLock()
-        self._last_state_change = datetime.utcnow()
+        self._last_state_change = datetime.now(timezone.utc)
         self._consecutive_failures = 0
         self._consecutive_successes = 0
         self._stats = CircuitStats()
@@ -139,7 +147,7 @@ class CircuitBreaker:
         with self._state_lock:
             if self._state == CircuitState.OPEN:
                 # Check if recovery timeout has passed
-                elapsed = (datetime.utcnow() - self._last_state_change).total_seconds()
+                elapsed = (datetime.now(timezone.utc) - self._last_state_change).total_seconds()
                 if elapsed >= self.recovery_timeout:
                     self._transition_to(CircuitState.HALF_OPEN)
             return self._state
@@ -157,7 +165,7 @@ class CircuitBreaker:
         """Transition to a new state with logging."""
         old_state = self._state
         self._state = new_state
-        self._last_state_change = datetime.utcnow()
+        self._last_state_change = datetime.now(timezone.utc)
         self._stats.state_changes += 1
 
         if new_state == CircuitState.HALF_OPEN:
@@ -183,7 +191,7 @@ class CircuitBreaker:
         with self._state_lock:
             self._stats.total_requests += 1
             self._stats.successful_requests += 1
-            self._stats.last_success_time = datetime.utcnow()
+            self._stats.last_success_time = datetime.now(timezone.utc)
             self._consecutive_failures = 0
             self._consecutive_successes += 1
 
@@ -196,7 +204,7 @@ class CircuitBreaker:
         with self._state_lock:
             self._stats.total_requests += 1
             self._stats.failed_requests += 1
-            self._stats.last_failure_time = datetime.utcnow()
+            self._stats.last_failure_time = datetime.now(timezone.utc)
             self._consecutive_successes = 0
             self._consecutive_failures += 1
 
@@ -230,13 +238,20 @@ class CircuitBreaker:
 
         if current_state == CircuitState.OPEN:
             self._stats.rejected_requests += 1
-            retry_after = self.recovery_timeout - int(
-                (datetime.utcnow() - self._last_state_change).total_seconds()
+            retry_after = max(
+                0,
+                self.recovery_timeout
+                - int((datetime.now(timezone.utc) - self._last_state_change).total_seconds()),
             )
+            if self.name == "gee":
+                raise GEECircuitOpenError(
+                    f"GEE circuit abierto. Reintento en {retry_after}s.",
+                    retry_after=retry_after,
+                )
             raise CircuitBreakerError(
                 f"Circuit '{self.name}' is OPEN. Service unavailable.",
                 circuit_name=self.name,
-                retry_after=max(0, retry_after),
+                retry_after=retry_after,
             )
 
         try:
@@ -262,13 +277,20 @@ class CircuitBreaker:
 
         if current_state == CircuitState.OPEN:
             self._stats.rejected_requests += 1
-            retry_after = self.recovery_timeout - int(
-                (datetime.utcnow() - self._last_state_change).total_seconds()
+            retry_after = max(
+                0,
+                self.recovery_timeout
+                - int((datetime.now(timezone.utc) - self._last_state_change).total_seconds()),
             )
+            if self.name == "gee":
+                raise GEECircuitOpenError(
+                    f"GEE circuit abierto. Reintento en {retry_after}s.",
+                    retry_after=retry_after,
+                )
             raise CircuitBreakerError(
                 f"Circuit '{self.name}' is OPEN. Service unavailable.",
                 circuit_name=self.name,
-                retry_after=max(0, retry_after),
+                retry_after=retry_after,
             )
 
         try:
@@ -368,7 +390,7 @@ gee_circuit = CircuitBreaker(
     name="gee",
     failure_threshold=5,  # Open after 5 consecutive failures (RES-001)
     success_threshold=1,  # Close after 1 successful probe in HALF_OPEN
-    recovery_timeout=60,  # Wait 60s before testing recovery
+    recovery_timeout=300,  # 5 min before testing recovery (spec §3.5)
     excluded_exceptions=(  # These shouldn't trigger the breaker
         ValueError,  # Validation errors (user input)
         KeyError,  # Missing data (not service failure)

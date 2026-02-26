@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Globe, Lock, LogIn, LogOut, Moon, Settings, Sun, Trees, User } from 'lucide-react'
+import { Globe, Lock, LogIn, LogOut, Moon, Settings, Sun, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -12,7 +12,7 @@ import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
-import { BRAND } from '@/config/brand'
+import { BrandLogo } from '@/components/brand/BrandLogo'
 import { HOME_PATH, LOGIN_PATH } from '@/lib/routing'
 import {
   getInternalItems,
@@ -48,9 +48,8 @@ function DesktopNavbar() {
   return (
     <>
       <header className="fixed top-0 left-0 right-0 z-50 hidden h-24 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:flex">
-        <Link to={HOME_PATH} className="flex items-center gap-2">
-          <Trees className="h-8 w-8 text-primary" />
-          <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
+        <Link to={HOME_PATH}>
+          <BrandLogo size="md" />
         </Link>
 
         <nav className="flex items-center gap-1">

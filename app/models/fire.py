@@ -62,6 +62,11 @@ class FireEvent(Base):
     # DEPRECATED: Use FireEpisode.slides_data instead (to be removed in v2.x)
     slides_data = Column(JSONB, server_default=text("'[]'::jsonb"))
 
+    # Recovery snapshot (G3-2: actualizado por trigger desde vegetation_monitoring)
+    recovery_status = Column(String(50))
+    recovery_percentage = Column(Numeric(5, 2))
+    last_monitoring_date = Column(Date)
+
     # Auditoría
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))
     updated_at = Column(DateTime(timezone=True), server_default=text("now()"))

@@ -10,18 +10,19 @@ Provides:
 - /gee - GEE credentials check
 """
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Literal, Optional
 
 import redis
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api import deps
 from app.core.celery_runtime import resolve_celery_broker_url
+from app.core.security import require_admin
 
 router = APIRouter(tags=["health"])
 
@@ -43,8 +44,8 @@ class DetailedHealthResponse(BaseModel):
     timestamp: datetime
     services: Dict[str, ServiceHealth]
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "status": "healthy",
                 "version": "1.0.0",
@@ -57,6 +58,7 @@ class DetailedHealthResponse(BaseModel):
                 },
             }
         }
+    )
 
 
 async def check_database(db: Session) -> ServiceHealth:
@@ -162,7 +164,7 @@ async def detailed_health_check(
         status=overall,
         version=settings.VERSION,
         environment=settings.ENVIRONMENT,
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         services=services,
     )
 
@@ -190,7 +192,7 @@ async def readiness_probe(
 )
 async def liveness_probe() -> Dict[str, Any]:
     """Kubernetes-style liveness probe."""
-    return {"alive": True, "timestamp": datetime.utcnow().isoformat()}
+    return {"alive": True, "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
 @router.get(
@@ -265,3 +267,36 @@ async def gee_health_check() -> Dict[str, Any]:
             },
             status_code=503
         )
+
+
+@router.get(
+    "/gee/circuit",
+    summary="GEE circuit breaker status (admin only)",
+    description="Returns GEE circuit breaker state for monitoring. Admin only, excluded from public schema.",
+    include_in_schema=False,
+    dependencies=[Depends(require_admin)],
+)
+async def gee_circuit_health() -> Dict[str, Any]:
+    """Admin-only: circuit_state, failure_count, is_healthy, last_failure (spec §5.3)."""
+    try:
+        from app.core.circuit_breaker import CircuitState, gee_circuit
+
+        stats = gee_circuit.stats
+        return {
+            "circuit_state": stats.current_state.value,
+            "failure_count": stats.consecutive_failures,
+            "is_healthy": stats.current_state == CircuitState.CLOSED,
+            "last_failure": (
+                stats.last_failure_time.isoformat()
+                if stats.last_failure_time
+                else None
+            ),
+        }
+    except Exception as e:
+        return {
+            "circuit_state": "unknown",
+            "failure_count": 0,
+            "is_healthy": False,
+            "last_failure": None,
+            "error": str(e)[:200],
+        }

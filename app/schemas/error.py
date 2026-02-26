@@ -4,10 +4,10 @@ Standardized error response schemas for ForestGuard API.
 Provides consistent error response format across all endpoints.
 Follows RFC 7807 (Problem Details) structure for API errors.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ErrorDetail(BaseModel):
@@ -60,12 +60,13 @@ class ErrorResponse(BaseModel):
         None, description="Request ID for tracing and support"
     )
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="When the error occurred"
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="When the error occurred",
     )
     path: Optional[str] = Field(None, description="API path that generated the error")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "error": "VALIDATION_ERROR",
                 "message": "Invalid request parameters",
@@ -82,6 +83,7 @@ class ErrorResponse(BaseModel):
                 "path": "/api/v1/auth/register",
             }
         }
+    )
 
 
 class NotFoundError(ErrorResponse):

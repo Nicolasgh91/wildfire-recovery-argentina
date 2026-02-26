@@ -41,21 +41,21 @@ class ContactService:
             return
         if content_type not in ALLOWED_CONTENT_TYPES:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Unsupported attachment type.",
             )
 
     async def read_attachment(self, attachment: UploadFile) -> ContactAttachment:
         if not attachment.filename:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Attachment filename is required.",
             )
 
         ext = Path(attachment.filename).suffix.lower()
         if ext not in ALLOWED_EXTENSIONS:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Unsupported attachment extension.",
             )
 

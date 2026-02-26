@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Trees } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -8,7 +7,7 @@ import { AnimatedGradientText } from '@/components/ui/AnimatedGradientText'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useI18n } from '@/context/LanguageContext'
 import bosqueLanding from '@/assets/bosque_landing.webp'
-import { BRAND } from '@/config/brand'
+import { BrandLogo } from '@/components/brand/BrandLogo'
 import { HOME_PATH, LOGIN_PATH } from '@/lib/routing'
 
 import { AuthFormOTP } from '@/components/auth/AuthFormOTP'
@@ -30,9 +29,8 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen bg-background p-6 md:p-8">
-      <Link to={LOGIN_PATH} className="absolute left-6 top-6 flex items-center gap-2 md:left-8 md:top-8">
-        <Trees className="h-8 w-8 text-primary" />
-        <span className="text-xl font-bold text-foreground">{BRAND.name}</span>
+      <Link to={LOGIN_PATH} className="absolute left-6 top-6 md:left-8 md:top-8">
+        <BrandLogo size="md" />
       </Link>
 
       <div className="grid min-h-[calc(100vh-3rem)] grid-cols-1 items-center gap-10 lg:grid-cols-2">

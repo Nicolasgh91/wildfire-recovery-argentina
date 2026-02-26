@@ -1,55 +1,67 @@
 """
 Recovery Task: Monitoreo de recuperación de vegetación post-incendio.
 
-Analyzes vegetation recovery using VAEService + GEE and persists
-results to the vegetation_monitoring table with upsert semantics.
+Fase 2 (GEE incremental): 1–2 requests GEE por ejecución.
+- Si ya existe baseline en BD: 1 req (mes actual).
+- Si no existe baseline: 2 req (baseline + mes actual).
+Persiste en vegetation_monitoring con UPSERT idempotente.
 """
 
 import logging
-import time
-from datetime import datetime, timedelta, date
-from celery import group
+from datetime import date, datetime, timedelta
+
+from sqlalchemy import text
+
 from ..celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
 
+def _classify_recovery(pct: float, current: float, baseline: float) -> str:
+    """Clasifica el estado de recuperación (string para BD/API)."""
+    if baseline and current >= baseline * 0.95:
+        return "full_recovery"
+    if pct >= 80:
+        return "advanced_recovery"
+    if pct >= 50:
+        return "moderate_recovery"
+    if pct >= 20:
+        return "early_recovery"
+    if pct >= 0:
+        return "stalled"
+    return "not_started"
+
+
 @celery_app.task(
     bind=True,
-    name='workers.tasks.recovery.analyze_recovery',
-    queue='vae',
+    name="workers.tasks.recovery.analyze_recovery",
+    queue="gee",
     max_retries=2,
 )
-def analyze_recovery(self, fire_event_id, months_after=None):
+def analyze_recovery(self, fire_event_id: str) -> dict:
     """
-    Analiza recuperación de vegetación post-incendio usando NDVI.
-    Persists results to vegetation_monitoring with upsert.
+    Analiza recuperación vegetal para un evento. Máximo 2 requests GEE por ejecución.
 
-    Args:
-        fire_event_id: UUID del fuego
-        months_after: Cuántos meses después analizar (None = auto-detect)
+    1. Lee baseline desde vegetation_monitoring si ya existe.
+    2. Si no existe, llama vae._get_baseline_ndvi (1 req GEE); propaga BaselineNotAvailableError.
+    3. Llama vae._get_current_ndvi_with_cloud para mes actual (1 req GEE).
+    4. Calcula recovery_pct y recovery_status; UPSERT en vegetation_monitoring.
     """
-    import time
     from app.db.session import SessionLocal
-    from sqlalchemy import text
-
-    logger.info(f"🚀 [RECOVERY] === STARTING RECOVERY ANALYSIS ===")
-    logger.info(f"🚀 [RECOVERY] Event ID: {fire_event_id}")
-    start_time = time.time()
+    from app.services.vae_service import (
+        BaselineNotAvailableError,
+        get_vae_service,
+    )
+    from app.services.gee_service import GEEImageNotFoundError
 
     db = SessionLocal()
     try:
-        logger.info(f"🚀 [RECOVERY] Fetching fire event details...")
-        
-        # 1. Get fire event geometry
+        # 1. Fire event + bbox
         fire_row = db.execute(
             text("""
-                SELECT
-                    id,
-                    start_date,
-                    ST_Y(centroid::geometry) as lat,
-                    ST_X(centroid::geometry) as lon,
-                    estimated_area_hectares
+                SELECT id, start_date,
+                       ST_Y(centroid::geometry) AS lat,
+                       ST_X(centroid::geometry) AS lon
                 FROM fire_events
                 WHERE id = :fire_id
             """),
@@ -57,353 +69,353 @@ def analyze_recovery(self, fire_event_id, months_after=None):
         ).fetchone()
 
         if not fire_row:
-            logger.warning(f" [RECOVERY]  Fire event {fire_event_id} not found, skipping")
-            return {
-                'fire_event_id': str(fire_event_id),
-                'status': 'skipped',
-                'reason': 'not_found'
-            }
+            logger.warning("analyze_recovery: fire event not found, fire_event_id=%s", fire_event_id)
+            return {"status": "skipped", "reason": "not_found"}
 
-        # Log event details
-        event_id, fire_date, lat, lon, area_ha = fire_row
-        logger.info(f" [RECOVERY]  Fire details: date={fire_date}, lat={lat:.4f}, lon={lon:.4f}, area={area_ha}ha")
-
-        # 2. Build bbox
+        fire_date = fire_row.start_date
+        if hasattr(fire_date, "date"):
+            fire_date = fire_date.date()
+        lat, lon = float(fire_row.lat), float(fire_row.lon)
         bbox = {
-            'min_lon': lon - 0.01,  # ~1km buffer
-            'max_lon': lon + 0.01,
-            'min_lat': lat - 0.01,
-            'max_lat': lat + 0.01,
+            "min_lon": lon - 0.01,
+            "max_lon": lon + 0.01,
+            "min_lat": lat - 0.01,
+            "max_lat": lat + 0.01,
         }
-        logger.info(f" [RECOVERY]  Bbox: {bbox}")
 
-        # 3. Determine analysis date
-        if months_after is None:
-            analysis_date = datetime.today()
+        # 2. Baseline: desde BD o 1 req GEE
+        baseline_row = db.execute(
+            text("""
+                SELECT baseline_ndvi FROM vegetation_monitoring
+                WHERE fire_event_id = :fid AND baseline_ndvi IS NOT NULL
+                LIMIT 1
+            """),
+            {"fid": str(fire_event_id)},
+        ).fetchone()
+
+        vae = get_vae_service()
+        if baseline_row and baseline_row.baseline_ndvi is not None:
+            baseline_ndvi = float(baseline_row.baseline_ndvi)
         else:
-            analysis_date = self._add_months(fire_date, months_after)
-        
-        logger.info(f" [RECOVERY]  Analysis date: {analysis_date} (months_after: {months_after})")
+            try:
+                baseline_ndvi = vae._get_baseline_ndvi(bbox, fire_date)
+            except BaselineNotAvailableError:
+                logger.warning(
+                    "analyze_recovery: no_baseline_image fire_event_id=%s",
+                    fire_event_id,
+                )
+                return {"status": "pending", "reason": "no_baseline_image"}
 
-        # 4. Initialize VAE service
-        logger.info(f" [RECOVERY]  Initializing VAE service...")
-        vae_service = VAEService()
-
-        # 5. Get baseline NDVI
-        logger.info(f" [RECOVERY]  Starting baseline NDVI calculation...")
-        baseline_start = time.time()
+        # 3. Mes actual: 1 req GEE (ndvi + cloud)
+        today = date.today()
+        target_month = today.replace(day=1)
         try:
-            baseline_ndvi = vae_service._get_baseline_ndvi(bbox, fire_date)
-            baseline_time = time.time() - baseline_start
-            logger.info(f" [RECOVERY]  Baseline NDVI: {baseline_ndvi:.4f} (took {baseline_time:.2f}s)")
-        except Exception as e:
-            logger.error(f" [RECOVERY]  Baseline NDVI failed: {e}")
-            raise
-
-        # 6. Get current NDVI (with median optimization)
-        logger.info(f" [RECOVERY]  Starting current NDVI calculation (median optimized)...")
-        current_start = time.time()
-        try:
-            current_ndvi = vae_service._get_current_ndvi(bbox, analysis_date)
-            current_time = time.time() - current_start
-            logger.info(f" [RECOVERY]  Current NDVI: {current_ndvi:.4f} (took {current_time:.2f}s)")
-        except Exception as e:
-            logger.error(f" [RECOVERY]  Current NDVI failed: {e}")
-            raise
-
-        # 7. Calculate recovery metrics
-        logger.info(f" [RECOVERY]  Calculating recovery metrics...")
-        ndvi_change = current_ndvi - baseline_ndvi
-        recovery_pct = max(0, min(100, (current_ndvi / baseline_ndvi) * 100)) if baseline_ndvi > 0 else 0
-        
-        logger.info(f" [RECOVERY]  Results: NDVI change={ndvi_change:+.4f}, Recovery={recovery_pct:.1f}%")
-
-        # 8. Classify recovery status
-        recovery_status = vae_service._classify_recovery_status(recovery_pct)
-        logger.info(f" [RECOVERY]  Recovery status: {recovery_status.value}")
-
-        # 9. Detect human activity
-        human_activity_detected = recovery_pct > vae_service._get_expected_recovery(months_after) * 1.2
-        activity_type = 'rapid_greening' if human_activity_detected else 'natural_recovery'
-        
-        logger.info(f" [RECOVERY]  Human activity: {human_activity_detected}, Type: {activity_type}")
-
-        # 10. Persist results
-        logger.info(f" [RECOVERY]  Persisting to database...")
-        persist_start = time.time()
-        
-        upsert_query = text("""
-            INSERT INTO vegetation_monitoring (
-                fire_event_id, monitoring_date, ndvi_mean, baseline_ndvi,
-                recovery_percentage, human_activity_detected, activity_type
-            ) VALUES (
-                :fire_event_id, :monitoring_date, :ndvi_mean, :baseline_ndvi,
-                :recovery_percentage, :human_activity_detected, :activity_type
+            current_ndvi, cloud_cover_pct = vae._get_current_ndvi_with_cloud(
+                bbox, target_month
             )
-            ON CONFLICT (fire_event_id, monitoring_date) DO UPDATE SET
-                ndvi_mean = EXCLUDED.ndvi_mean,
-                ndvi_min = EXCLUDED.ndvi_min,
-                ndvi_max = EXCLUDED.ndvi_max,
-                baseline_ndvi = EXCLUDED.baseline_ndvi,
-                recovery_percentage = EXCLUDED.recovery_percentage,
-                human_activity_detected = EXCLUDED.human_activity_detected,
-                activity_type = EXCLUDED.activity_type,
-                classification_confidence = EXCLUDED.classification_confidence,
-                updated_at = NOW()
-        """)
+        except GEEImageNotFoundError:
+            logger.warning(
+                "analyze_recovery: no_image_this_month fire_event_id=%s month=%s",
+                fire_event_id,
+                target_month.isoformat(),
+            )
+            return {"status": "pending", "reason": "no_image_this_month"}
 
-        db.execute(upsert_query, {
-            "fire_event_id": str(fire_event_id),
-            "monitoring_date": monitoring_date,
-            "months_after_fire": analysis.months_after_fire,
-            "ndvi_mean": analysis.current_ndvi,
-            "ndvi_min": None,
-            "ndvi_max": None,
-            "baseline_ndvi": analysis.baseline_ndvi,
-            "recovery_percentage": analysis.recovery_percentage,
-            "human_activity_detected": analysis.anomaly_detected,
-            "activity_type": analysis.anomaly_type.value if analysis.anomaly_detected else None,
-            "classification_confidence": analysis.anomaly_confidence if analysis.anomaly_detected else None,
-        })
+        # 4. recovery_pct = (current / baseline) * 100 — porcentaje del baseline alcanzado (gee_spec §1.3)
+        recovery_pct = min(100.0, max(0.0, (current_ndvi / baseline_ndvi) * 100))
+        recovery_status = _classify_recovery(recovery_pct, current_ndvi, baseline_ndvi)
+
+        # months_after_fire
+        months_after = (target_month.year - fire_date.year) * 12 + (
+            target_month.month - fire_date.month
+        )
+
+        # 5. UPSERT (idempotente); cloud_cover_pct y recovery_status desde migración 2026_02_26
+        db.execute(
+            text("""
+                INSERT INTO vegetation_monitoring (
+                    fire_event_id, monitoring_date, months_after_fire,
+                    ndvi_mean, baseline_ndvi, recovery_percentage,
+                    cloud_cover_pct, recovery_status,
+                    human_activity_detected, activity_type, updated_at
+                ) VALUES (
+                    :fire_event_id, :monitoring_date, :months_after_fire,
+                    :ndvi_mean, :baseline_ndvi, :recovery_percentage,
+                    :cloud_cover_pct, :recovery_status,
+                    :human_activity_detected, :activity_type, NOW()
+                )
+                ON CONFLICT (fire_event_id, monitoring_date) DO UPDATE SET
+                    months_after_fire = EXCLUDED.months_after_fire,
+                    ndvi_mean = EXCLUDED.ndvi_mean,
+                    baseline_ndvi = EXCLUDED.baseline_ndvi,
+                    recovery_percentage = EXCLUDED.recovery_percentage,
+                    cloud_cover_pct = EXCLUDED.cloud_cover_pct,
+                    recovery_status = EXCLUDED.recovery_status,
+                    human_activity_detected = EXCLUDED.human_activity_detected,
+                    activity_type = EXCLUDED.activity_type,
+                    updated_at = NOW()
+            """),
+            {
+                "fire_event_id": str(fire_event_id),
+                "monitoring_date": target_month,
+                "months_after_fire": months_after,
+                "ndvi_mean": current_ndvi,
+                "baseline_ndvi": baseline_ndvi,
+                "recovery_percentage": recovery_pct,
+                "cloud_cover_pct": cloud_cover_pct,
+                "recovery_status": recovery_status,
+                "human_activity_detected": False,
+                "activity_type": None,
+            },
+        )
         db.commit()
 
         logger.info(
-            f"Recovery analysis persisted for {fire_event_id}: "
-            f"{analysis.recovery_percentage:.1f}% recovered"
+            "recovery_analyzed fire_event_id=%s recovery_pct=%.1f status=%s",
+            fire_event_id,
+            recovery_pct,
+            recovery_status,
         )
         return {
-            "fire_event_id": str(fire_event_id),
-            "status": "completed",
-            "recovery_percentage": analysis.recovery_percentage,
-            "ndvi_change": analysis.ndvi_change,
-            "recovery_status": analysis.recovery_status.value,
-            "months_after_fire": analysis.months_after_fire,
-            "analysis_date": monitoring_date.isoformat(),
+            "status": "ok",
+            "recovery_percentage": recovery_pct,
+            "recovery_status": recovery_status,
         }
-
+    except BaselineNotAvailableError:
+        db.rollback()
+        logger.warning(
+            "analyze_recovery: baseline_not_available fire_event_id=%s",
+            fire_event_id,
+        )
+        return {"status": "pending", "reason": "no_baseline_image"}
     except Exception as exc:
         db.rollback()
-        logger.error(f"Error analyzing recovery for {fire_event_id}: {exc}")
+        logger.error(
+            "analyze_recovery_failed fire_event_id=%s error_type=%s error_msg=%s",
+            fire_event_id,
+            type(exc).__name__,
+            str(exc)[:500],
+        )
         raise self.retry(exc=exc, countdown=300)
     finally:
         db.close()
 
 
+# Countdown entre tasks para no saturar GEE (gee_spec §3.3)
+GEE_DELAY_BETWEEN_TASKS = 3
+MAX_EVENTS_MONTHLY = 900
+
+
+@celery_app.task(
+    name="workers.tasks.recovery.batch_recovery_monthly",
+    queue="gee",
+)
+def batch_recovery_monthly() -> dict:
+    """
+    Encola analyze_recovery para eventos active/monitoring (LIMIT 900).
+    Día 2 de cada mes 02:00 UTC. 900 × 2 ≈ 1.800 req GEE (~4% cuota diaria).
+    """
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            text("""
+                SELECT id FROM fire_events
+                WHERE status IN ('active', 'monitoring')
+                  AND centroid IS NOT NULL
+                ORDER BY updated_at DESC
+                LIMIT :limit
+            """),
+            {"limit": MAX_EVENTS_MONTHLY},
+        ).fetchall()
+        event_ids = [str(r.id) for r in rows]
+    finally:
+        db.close()
+
+    enqueued = 0
+    for i, eid in enumerate(event_ids):
+        analyze_recovery.apply_async(
+            args=[eid],
+            queue="gee",
+            countdown=i * GEE_DELAY_BETWEEN_TASKS,
+        )
+        enqueued += 1
+    logger.info("batch_recovery_monthly enqueued=%d", enqueued)
+    return {"enqueued": enqueued, "status": "queued"}
+
+
+@celery_app.task(
+    name="workers.tasks.recovery.batch_recovery_recent",
+    queue="gee",
+)
+def batch_recovery_recent() -> dict:
+    """
+    Encola analyze_recovery para eventos creados en los últimos 30 días
+    que no tengan análisis del mes actual (LEFT JOIN por ausencia).
+    Lunes 03:00 UTC.
+    """
+    from app.db.session import SessionLocal
+
+    today = date.today()
+    first_of_month = today.replace(day=1)
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            text("""
+                SELECT fe.id
+                FROM fire_events fe
+                LEFT JOIN vegetation_monitoring vm
+                  ON vm.fire_event_id = fe.id
+                  AND vm.monitoring_date = :first_of_month
+                WHERE fe.centroid IS NOT NULL
+                  AND fe.created_at >= NOW() - INTERVAL '30 days'
+                  AND vm.fire_event_id IS NULL
+                ORDER BY fe.created_at DESC
+                LIMIT 500
+            """),
+            {"first_of_month": first_of_month},
+        ).fetchall()
+        event_ids = [str(r.id) for r in rows]
+    finally:
+        db.close()
+
+    enqueued = 0
+    for i, eid in enumerate(event_ids):
+        analyze_recovery.apply_async(
+            args=[eid],
+            queue="gee",
+            countdown=i * GEE_DELAY_BETWEEN_TASKS,
+        )
+        enqueued += 1
+    logger.info("batch_recovery_recent enqueued=%d", enqueued)
+    return {"enqueued": enqueued, "status": "queued"}
+
+
 @celery_app.task(
     bind=True,
-    name='workers.tasks.recovery.batch_recovery_analysis',
-    queue='vae',
+    name="workers.tasks.recovery.batch_recovery_analysis",
+    queue="gee",
     max_retries=2,
 )
 def batch_recovery_analysis(self, fire_event_ids=None, max_events=50, months_list=None):
     """
-    Ejecuta análisis de recuperación para eventos activos.
-
-    Cuando fire_event_ids es None o vacío, consulta la BD para obtener
-    los eventos activos más recientes (< 36 meses). Limita a max_events
-    por ejecución para proteger la cuota GEE.
-
-    Programada mensualmente vía Celery Beat.
-
-    Args:
-        fire_event_ids: Lista de UUIDs (opcional; si vacía, auto-query)
-        max_events: Máximo de eventos a procesar por batch
-        months_list: Not used (auto-detected per event), kept for compatibility
+    Compatibilidad: encola analyze_recovery para una lista de IDs o eventos activos.
+    Usa cola gee y countdown escalonado.
     """
     from app.db.session import SessionLocal
-    from sqlalchemy import text
 
-    try:
-        # If no IDs provided, query DB for active events
-        if not fire_event_ids:
-            db = SessionLocal()
-            try:
-                rows = db.execute(text("""
-                    SELECT fe.id
-                    FROM fire_events fe
+    if not fire_event_ids:
+        db = SessionLocal()
+        try:
+            rows = db.execute(
+                text("""
+                    SELECT fe.id FROM fire_events fe
                     WHERE fe.start_date > NOW() - INTERVAL '36 months'
                       AND fe.status IN ('active', 'monitoring', 'contained')
                       AND fe.centroid IS NOT NULL
                     ORDER BY fe.start_date DESC
                     LIMIT :max_events
-                """), {"max_events": max_events}).fetchall()
-                fire_event_ids = [str(row.id) for row in rows]
-            finally:
-                db.close()
+                """),
+                {"max_events": max_events},
+            ).fetchall()
+            fire_event_ids = [str(r.id) for r in rows]
+        finally:
+            db.close()
 
-        logger.info(f"Batch recovery analysis: {len(fire_event_ids)} fires...")
-
-        signatures = [
-            analyze_recovery.s(fire_id).set(queue='vae')
-            for fire_id in fire_event_ids
-        ]
-
-        group_result = group(signatures).apply_async() if signatures else None
-
-        return {
-            'total_tasks_enqueued': len(signatures),
-            'fire_events': len(fire_event_ids),
-            'status': 'queued',
-            'group_id': group_result.id if group_result else None,
-        }
-
-    except Exception as exc:
-        logger.error(f"Error in batch recovery analysis: {exc}")
-        raise self.retry(exc=exc, countdown=60)
+    for i, eid in enumerate(fire_event_ids):
+        analyze_recovery.apply_async(
+            args=[eid],
+            queue="gee",
+            countdown=i * GEE_DELAY_BETWEEN_TASKS,
+        )
+    return {
+        "total_tasks_enqueued": len(fire_event_ids),
+        "fire_events": len(fire_event_ids),
+        "status": "queued",
+    }
 
 
 @celery_app.task(
     bind=True,
-    name='workers.tasks.recovery.analyze_episode_recovery',
-    queue='vae',
+    name="workers.tasks.recovery.analyze_episode_recovery",
+    queue="gee",
     max_retries=2,
 )
 def analyze_episode_recovery(self, episode_id, months_after=None):
-    """
-    Analiza recuperación de vegetación para un episodio completo.
-    
-    Selecciona el evento representativo del episodio (más reciente o mayor FRP)
-    y ejecuta el análisis de recuperación sobre ese evento.
-    
-    Args:
-        episode_id: UUID del episodio
-        months_after: Cuántos meses después analizar (None = auto-detect)
-    """
+    """Encola analyze_recovery para el evento representativo del episodio."""
     from app.db.session import SessionLocal
-    from sqlalchemy import text
-    
+
     db = SessionLocal()
     try:
-        logger.info(f"Analyzing episode recovery for episode {episode_id}...")
-        
-        # 1. Get representative event from episode
-        event_row = db.execute(text("""
-            SELECT fe.id, fe.start_date, 
-                   ST_Y(fe.centroid::geometry) as lat,
-                   ST_X(fe.centroid::geometry) as lon,
-                   fe.estimated_area_hectares,
-                   fe.avg_frp, fe.max_frp
-            FROM fire_events fe
-            JOIN fire_episode_events fee ON fe.id = fee.event_id
-            WHERE fee.episode_id = :episode_id
-            AND fe.centroid IS NOT NULL
-            ORDER BY fe.max_frp DESC, fe.start_date DESC
-            LIMIT 1
-        """), {"episode_id": str(episode_id)}).fetchone()
-        
+        event_row = db.execute(
+            text("""
+                SELECT fe.id FROM fire_events fe
+                JOIN fire_episode_events fee ON fe.id = fee.event_id
+                WHERE fee.episode_id = :eid AND fe.centroid IS NOT NULL
+                ORDER BY fe.max_frp DESC NULLS LAST, fe.start_date DESC
+                LIMIT 1
+            """),
+            {"eid": str(episode_id)},
+        ).fetchone()
         if not event_row:
-            logger.warning(f"No representative event found for episode {episode_id}")
-            return {
-                'episode_id': str(episode_id),
-                'status': 'skipped',
-                'reason': 'no_representative_event'
-            }
-        
-        representative_event_id = event_row[0]
-        logger.info(f"Selected representative event {representative_event_id} for episode {episode_id}")
-        
-        # 2. Execute recovery analysis on representative event
-        from .recovery import analyze_recovery
-        result = analyze_recovery.delay(representative_event_id, months_after)
-        
-        # 3. Store episode-level recovery status (optional enhancement)
-        # This could be added later to cache recovery status at episode level
-        
+            return {"episode_id": str(episode_id), "status": "skipped", "reason": "no_representative_event"}
+        rep_id = str(event_row.id)
+        result = analyze_recovery.apply_async(args=[rep_id], queue="gee")
         return {
-            'episode_id': str(episode_id),
-            'representative_event_id': str(representative_event_id),
-            'recovery_task_id': result.id,
-            'status': 'queued',
-            'event_frp': float(event_row[5]) if event_row[5] else None,
+            "episode_id": str(episode_id),
+            "representative_event_id": rep_id,
+            "recovery_task_id": result.id,
+            "status": "queued",
         }
-        
-    except Exception as exc:
-        logger.error(f"Error analyzing episode recovery for {episode_id}: {exc}")
-        raise self.retry(exc=exc, countdown=60)
     finally:
         db.close()
 
 
 @celery_app.task(
     bind=True,
-    name='workers.tasks.recovery.batch_episode_recovery_analysis',
-    queue='vae',
+    name="workers.tasks.recovery.batch_episode_recovery_analysis",
+    queue="gee",
     max_retries=2,
 )
-def batch_episode_recovery_analysis(self, max_episodes=50, recent_only=False, carousel_only=False):
-    """
-    Ejecuta análisis de recuperación para múltiples episodios en batch.
-    
-    Args:
-        max_episodes: Máximo número de episodios a procesar
-        recent_only: Solo episodios recientes (últimos 12 meses)
-        carousel_only: Solo episodios activos/monitoreo (para carrusel)
-    """
+def batch_episode_recovery_analysis(
+    self, max_episodes=50, recent_only=False, carousel_only=False
+):
+    """Encola analyze_episode_recovery para múltiples episodios."""
     from app.db.session import SessionLocal
-    from sqlalchemy import text
     from celery import group
-    
+
     db = SessionLocal()
     try:
-        logger.info(f"Starting batch episode recovery analysis (max_episodes={max_episodes})")
-        
-        # Build query based on parameters
-        where_conditions = ["fe.centroid IS NOT NULL"]
+        where = ["fe.centroid IS NOT NULL"]
         if recent_only:
-            where_conditions.append("fe.start_date >= NOW() - INTERVAL '12 months'")
+            where.append("fe.start_date >= NOW() - INTERVAL '12 months'")
         if carousel_only:
-            where_conditions.append("ep.status IN ('active', 'monitoring')")
-        
-        where_clause = " AND ".join(where_conditions)
-        
-        # Get episodes for processing
-        episodes_query = text(f"""
-            SELECT ep.id, ep.status, ep.created_at,
-                   CASE WHEN ep.status = 'active' THEN 1
-                        WHEN ep.status = 'monitoring' THEN 2
-                        ELSE 3 END as status_priority
-            FROM fire_episodes ep
-            JOIN fire_episode_events fee ON ep.id = fee.episode_id
-            JOIN fire_events fe ON fee.event_id = fe.id
-            WHERE {where_clause}
-            GROUP BY ep.id, ep.status, ep.created_at
-            ORDER BY status_priority, ep.created_at DESC
-            LIMIT :max_episodes
-        """)
-        
-        episodes = db.execute(episodes_query, {"max_episodes": max_episodes}).fetchall()
-        
-        if not episodes:
-            logger.info("No episodes found for batch processing")
-            return {
-                'total_episodes': 0,
-                'status': 'completed',
-                'message': 'no_episodes_found'
-            }
-        
-        episode_ids = [str(ep[0]) for ep in episodes]
-        logger.info(f"Found {len(episode_ids)} episodes for batch processing")
-        
-        # Create group of episode recovery tasks
-        signatures = [
-            analyze_episode_recovery.s(episode_id) 
-            for episode_id in episode_ids
-        ]
-        
-        group_result = group(*signatures).apply_async()
-        
-        logger.info(f"Queued {len(signatures)} episode recovery tasks")
-        
+            where.append("ep.status IN ('active', 'monitoring')")
+        where_sql = " AND ".join(where)
+        rows = db.execute(
+            text(f"""
+                SELECT ep.id FROM fire_episodes ep
+                JOIN fire_episode_events fee ON fee.episode_id = ep.id
+                JOIN fire_events fe ON fe.id = fee.event_id
+                WHERE {where_sql}
+                GROUP BY ep.id
+                ORDER BY ep.created_at DESC
+                LIMIT :lim
+            """),
+            {"lim": max_episodes},
+        ).fetchall()
+        episode_ids = [str(r.id) for r in rows]
+        if not episode_ids:
+            return {"total_episodes": 0, "status": "completed", "message": "no_episodes_found"}
+        sigs = [analyze_episode_recovery.s(eid) for eid in episode_ids]
+        gr = group(sigs).apply_async(queue="gee")
         return {
-            'total_episodes': len(episode_ids),
-            'total_tasks_enqueued': len(signatures),
-            'episode_ids': episode_ids,
-            'status': 'queued',
-            'group_id': group_result.id if group_result else None,
+            "total_episodes": len(episode_ids),
+            "total_tasks_enqueued": len(sigs),
+            "episode_ids": episode_ids,
+            "status": "queued",
+            "group_id": gr.id,
         }
-        
-    except Exception as exc:
-        logger.error(f"Error in batch episode recovery analysis: {exc}")
-        raise self.retry(exc=exc, countdown=60)
     finally:
         db.close()

@@ -18,6 +18,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { QualityIndicator } from '@/components/fires/QualityIndicator'
 import { RecoveryPanel } from '@/components/monitoring/RecoveryPanel'
+import { RecoveryStatusBadge } from '@/components/monitoring/RecoveryStatusBadge'
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import { useFire } from '@/hooks/queries/useFire'
@@ -344,6 +345,19 @@ export default function FireDetailPage() {
           </div>
         )}
 
+        {/* Badge público de recuperación (todos los usuarios, sin llamar a /monitoring) */}
+        {data?.recovery_snapshot && (
+          <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <span className="text-sm text-muted-foreground">Recuperación:</span>
+            <RecoveryStatusBadge status={data.recovery_snapshot.recovery_status} />
+            {data.recovery_snapshot.recovery_percentage != null && (
+              <span className="text-sm font-medium text-foreground">
+                {data.recovery_snapshot.recovery_percentage.toFixed(1)}%
+              </span>
+            )}
+          </div>
+        )}
+
         <div
           className={`mb-6 grid gap-4 sm:grid-cols-2 ${isEpisodeDetail ? 'lg:grid-cols-3' : 'lg:grid-cols-4'
             }`}
@@ -410,9 +424,13 @@ export default function FireDetailPage() {
           </div>
         </div>
 
-        {isAuthenticated && !isEpisodeDetail && (
+        {isAuthenticated && (
           <div className="mt-6">
-            <RecoveryPanel fireEventId={fireId} />
+            <RecoveryPanel
+              fireEventId={fireId}
+              episodeId={isEpisodeDetail ? fireId : undefined}
+              fireDate={fire?.start_date}
+            />
           </div>
         )}
 

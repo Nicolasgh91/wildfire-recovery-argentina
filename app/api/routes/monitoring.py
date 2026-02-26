@@ -14,6 +14,7 @@ Use Cases:
 
 Endpoints:
     - GET  /monitoring/recovery/{fire_event_id}    - Get recovery timeline
+    - GET  /monitoring/recovery/by-episode/{episode_id} - Aggregated recovery by episode (Fase 6)
     - GET  /monitoring/recovery/summary            - Get summary for multiple fires
     - GET  /monitoring/land-use-changes/{fire_event_id} - Get land use changes
     - POST /monitoring/recovery/trigger            - Manual trigger (admin only)
@@ -31,7 +32,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -41,7 +42,10 @@ except ImportError:
     from app.api.deps import get_db
 
 from app.api.auth_deps import get_current_user
-from app.core.rate_limiter import make_generation_rate_limiter
+from app.core.rate_limiter import (
+    make_generation_rate_limiter,
+    make_recovery_trigger_rate_limiter,
+)
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -52,8 +56,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Rate limiter for trigger endpoint: 5 requests/6 hours per user
+# Rate limiters for trigger endpoint: 5/6h per user + 10/h per IP (GEE quota, spec §3.4)
 _trigger_rate_limit = make_generation_rate_limiter()
+_trigger_ip_limit = make_recovery_trigger_rate_limiter()
 
 # =============================================================================
 # SCHEMAS
@@ -105,9 +110,13 @@ class RecoveryResponse(BaseModel):
 
     monitoring_data: List[MonthlyNDVI]
     query_duration_ms: int
+    message: Optional[str] = Field(
+        None,
+        description="Mensaje opcional, p. ej. cuando recovery_status es pending",
+    )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "fire_event_id": "550e8400-e29b-41d4-a716-446655440000",
                 "fire_date": "2024-08-15",
@@ -122,6 +131,7 @@ class RecoveryResponse(BaseModel):
                 "query_duration_ms": 150,
             }
         }
+    )
 
 
 class RecoverySummaryItem(BaseModel):
@@ -180,6 +190,30 @@ class TriggerResponse(BaseModel):
 # =============================================================================
 # HELPER: classify recovery status from percentage
 # =============================================================================
+
+
+def _enqueue_recovery_if_not_pending(fire_event_id: str) -> None:
+    """
+    Encola análisis GEE si no hay datos. La tarea es idempotente (UPSERT),
+    por lo que múltiples encoles no generan duplicados en BD.
+    """
+    try:
+        from workers.tasks.recovery import analyze_recovery
+
+        analyze_recovery.apply_async(
+            args=[fire_event_id],
+            queue="gee",
+            countdown=5,
+        )
+    except Exception as exc:
+        logger.warning(
+            "enqueue_recovery_failed",
+            extra={
+                "error_type": type(exc).__name__,
+                "error_msg": str(exc)[:500],
+                "fire_event_id": fire_event_id,
+            },
+        )
 
 
 def _classify_status(recovery_pct: Optional[float], has_activity: bool) -> str:
@@ -276,7 +310,11 @@ async def get_recovery_summary(
             {"province": province, "min_months": min_months, "limit": limit},
         ).fetchall()
     except Exception as exc:
-        logger.error("Failed to query recovery summary: %s", exc, exc_info=True)
+        logger.error(
+            "Failed to query recovery summary",
+            exc_info=True,
+            extra={"error_type": type(exc).__name__, "error_msg": str(exc)[:500]},
+        )
         raise HTTPException(
             status_code=503,
             detail="Servicio de análisis temporalmente no disponible, reintente en unos instantes.",
@@ -337,6 +375,150 @@ async def get_recovery_summary(
         status_breakdown=status_counts,
         suspicious_count=suspicious_count,
         fires=fires,
+    )
+
+
+@router.get(
+    "/recovery/by-episode/{episode_id}",
+    response_model=RecoveryResponse,
+    summary="Get aggregated recovery timeline by episode",
+    description="""
+    **Fase 6 / analisis_ndvi Mejora 3:** Recovery agregado por episodio.
+
+    Returns vegetation recovery data aggregated across all fire events
+    belonging to the episode. Uses AVG(ndvi_mean), AVG(recovery_percentage),
+    AVG(baseline_ndvi) per calendar month. Structure compatible with RecoveryResponse.
+    """,
+    responses={
+        200: {"description": "Aggregated recovery timeline"},
+        404: {"description": "Episode not found"},
+    },
+)
+async def get_recovery_by_episode(
+    episode_id: UUID,
+    max_months: int = Query(default=36, ge=1, le=36),
+    db: Session = Depends(get_db),
+) -> RecoveryResponse:
+    """Aggregated recovery by episode (JOIN vm + fire_events + fire_episode_events)."""
+    start_time = time.time()
+
+    episode_row = db.execute(
+        text(
+            "SELECT id, start_date, centroid_lat, centroid_lon "
+            "FROM fire_episodes WHERE id = :eid"
+        ),
+        {"eid": str(episode_id)},
+    ).fetchone()
+    if not episode_row:
+        raise HTTPException(status_code=404, detail="Episode not found")
+
+    ep_start = episode_row.start_date
+    ep_lat = float(episode_row.centroid_lat) if episode_row.centroid_lat is not None else 0.0
+    ep_lon = float(episode_row.centroid_lon) if episode_row.centroid_lon is not None else 0.0
+
+    agg_query = text(
+        """
+        SELECT
+            DATE_TRUNC('month', vm.monitoring_date)::date AS month_start,
+            AVG(vm.ndvi_mean) AS ndvi_mean,
+            AVG(vm.recovery_percentage) AS recovery_percentage,
+            AVG(vm.baseline_ndvi) AS baseline_ndvi,
+            AVG(vm.cloud_cover_pct) AS cloud_cover_pct
+        FROM vegetation_monitoring vm
+        INNER JOIN fire_episode_events fee ON fee.event_id = vm.fire_event_id
+        WHERE fee.episode_id = :eid
+        AND vm.monitoring_date >= :ep_start
+        AND vm.monitoring_date <= :ep_start + (INTERVAL '1 month' * :max_months)
+        GROUP BY DATE_TRUNC('month', vm.monitoring_date)
+        ORDER BY month_start ASC
+        """
+    )
+    try:
+        agg_rows = db.execute(
+            agg_query,
+            {
+                "eid": str(episode_id),
+                "ep_start": ep_start,
+                "max_months": max_months,
+            },
+        ).fetchall()
+    except Exception as exc:
+        logger.error(
+            "Failed to query recovery by episode",
+            exc_info=True,
+            extra={"error_type": type(exc).__name__, "error_msg": str(exc)[:500]},
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Servicio de análisis temporalmente no disponible, reintente en unos instantes.",
+        )
+
+    query_duration_ms = int((time.time() - start_time) * 1000)
+
+    if not agg_rows:
+        return RecoveryResponse(
+            fire_event_id=str(episode_id),
+            fire_date=ep_start.isoformat() if hasattr(ep_start, "isoformat") else str(ep_start),
+            fire_location={"lat": ep_lat, "lon": ep_lon},
+            baseline_ndvi=None,
+            current_ndvi=None,
+            months_monitored=0,
+            recovery_status="pending",
+            recovery_percentage=None,
+            anomaly_detected=None,
+            monitoring_data=[],
+            query_duration_ms=query_duration_ms,
+            message="No hay datos de monitoreo agregados para este episodio aún.",
+        )
+
+    monitoring_data = []
+    baseline_ndvi = None
+    for row in agg_rows:
+        month_start = row.month_start
+        ndvi = float(row.ndvi_mean) if row.ndvi_mean is not None else 0.0
+        rec_pct = float(row.recovery_percentage) if row.recovery_percentage is not None else None
+        base_ndvi = float(row.baseline_ndvi) if row.baseline_ndvi is not None else None
+        cloud = float(row.cloud_cover_pct) if getattr(row, "cloud_cover_pct", None) is not None else None
+        if baseline_ndvi is None and base_ndvi is not None:
+            baseline_ndvi = base_ndvi
+        months_after = (
+            (month_start.year - ep_start.year) * 12
+            + (month_start.month - ep_start.month)
+            if hasattr(ep_start, "year") and hasattr(month_start, "year")
+            else 0
+        )
+        monitoring_data.append(
+            MonthlyNDVI(
+                month=max(0, months_after),
+                date=month_start.isoformat() if hasattr(month_start, "isoformat") else str(month_start),
+                ndvi_mean=ndvi,
+                recovery_percentage=rec_pct,
+                cloud_cover_pct=cloud,
+            )
+        )
+
+    latest = agg_rows[-1]
+    current_ndvi = float(latest.ndvi_mean) if latest.ndvi_mean is not None else None
+    current_recovery = float(latest.recovery_percentage) if latest.recovery_percentage is not None else None
+    recovery_status = _classify_status(current_recovery, False)
+    if baseline_ndvi is None and agg_rows:
+        baseline_ndvi = next(
+            (float(r.baseline_ndvi) for r in agg_rows if r.baseline_ndvi is not None),
+            None,
+        )
+
+    return RecoveryResponse(
+        fire_event_id=str(episode_id),
+        fire_date=ep_start.isoformat() if hasattr(ep_start, "isoformat") else str(ep_start),
+        fire_location={"lat": ep_lat, "lon": ep_lon},
+        baseline_ndvi=baseline_ndvi,
+        current_ndvi=current_ndvi,
+        months_monitored=len(monitoring_data),
+        recovery_status=recovery_status,
+        recovery_percentage=current_recovery,
+        anomaly_detected=None,
+        monitoring_data=monitoring_data,
+        query_duration_ms=query_duration_ms,
     )
 
 
@@ -414,6 +596,8 @@ async def get_recovery_status(
             ndvi_mean,
             baseline_ndvi,
             recovery_percentage,
+            cloud_cover_pct,
+            recovery_status,
             human_activity_detected,
             activity_type,
             classification_confidence
@@ -430,7 +614,11 @@ async def get_recovery_status(
             {"fire_id": str(fire_event_id), "max_months": max_months},
         ).fetchall()
     except Exception as exc:
-        logger.error("Failed to query vegetation_monitoring: %s", exc, exc_info=True)
+        logger.error(
+            "Failed to query vegetation_monitoring",
+            exc_info=True,
+            extra={"error_type": type(exc).__name__, "error_msg": str(exc)[:500]},
+        )
         raise HTTPException(
             status_code=503,
             detail="Servicio de análisis temporalmente no disponible, reintente en unos instantes.",
@@ -438,8 +626,9 @@ async def get_recovery_status(
 
     query_duration_ms = int((time.time() - start_time) * 1000)
 
-    # No monitoring data yet — return pending status
+    # No monitoring data yet — encolar análisis y devolver pending
     if not rows:
+        _enqueue_recovery_if_not_pending(str(fire_event_id))
         return RecoveryResponse(
             fire_event_id=str(fire_event_id),
             fire_date=fire_date.isoformat()
@@ -454,6 +643,7 @@ async def get_recovery_status(
             anomaly_detected=None,
             monitoring_data=[],
             query_duration_ms=query_duration_ms,
+            message="Análisis en proceso. Los datos estarán disponibles en los próximos minutos.",
         )
 
     # Build response from DB data
@@ -475,7 +665,9 @@ async def get_recovery_status(
                 recovery_percentage=float(row.recovery_percentage)
                 if row.recovery_percentage is not None
                 else None,
-                cloud_cover_pct=None,
+                cloud_cover_pct=float(row.cloud_cover_pct)
+                if getattr(row, "cloud_cover_pct", None) is not None
+                else None,
             )
         )
 
@@ -563,7 +755,11 @@ async def get_land_use_changes(
     try:
         rows = db.execute(query, {"fire_id": str(fire_event_id)}).fetchall()
     except Exception as exc:
-        logger.error("Failed to query land_use_changes: %s", exc, exc_info=True)
+        logger.error(
+            "Failed to query land_use_changes",
+            exc_info=True,
+            extra={"error_type": type(exc).__name__, "error_msg": str(exc)[:500]},
+        )
         raise HTTPException(
             status_code=503,
             detail="Servicio de análisis temporalmente no disponible, reintente en unos instantes.",
@@ -612,15 +808,16 @@ async def get_land_use_changes(
     for a specific fire event. The analysis runs asynchronously via
     the `vae` Celery queue.
 
-    Rate limited to protect GEE quota (5 requests/day).
+    Rate limited: 5 requests/6h per user and 10 requests/hour per IP (GEE quota).
+    429 responses include retry_after (seconds) in body.
     """,
     responses={
         202: {"description": "Analysis job queued"},
         403: {"description": "Admin role required"},
         404: {"description": "Fire event not found"},
-        429: {"description": "Rate limit exceeded"},
+        429: {"description": "Rate limit exceeded (detail.retry_after in seconds)"},
     },
-    dependencies=[Depends(_trigger_rate_limit)],
+    dependencies=[Depends(_trigger_rate_limit), Depends(_trigger_ip_limit)],
 )
 async def trigger_recovery_analysis(
     fire_event_id: UUID,
@@ -643,21 +840,25 @@ async def trigger_recovery_analysis(
     if not db.execute(fire_check, {"fire_id": str(fire_event_id)}).fetchone():
         raise HTTPException(status_code=404, detail="Fire event not found")
 
-    # Enqueue recovery and destruction tasks on the vae queue
+    # Enqueue recovery and destruction tasks (cola gee, Fase 2)
     try:
         from workers.tasks.recovery import analyze_recovery
         from workers.tasks.destruction import detect_destruction
 
         analyze_recovery.apply_async(
             args=[str(fire_event_id)],
-            queue="vae",
+            queue="gee",
         )
         detect_destruction.apply_async(
             args=[str(fire_event_id)],
-            queue="vae",
+            queue="gee",
         )
     except Exception as exc:
-        logger.error("Failed to enqueue VAE tasks: %s", exc, exc_info=True)
+        logger.error(
+            "Failed to enqueue recovery/destruction tasks",
+            exc_info=True,
+            extra={"error_type": type(exc).__name__, "error_msg": str(exc)[:500]},
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Servicio de análisis temporalmente no disponible, reintente en unos instantes.",
@@ -666,5 +867,5 @@ async def trigger_recovery_analysis(
     return TriggerResponse(
         fire_event_id=str(fire_event_id),
         status="queued",
-        message="Recovery and land-use analysis jobs enqueued on vae queue",
+        message="Recovery and land-use analysis jobs enqueued on gee queue",
     )

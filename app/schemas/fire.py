@@ -290,6 +290,14 @@ class FireEventDetail(FireEventListItem):
     updated_at: Optional[datetime] = None
 
 
+class RecoverySnapshot(BaseModel):
+    """Snapshot público de recuperación (desde fire_events, sin llamar a /monitoring)."""
+
+    recovery_status: str
+    recovery_percentage: Optional[float] = None
+    last_monitoring_date: Optional[date] = None
+
+
 class FireDetailResponse(BaseModel):
     """Response del detalle de incendio."""
 
@@ -300,6 +308,7 @@ class FireDetailResponse(BaseModel):
     related_fires_count: int = 0
     event_count: Optional[int] = None
     last_seen_at: Optional[datetime] = None
+    recovery_snapshot: Optional[RecoverySnapshot] = None
 
 
 # =============================================================================
