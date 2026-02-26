@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Camera, Flame } from 'lucide-react'
+import { ArrowRight, Camera, Flame, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -78,6 +78,15 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
     fire.slides_data == null || slidesToShow.length === 0
   const isProcessing =
     fire.slides_data != null && allSlides.length > 0 && slidesToShow.length === 0
+  const slidesStatus = fire.slides_status ?? (slidesToShow.length ? 'ready' : (isProcessing ? 'processing' : 'pending'))
+  let imageStatusLabel: string | null = null
+  if (slidesStatus === 'failed') {
+    imageStatusLabel = 'Imagen no disponible'
+  } else if (slidesStatus === 'processing') {
+    imageStatusLabel = 'Generando imágenes...'
+  } else if (slidesStatus === 'pending') {
+    imageStatusLabel = 'Imagen en preparación'
+  }
   const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const detailId = fire.representative_event_id ?? fire.id
@@ -164,9 +173,12 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
               <span className="max-w-[180px] truncate text-sm font-medium text-slate-700">
                 {fire.provinces?.[0] ?? t('noProvince')}
               </span>
-              {isProcessing && (
-                <span className="text-xs text-slate-500">
-                  Imagen en procesamiento...
+              {imageStatusLabel && (
+                <span className="flex items-center gap-1 text-xs text-slate-500">
+                  {slidesStatus === 'processing' && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  )}
+                  {imageStatusLabel}
                 </span>
               )}
             </div>

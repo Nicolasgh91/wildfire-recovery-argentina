@@ -38,6 +38,7 @@ class FireEpisodeListItem(BaseModel):
     gee_candidate: bool = False
     gee_priority: Optional[int] = None
     slides_data: Optional[List[EpisodeSlideItem]] = None
+    slides_status: Optional[str] = None  # pending | processing | ready | failed
     representative_event_id: Optional[UUID] = None
     is_recent: bool = False
     recent_days: Optional[int] = None

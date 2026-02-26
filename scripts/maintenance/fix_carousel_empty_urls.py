@@ -41,10 +41,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 
+def _is_valid_url(url: str | None) -> bool:
+    if not url or not url.strip():
+        return False
+    u = url.strip()
+    return u.startswith("http://") or u.startswith("https://")
+
+
 def _slide_has_no_url(slide: dict) -> bool:
     thumb = (slide.get("thumbnail_url") or "").strip()
     url = (slide.get("url") or "").strip()
-    return not thumb and not url
+    return not _is_valid_url(thumb) and not _is_valid_url(url)
 
 
 def find_episodes_with_empty_slides(db):
@@ -84,7 +91,7 @@ def patch_episode_from_satellite_images(db, episode_id: str, slides_data: list) 
             img = db.query(SatelliteImage).filter(SatelliteImage.id == uid).first()
             if img:
                 url = (img.thumbnail_url or img.r2_url or "").strip()
-                if url:
+                if _is_valid_url(url):
                     new_slide["thumbnail_url"] = url
                     changed = True
         updated.append(new_slide)

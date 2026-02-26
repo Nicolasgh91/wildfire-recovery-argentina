@@ -143,12 +143,18 @@ def list_fire_episodes(
         # Politica de visibilidad alineada con el carousel worker:
         # - active y monitoring: siempre visibles
         # - extinct recientes (<= 30 dias post extinct_at): visibles hasta transicion a closed
-        # Esto garantiza que la API muestre exactamente los episodios para los que
-        # el carousel worker genera thumbnails.
+        # - al menos un slide con thumbnail_url no vacio (evita episodios con datos corruptos)
         query = query.filter(
             FireEpisode.gee_candidate == True,
             FireEpisode.slides_data.isnot(None),
             text("jsonb_array_length(fire_episodes.slides_data) > 0"),
+            text(
+                "EXISTS ("
+                "  SELECT 1 FROM jsonb_array_elements(fire_episodes.slides_data) AS s"
+                "  WHERE (s->>'thumbnail_url') IS NOT NULL"
+                "    AND TRIM(s->>'thumbnail_url') != ''"
+                ")"
+            ),
             text(
                 "(fire_episodes.status IN ('active', 'monitoring')"
                 " OR (fire_episodes.status = 'extinct'"
@@ -239,6 +245,7 @@ def list_fire_episodes(
                 gee_candidate=bool(episode.gee_candidate),
                 gee_priority=episode.gee_priority,
                 slides_data=episode.slides_data,
+                slides_status=episode.slides_status or "pending",
                 representative_event_id=representative_map.get(episode.id),
                 is_recent=is_recent_flag,
                 recent_days=recent_days_val,

@@ -46,6 +46,7 @@ class FireEpisode(Base):
     last_gee_image_id = Column(String)
     last_update_sat = Column(DateTime(timezone=True))
     slides_data = Column(JSONB)
+    slides_status = Column(String(20), server_default=text("'pending'"))
 
     clustering_version_id = Column(
         UUID(as_uuid=True), ForeignKey("clustering_versions.id")
