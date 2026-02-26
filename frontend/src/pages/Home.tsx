@@ -9,7 +9,6 @@ import { FireCardSkeleton } from '@/components/fires/fire-card'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 import type { RestoreContext } from '@/types/navigation'
 
-const StoriesBar = lazy(() => import('@/components/stories-bar').then((m) => ({ default: m.StoriesBar })))
 const FireCard = lazy(() => import('@/components/fires/fire-card').then((m) => ({ default: m.FireCard })))
 const FireFilters = lazy(() => import('@/components/fire-filters').then((m) => ({ default: m.FireFilters })))
 
@@ -139,10 +138,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Suspense fallback={null}>
-        <StoriesBar fires={filteredEpisodes} />
-      </Suspense>
-
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
