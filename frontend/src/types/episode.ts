@@ -25,6 +25,8 @@ export type EpisodeListItem = {
   gee_candidate?: boolean
   gee_priority?: number | null
   slides_data?: EpisodeSlide[] | null
+  /** pending | processing | ready | failed */
+  slides_status?: string | null
   representative_event_id?: string | null
   is_recent?: boolean
   recent_days?: number | null

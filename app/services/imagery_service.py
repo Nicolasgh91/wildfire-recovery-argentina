@@ -46,6 +46,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -75,6 +76,14 @@ from app.services.storage_service import StorageService
 from app.utils.watermark import apply_watermark
 
 logger = logging.getLogger(__name__)
+
+
+def _is_valid_url(url: Optional[str]) -> bool:
+    """True si la URL es no vacia y parece valida (http/https)."""
+    if not url or not url.strip():
+        return False
+    u = url.strip()
+    return u.startswith("http://") or u.startswith("https://")
 
 
 DEFAULT_CAROUSEL_HOME_LIMIT = 20
@@ -628,6 +637,13 @@ class ImageryService:
             SatelliteImage.image_type == CAROUSEL_IMAGE_TYPE,
         ).delete(synchronize_session=False)
 
+    def _set_episode_slides_status(self, episode_id: str, status: str) -> None:
+        """Actualiza slides_status del episodio (pending | processing | ready | failed)."""
+        self.db.query(FireEpisode).filter(FireEpisode.id == episode_id).update(
+            {FireEpisode.slides_status: status},
+            synchronize_session=False,
+        )
+
     def _update_episode(
         self, episode_id: str, image_id: str, slides: List[Dict[str, Any]]
     ) -> None:
@@ -639,6 +655,7 @@ class ImageryService:
         episode.last_gee_image_id = image_id
         episode.last_update_sat = datetime.now(timezone.utc)
         episode.slides_data = slides
+        episode.slides_status = "ready"
 
     def _update_fire_event(
         self, fire_event_id: str, image_id: str, slides: List[Dict[str, Any]]
@@ -722,6 +739,7 @@ class ImageryService:
             }
 
         self._delete_existing_carousel_images(episode.id)
+        self._set_episode_slides_status(episode.id, "processing")
 
         slides: List[Dict[str, Any]] = []
         uploaded_keys: List[str] = []  # para limpieza de huerfanos en rollback (T-07)
@@ -755,18 +773,25 @@ class ImageryService:
                 metadata=watermark_meta,
             )
 
-            upload_result = self._upload_thumbnail(
-                episode.id,
-                vis_type,
-                metadata.acquisition_date,
-                processed_bytes,
-                watermark_meta,
-            )
-            url = (upload_result.url or "").strip()
-            if not upload_result.success or not url:
+            upload_result = None
+            url = ""
+            for attempt in range(3):
+                upload_result = self._upload_thumbnail(
+                    episode.id,
+                    vis_type,
+                    metadata.acquisition_date,
+                    processed_bytes,
+                    watermark_meta,
+                )
+                url = (upload_result.url or "").strip()
+                if upload_result.success and _is_valid_url(url):
+                    break
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+            else:
                 logger.error(
-                    "Carousel upload failed for episode %s %s: success=%s url=%r",
-                    episode.id, vis_type, getattr(upload_result, "success", True), upload_result.url,
+                    "Carousel upload failed for episode %s %s after 3 attempts: success=%s url=%r",
+                    episode.id, vis_type, getattr(upload_result, "success", True), getattr(upload_result, "url", ""),
                 )
                 break
             uploaded_keys.append(upload_result.key)
@@ -791,8 +816,8 @@ class ImageryService:
                 usable_for_analysis=quality != "unusable",
                 r2_bucket=os.environ.get("STORAGE_BUCKET_IMAGES", "forestguard-images"),
                 r2_key=upload_result.key,
-                r2_url=url,
-                thumbnail_url=url,
+                r2_url=url if _is_valid_url(url) else "",
+                thumbnail_url=url if _is_valid_url(url) else "",
                 file_size_mb=round(upload_result.size_bytes / (1024 * 1024), 4),
                 bands_included=vis_params.get("bands"),
                 processing_level=metadata.processing_level
@@ -809,7 +834,7 @@ class ImageryService:
             slides.append(
                 {
                     "type": vis_type.lower(),
-                    "thumbnail_url": url,
+                    "thumbnail_url": url if _is_valid_url(url) else "",
                     "satellite_image_id": str(satellite_image.id),
                     "generated_at": generated_at,
                 }
@@ -817,6 +842,8 @@ class ImageryService:
 
         if len(slides) != len(VISUALS):
             self.db.rollback()
+            self._set_episode_slides_status(episode.id, "failed")
+            self.db.commit()
             logger.error(
                 "Atomic check failed for episode %s: expected %d slides, got %d — cleaning orphan assets",
                 episode.id, len(VISUALS), len(slides),
