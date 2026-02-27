@@ -135,7 +135,7 @@ export default function MapPage() {
           fires={mapItems}
           selectedFire={selectedFire}
           onFireSelect={setSelectedFire}
-          height="h-full"
+          height="h-full md:h-[calc(100vh-12rem)]"
         />
       </Suspense>
 

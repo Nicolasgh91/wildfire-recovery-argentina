@@ -64,7 +64,7 @@ function AppShell({ children }: { children: ReactNode }) {
   const mainClass = hideChrome
     ? 'flex-1'
     : isMapPage
-      ? 'flex-1 overflow-hidden pt-0 pb-24 md:pt-24 md:pb-0'
+      ? 'flex-1 overflow-hidden pt-0 pb-11 md:overflow-visible md:pt-24 md:pb-0'
       : 'flex-1 pt-0 pb-24 md:pt-24 md:pb-0'
 
   useIdleTimer({
