@@ -368,13 +368,43 @@ class ImageryService:
     def _bbox_from_point(
         self, lat: float, lon: float, buffer_degrees: Optional[float] = None
     ) -> Dict[str, float]:
+        """
+        Construye un bbox centrado en (lat, lon) ajustado al aspect ratio del thumbnail.
+
+        Mantener el aspect ratio del bbox alineado con las dimensiones configuradas
+        para el thumbnail (por defecto 768x576 → 4:3) reduce la probabilidad de que GEE
+        agregue padding lateral o vertical, que en el carrusel se percibe como franjas
+        vacías aun cuando la imagen se abre directamente en el navegador.
+        """
         if buffer_degrees is None:
             buffer_degrees = self._resolve_bbox_buffer_degrees()
+
+        # Altura base (en grados) alrededor del centro.
+        half_height = buffer_degrees
+
+        # Derivar aspect ratio a partir de las dimensiones del thumbnail.
+        dimensions = self._resolve_thumb_dimensions()
+        aspect_ratio = 1.0  # ancho / alto
+        if isinstance(dimensions, str) and "x" in dimensions.lower():
+            try:
+                width_str, height_str = dimensions.lower().split("x", 1)
+                width = float(width_str)
+                height = float(height_str)
+                if width > 0 and height > 0:
+                    aspect_ratio = width / height
+            except (TypeError, ValueError):
+                aspect_ratio = 1.0
+        elif isinstance(dimensions, (int, float)) and dimensions > 0:
+            # Dimensión cuadrada → mantener bbox cuadrado.
+            aspect_ratio = 1.0
+
+        half_width = half_height * aspect_ratio
+
         return {
-            "west": lon - buffer_degrees,
-            "south": lat - buffer_degrees,
-            "east": lon + buffer_degrees,
-            "north": lat + buffer_degrees,
+            "west": lon - half_width,
+            "south": lat - half_height,
+            "east": lon + half_width,
+            "north": lat + half_height,
         }
 
     def _resolve_extinct_grace_days(self) -> int:
