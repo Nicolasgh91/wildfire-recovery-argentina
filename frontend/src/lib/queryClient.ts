@@ -20,7 +20,9 @@ export const queryKeys = {
   },
   episodes: {
     active: (limit: number) => ['episodes', 'active', limit] as const,
-    mode: (mode: string, limit: number) => ['episodes', mode, limit] as const,
+    mode: (mode: string, limit: number, sortParams?: object) => sortParams 
+      ? ['episodes', mode, limit, sortParams] as const 
+      : ['episodes', mode, limit] as const,
   },
   quality: {
     fire: (id: string) => ['quality', 'fire', id] as const,

@@ -27,7 +27,7 @@ export const translations = {
     certificates: 'Certificados',
     shelters: 'Refugios',
     report: 'Reportar',
-    reports: 'Exploración satelital',
+    reports: 'Explorá',
     creditsTitle: 'Créditos',
     creditsDescription: 'Compra créditos para reportes judiciales o históricos.',
     creditsBalance: 'Saldo de créditos',
@@ -96,10 +96,12 @@ export const translations = {
     status: 'Estado',
     severity: 'Severidad',
     date: 'Fecha',
-    recentFiresToggle: 'Ver recientes',
     recentFiresEmpty: 'No hay incendios activos ni recientes en los últimos 60 días.',
     fireLoadError: 'Error al cargar incendios',
     fireLoadErrorDetail: 'No pudimos obtener los datos. Verificá tu conexión e intentá de nuevo.',
+    sortByDate: 'Ordenar por fecha',
+    sortNewestFirst: 'Más recientes primero',
+    sortOldestFirst: 'Más antiguos primero',
 
     // Fire Detail
     reliabilityScore: 'Puntuación de Confiabilidad',
@@ -763,6 +765,9 @@ export const translations = {
     recentFiresEmpty: 'No active or recent fires in the last 60 days.',
     fireLoadError: 'Error loading fires',
     fireLoadErrorDetail: 'Could not fetch data. Check your connection and try again.',
+    sortByDate: 'Sort by date',
+    sortNewestFirst: 'Newest first',
+    sortOldestFirst: 'Oldest first',
 
     // Fire Detail
     reliabilityScore: 'Reliability Score',

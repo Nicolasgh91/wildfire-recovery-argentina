@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, RefreshCcw, Trees } from 'lucide-react'
+import { AlertTriangle, ArrowRight, RefreshCcw, Trees, ArrowUp, ArrowDown } from 'lucide-react'
 import { BrandLogo } from '@/components/brand/BrandLogo'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/context/LanguageContext'
 import { useEpisodesByMode } from '@/hooks/queries/useEpisodesByMode'
 import { FireCardSkeleton } from '@/components/fires/fire-card'
@@ -23,7 +22,7 @@ export default function HomePage() {
   const gridRef = useRef<HTMLDivElement | null>(null)
   const [gridVisible, setGridVisible] = useState(false)
   const [slideStage, setSlideStage] = useState(1) // 1: primer thumbnail, 2: segundo, 3: tercero
-  const [showRecents, setShowRecents] = useState(false)
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
   // Restore scroll position when returning from fire detail
   useEffect(() => {
@@ -61,45 +60,18 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 1. Cargar episodios activos (siempre)
-  const { data: activeData, isLoading: loadingActive, isError: errorActive, refetch: refetchActive } = useEpisodesByMode('active', DEFAULT_LIMIT)
+  // Cargar episodios activos con ordenamiento
+  const { data: activeData, isLoading: loadingActive, isError: errorActive, refetch: refetchActive } = useEpisodesByMode(
+    'active', 
+    DEFAULT_LIMIT, 
+    true,
+    { sort_by: 'start_date', sort_desc: sortOrder === 'desc' }
+  )
   const activeEpisodes = activeData?.episodes ?? []
 
-  // 2. Cargar recientes SOLO si el usuario los pide O si no hay activos
-  //    (Lazy loading para evitar doble request inicial)
-  const enableRecent = showRecents || (activeEpisodes.length === 0 && !loadingActive)
-  const { data: recentData, isLoading: loadingRecent, isError: errorRecent, refetch: refetchRecent } = useEpisodesByMode(
-    'recent',
-    DEFAULT_LIMIT,
-    enableRecent
-  )
-  const recentEpisodes = recentData?.episodes ?? []
-
-  // Loading es true si cargamos activos O (estamos cargando recientes explícitamente)
-  const isLoading = loadingActive || (enableRecent && loadingRecent)
-  const isError = errorActive || (enableRecent && errorRecent)
-
   const displayEpisodes = useMemo(() => {
-    // Si no hay activos, mostrar recientes (fallback)
-    if (activeEpisodes.length === 0 && !loadingActive) return recentEpisodes
-
-    // Si el usuario no pidió recientes, solo activos
-    if (!showRecents) return activeEpisodes
-
-    // Combinar ambos sin duplicados
-    const seen = new Set<string>()
-    const merged = []
-    for (const episode of activeEpisodes) {
-      seen.add(episode.id)
-      merged.push(episode)
-    }
-    for (const episode of recentEpisodes) {
-      if (!seen.has(episode.id)) {
-        merged.push(episode)
-      }
-    }
-    return merged
-  }, [activeEpisodes, recentEpisodes, showRecents, loadingActive])
+    return activeEpisodes
+  }, [activeEpisodes])
 
   const filteredEpisodes = useMemo(() => {
     return displayEpisodes.filter((episode) => {
@@ -108,6 +80,10 @@ export default function HomePage() {
       return matchesProvince
     })
   }, [displayEpisodes, selectedProvince])
+
+  // Loading y error states
+  const isLoading = loadingActive
+  const isError = errorActive
 
   useEffect(() => {
     if (!gridRef.current) return
@@ -152,17 +128,16 @@ export default function HomePage() {
                 onProvinceChange={setSelectedProvince}
               />
             </Suspense>
-            {/* Mostrar toggle solo si hay posibilidad de tener ambos o ya se cargaron */}
-            {(activeEpisodes.length > 0 || showRecents) && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Switch
-                  id="show-recents"
-                  checked={showRecents}
-                  onCheckedChange={setShowRecents}
-                />
-                <label htmlFor="show-recents">{t('recentFiresToggle')}</label>
-              </div>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+              className="gap-2"
+              title={sortOrder === 'desc' ? t('sortNewestFirst') : t('sortOldestFirst')}
+            >
+              {sortOrder === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+              {t('sortByDate')}
+            </Button>
             <Button asChild variant="outline" className="ml-auto gap-2 sm:ml-0">
               <Link to="/fires/history">
                 {t('fireHistory')}
@@ -189,7 +164,6 @@ export default function HomePage() {
                   type="button"
                   onClick={() => {
                     refetchActive()
-                    if (enableRecent) refetchRecent()
                   }}
                   className="inline-flex items-center gap-1.5 rounded-md bg-destructive/20 px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/30 transition-colors"
                 >
