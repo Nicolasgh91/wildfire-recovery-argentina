@@ -24,9 +24,9 @@ This plan outlines the step-by-step execution of UC-F12 testing and manual worke
 
 ### 1.1 Check Worker Status
 - SSH into production VM
-- Verify worker-vae container is running
+- Verify `forestguard-worker-gee` container is running (current VAE worker)
 - Check celery-beat container status
-- Confirm worker-vae is listening to 'vae' queue
+- Confirm `worker-gee` is listening to `analysis` and `vae` queues
 
 ### 1.2 Database State Verification
 - Check vegetation_monitoring table (expected: 0 rows)

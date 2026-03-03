@@ -40,11 +40,11 @@ docker compose up -d redis
 docker compose up -d api
 # Wait for healthy: curl http://localhost:8000/health
 
-# Start all workers
-docker compose up -d worker-ingestion worker-clustering worker-analysis
+# Start workers y scheduler según topología actual
+docker compose up -d worker-fast worker-gee celery-beat
 
-# Start Celery Beat and Flower
-docker compose up -d celery-beat flower
+# (Opcional) Flower solo para debugging
+docker compose up -d flower
 
 # Check all services
 docker compose ps
@@ -139,9 +139,8 @@ docker compose up -d
 SERVICE              STATUS      PORTS
 redis                Up          6379:6379
 api                  Up          8000:8000
-worker-ingestion     Up          -
-worker-clustering    Up          -
-worker-analysis      Up          -
+worker-fast          Up          -
+worker-gee           Up          -
 celery-beat          Up          -
 flower               Up          5555:5555
 frontend             Up          -

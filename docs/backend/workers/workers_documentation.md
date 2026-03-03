@@ -2,8 +2,12 @@
 
 ## Overview
 
-ForestGuard uses Celery with Redis as the message broker for background task processing.
-Tasks are organized by function and routed to specific queues for optimal resource allocation.
+ForestGuard usa Celery con Redis como broker de mensajes para procesamiento en segundo plano.
+Las tasks se organizan por función y se enrutan a colas específicas para optimizar recursos.
+
+Para la topología de contenedores y qué colas consume cada uno, ver también:
+
+- `docs/containers/workers.md`
 
 ## Worker Configuration
 

@@ -1,4 +1,4 @@
-﻿# Vestigia
+# Vestigia
 
 Vestigia te ayuda a explorar incendios historicos en Argentina con evidencia satelital, sin necesitar perfil tecnico.
 
@@ -67,6 +67,7 @@ Documentacion tecnica:
 - `docs/frontend/README.md`
 - `docs/backend/api/auth_matrix.md`
 - `docs/infrastructure/deployment/DEPLOYMENT.md`
+- `docs/containers/README.md` (arquitectura de contenedores y workers)
 
 ## como correr local
 

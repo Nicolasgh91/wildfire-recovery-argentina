@@ -184,7 +184,7 @@ docker compose restart frontend nginx
 
 # Or restart backend services
 docker compose restart api redis
-docker compose restart worker-ingestion worker-clustering worker-analysis
+docker compose restart worker-fast worker-gee
 docker compose restart celery-beat flower
 ```
 

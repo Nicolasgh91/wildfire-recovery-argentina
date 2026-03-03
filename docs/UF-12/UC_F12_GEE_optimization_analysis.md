@@ -249,9 +249,9 @@ SELECT count(*) as episodes_total,
 FROM fire_episodes;
 ```
 
-2. **Ejecutar backfill de los últimos 12 meses** (eventos recientes, mayor valor para la UI):
+2. **Ejecutar backfill de los últimos 12 meses** (eventos recientes, mayor valor para la UI), usando el worker actual `forestguard-worker-gee`:
 ```bash
-docker exec forestguard-worker-vae celery -A workers.celery_app call \
+docker exec forestguard-worker-gee celery -A workers.celery_app call \
   workers.tasks.recovery.batch_recovery_analysis \
   --kwargs='{"max_events": 200}'
 ```
@@ -419,7 +419,7 @@ ORDER BY created_at DESC
 LIMIT 100;
 
 # 2. Ejecutar backfill por episodios (prioridad reciente)
-docker exec forestguard-worker-vae celery -A workers.celery_app call \
+docker exec forestguard-worker-gee celery -A workers.celery_app call \
   workers.tasks.recovery.batch_episode_recovery_analysis \
   --kwargs='{"max_episodes": 100, "recent_only": true}'
 ```

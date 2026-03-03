@@ -1,4 +1,4 @@
-﻿# guia de despliegue de Vestigia
+# guia de despliegue de Vestigia
 
 Esta guia prioriza el camino simple y actual para operar la app.
 
@@ -31,6 +31,7 @@ Referencias:
 - `scripts/deploy.sh`
 - `.github/workflows/deploy-prod-vm.yml`
 - `docs/flujo-deploy.md`
+- `docs/containers/README.md` (detalle de servicios/containers de Docker Compose)
 
 ## flujo local rapido
 
