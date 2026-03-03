@@ -86,6 +86,42 @@ def _is_valid_url(url: Optional[str]) -> bool:
     return u.startswith("http://") or u.startswith("https://")
 
 
+def parse_dimensions(dimensions: Union[int, str]) -> tuple[int, int]:
+    """
+    Parse thumbnail dimensions into (width, height).
+
+    Accepts:
+      - "768x576" or "768X576" → (768, 576)
+      - 512 or "512"           → (512, 512)  (square)
+
+    Raises:
+        ValueError: on unparseable or non-positive input.
+    """
+    if isinstance(dimensions, (int, float)):
+        side = int(dimensions)
+        if side > 0:
+            return (side, side)
+        raise ValueError(f"Dimensions must be positive, got {dimensions!r}")
+
+    if isinstance(dimensions, str):
+        raw = dimensions.strip()
+        if raw.isdigit():
+            side = int(raw)
+            if side > 0:
+                return (side, side)
+        if "x" in raw.lower():
+            parts = raw.lower().split("x", 1)
+            try:
+                w, h = int(parts[0]), int(parts[1])
+            except ValueError:
+                raise ValueError(f"Cannot parse dimensions: {dimensions!r}")
+            if w > 0 and h > 0:
+                return (w, h)
+            raise ValueError(f"Dimensions must be positive, got {dimensions!r}")
+
+    raise ValueError(f"Cannot parse dimensions: {dimensions!r}")
+
+
 DEFAULT_CAROUSEL_HOME_LIMIT = 20
 MAX_CAROUSEL_HOME_LIMIT = 50
 DEFAULT_CLOUD_THRESHOLDS = [10, 20, 30, 50]
@@ -317,11 +353,12 @@ class ImageryService:
 
     def _resolve_thumb_dimensions(self) -> Union[int, str]:
         raw = os.environ.get("CAROUSEL_THUMB_DIMENSIONS")
-        if not raw:
+        if not raw or not raw.strip():
             return THUMB_DIMENSIONS
         raw = raw.strip()
-        if not raw:
-            return THUMB_DIMENSIONS
+        # Validate early: malformed values fail fast here instead of
+        # silently producing aspect_ratio=1.0 downstream.
+        parse_dimensions(raw)
         if raw.isdigit():
             return int(raw)
         return raw
@@ -372,33 +409,23 @@ class ImageryService:
         Construye un bbox centrado en (lat, lon) ajustado al aspect ratio del thumbnail.
 
         Mantener el aspect ratio del bbox alineado con las dimensiones configuradas
-        para el thumbnail (por defecto 768x576 → 4:3) reduce la probabilidad de que GEE
-        agregue padding lateral o vertical, que en el carrusel se percibe como franjas
-        vacías aun cuando la imagen se abre directamente en el navegador.
+        para el thumbnail (por defecto 768x576 → 4:3) evita que GEE agregue padding
+        lateral o vertical, que en el carrusel se percibe como franjas vacías.
         """
         if buffer_degrees is None:
             buffer_degrees = self._resolve_bbox_buffer_degrees()
 
-        # Altura base (en grados) alrededor del centro.
         half_height = buffer_degrees
 
-        # Derivar aspect ratio a partir de las dimensiones del thumbnail.
         dimensions = self._resolve_thumb_dimensions()
-        aspect_ratio = 1.0  # ancho / alto
-        if isinstance(dimensions, str) and "x" in dimensions.lower():
-            try:
-                width_str, height_str = dimensions.lower().split("x", 1)
-                width = float(width_str)
-                height = float(height_str)
-                if width > 0 and height > 0:
-                    aspect_ratio = width / height
-            except (TypeError, ValueError):
-                aspect_ratio = 1.0
-        elif isinstance(dimensions, (int, float)) and dimensions > 0:
-            # Dimensión cuadrada → mantener bbox cuadrado.
-            aspect_ratio = 1.0
-
+        w, h = parse_dimensions(dimensions)
+        aspect_ratio = w / h
         half_width = half_height * aspect_ratio
+
+        logger.debug(
+            "bbox_from_point lat=%.4f lon=%.4f ar=%.4f half_w=%.6f half_h=%.6f dims=%s",
+            lat, lon, aspect_ratio, half_width, half_height, dimensions,
+        )
 
         return {
             "west": lon - half_width,
@@ -630,6 +657,57 @@ class ImageryService:
             metadata=metadata,
         )
 
+    def _validate_thumbnail(
+        self,
+        image_bytes: bytes,
+        expected_dimensions: Union[int, str],
+        vis_type: str,
+        episode_id: str,
+    ) -> None:
+        """
+        Validate downloaded thumbnail dimensions and detect empty-band artifacts.
+
+        Raises ValueError if the image cannot be decoded or dimensions mismatch.
+        Logs a warning (non-blocking) if empty vertical bands are detected.
+        """
+        try:
+            from PIL import Image as PILImage
+            from io import BytesIO
+
+            img = PILImage.open(BytesIO(image_bytes))
+            actual_w, actual_h = img.size
+        except Exception as exc:
+            raise ValueError(
+                f"Cannot decode thumbnail for episode {episode_id} {vis_type}: {exc}"
+            ) from exc
+
+        expected_w, expected_h = parse_dimensions(expected_dimensions)
+        # GEE can be off by 1px due to rounding
+        if abs(actual_w - expected_w) > 1 or abs(actual_h - expected_h) > 1:
+            raise ValueError(
+                f"Thumbnail dimension mismatch for episode {episode_id} {vis_type}: "
+                f"expected {expected_w}x{expected_h}, got {actual_w}x{actual_h}"
+            )
+
+        # Detect empty vertical bands (the original bug symptom)
+        try:
+            pixels = img.convert("RGB")
+            strip_width = min(5, actual_w // 10)
+            left_strip = pixels.crop((0, 0, strip_width, actual_h))
+            right_strip = pixels.crop((actual_w - strip_width, 0, actual_w, actual_h))
+
+            for name, strip in [("left", left_strip), ("right", right_strip)]:
+                extrema = strip.getextrema()
+                all_zero = all(channel_max == 0 for _, channel_max in extrema)
+                if all_zero:
+                    logger.warning(
+                        "Empty %s band detected in thumbnail for episode %s %s "
+                        "(possible bbox/dimension AR mismatch)",
+                        name, episode_id, vis_type,
+                    )
+        except Exception:
+            pass  # Non-critical; dimension check above is the hard gate
+
     def _download_thumbnail(
         self,
         image: Any,
@@ -638,6 +716,7 @@ class ImageryService:
         dimensions: Union[int, str],
         resample: Optional[str],
     ) -> bytes:
+        parse_dimensions(dimensions)  # fail fast on malformed input
         kwargs = {
             "vis_type": vis_type,
             "dimensions": dimensions,
@@ -785,6 +864,7 @@ class ImageryService:
                 dimensions=dimensions,
                 resample=resample,
             )
+            self._validate_thumbnail(raw_bytes, dimensions, vis_type, episode.id)
             watermark_label = "Archivo" if is_archive else None
             watermark_meta = self._build_metadata(
                 gee_system_index=metadata.image_id,
