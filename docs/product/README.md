@@ -1,4 +1,4 @@
-﻿# documentacion canonica de producto
+# documentacion canonica de producto
 
 Esta carpeta concentra la documentacion vigente de Vestigia para producto y experiencia de usuario.
 
@@ -25,6 +25,7 @@ Alinear todo el repo con una narrativa unica:
 3. `docs/product/casos-de-uso-y-estado.md`
 4. `docs/frontend/README.md`
 5. `docs/backend/api/auth_matrix.md`
+6. `docs/core-flows/README.md` (flujos CORE de datos e inferencia)
 
 ## criterio editorial
 

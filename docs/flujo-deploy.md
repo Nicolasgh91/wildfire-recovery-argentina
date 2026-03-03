@@ -1,4 +1,10 @@
-﻿# flujo de deploy a produccion
+> **Nota de contexto (2026-03)**  
+> Este documento describe el flujo de deploy de alto nivel.  
+> Para entender cómo este deploy afecta el pipeline diario de datos (ingesta → clustering → episodios → assets → VAE → UI), ver también:
+> - `docs/core-flows/core-pipeline-e2e/core-pipeline-overview.md`
+> - `docs/core-flows/core-pipeline-e2e/core-pipeline-design.md`
+
+# flujo de deploy a produccion
 
 Principio base:
 

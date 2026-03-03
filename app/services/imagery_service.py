@@ -51,6 +51,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Union
+
+import numpy as np
 from uuid import UUID
 
 from sqlalchemy import text
@@ -689,7 +691,7 @@ class ImageryService:
                 f"expected {expected_w}x{expected_h}, got {actual_w}x{actual_h}"
             )
 
-        # Detect empty vertical bands (the original bug symptom)
+        # Detect low-brightness vertical bands (bbox/AR mismatch symptom)
         try:
             pixels = img.convert("RGB")
             strip_width = min(5, actual_w // 10)
@@ -697,13 +699,13 @@ class ImageryService:
             right_strip = pixels.crop((actual_w - strip_width, 0, actual_w, actual_h))
 
             for name, strip in [("left", left_strip), ("right", right_strip)]:
-                extrema = strip.getextrema()
-                all_zero = all(channel_max == 0 for _, channel_max in extrema)
-                if all_zero:
+                arr = np.array(strip, dtype=np.float64)
+                mean_brightness = arr.mean()
+                if mean_brightness < 10.0:
                     logger.warning(
-                        "Empty %s band detected in thumbnail for episode %s %s "
+                        "Low-brightness %s band (%.2f) in thumbnail for episode %s %s "
                         "(possible bbox/dimension AR mismatch)",
-                        name, episode_id, vis_type,
+                        name, mean_brightness, episode_id, vis_type,
                     )
         except Exception:
             pass  # Non-critical; dimension check above is the hard gate

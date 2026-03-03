@@ -230,7 +230,7 @@ class TestValidateThumbnail:
         png = self._make_png_with_empty_bands(768, 576)
         with caplog.at_level(logging.WARNING):
             svc._validate_thumbnail(png, "768x576", "RGB", "ep-001")
-        assert "empty" in caplog.text.lower()
+        assert "low-brightness" in caplog.text.lower()
 
     def test_corrupt_bytes_raises(self):
         svc = self._make_service()
@@ -251,9 +251,9 @@ class TestValidateThumbnail:
 class TestCreateBboxFromCoordinates:
     """Tests for bbox_utils.create_bbox_from_coordinates with aspect_ratio."""
 
-    def test_default_square(self):
-        """Default aspect_ratio=1.0 should produce square bbox."""
-        bbox = create_bbox_from_coordinates(-27.5, -58.5, buffer_degrees=0.01)
+    def test_explicit_square(self):
+        """aspect_ratio=1.0 should produce square bbox."""
+        bbox = create_bbox_from_coordinates(-27.5, -58.5, buffer_degrees=0.01, aspect_ratio=1.0)
         w = bbox["east"] - bbox["west"]
         h = bbox["north"] - bbox["south"]
         assert w == pytest.approx(h)
@@ -266,13 +266,18 @@ class TestCreateBboxFromCoordinates:
         h = bbox["north"] - bbox["south"]
         assert w / h == pytest.approx(ar, rel=1e-6)
 
-    def test_backward_compatible(self):
-        """Calling without aspect_ratio behaves identically to old code."""
-        bbox = create_bbox_from_coordinates(-27.5, -58.5, buffer_degrees=0.05)
+    def test_backward_compatible_values(self):
+        """With aspect_ratio=1.0, output matches legacy square bbox."""
+        bbox = create_bbox_from_coordinates(-27.5, -58.5, buffer_degrees=0.05, aspect_ratio=1.0)
         assert bbox["west"] == pytest.approx(-58.55)
         assert bbox["east"] == pytest.approx(-58.45)
         assert bbox["south"] == pytest.approx(-27.55)
         assert bbox["north"] == pytest.approx(-27.45)
+
+    def test_aspect_ratio_required(self):
+        """Omitting aspect_ratio should raise TypeError."""
+        with pytest.raises(TypeError):
+            create_bbox_from_coordinates(-27.5, -58.5, buffer_degrees=0.01)
 
 
 # =========================================================================
@@ -448,3 +453,93 @@ class TestApplyWatermark:
         dummy = self._make_rgb_png(64, 48)
         result = apply_watermark(dummy)
         assert result == dummy
+
+
+# =========================================================================
+# TestBboxAspectRatioParametrized
+# =========================================================================
+
+
+class TestBboxAspectRatioParametrized:
+    """Parametrized aspect ratio tests across multiple dimension configs."""
+
+    @staticmethod
+    def _make_service(dimensions, buffer_deg=0.04):
+        svc = object.__new__(ImageryService)
+        svc.db = MagicMock()
+        svc._gee = MagicMock()
+        svc._storage = MagicMock()
+        svc._resolve_thumb_dimensions = MagicMock(return_value=dimensions)
+        svc._resolve_bbox_buffer_degrees = MagicMock(return_value=buffer_deg)
+        return svc
+
+    @pytest.mark.parametrize(
+        "dimensions, expected_ar",
+        [
+            ("768x576", 768.0 / 576.0),    # 4:3
+            ("1024x768", 1024.0 / 768.0),  # 4:3
+            (512, 1.0),                      # square
+            ("512", 1.0),                    # square (string)
+        ],
+        ids=["768x576", "1024x768", "512_int", "512_str"],
+    )
+    def test_aspect_ratio_matches_dimensions(self, dimensions, expected_ar):
+        svc = self._make_service(dimensions)
+        bbox = svc._bbox_from_point(-27.5, -58.5)
+
+        bbox_w = bbox["east"] - bbox["west"]
+        bbox_h = bbox["north"] - bbox["south"]
+        assert bbox_w / bbox_h == pytest.approx(expected_ar, abs=0.01)
+
+
+# =========================================================================
+# TestBlackStripeRegression
+# =========================================================================
+
+
+class TestBlackStripeRegression:
+    """Regression test: semi-padding bands (brightness < 10) must be logged."""
+
+    @staticmethod
+    def _make_service():
+        svc = object.__new__(ImageryService)
+        svc.db = MagicMock()
+        return svc
+
+    @staticmethod
+    def _make_png_with_low_brightness_left_band(width, height):
+        """
+        Create PNG where the left 20px have RGB=(8,4,4) → mean brightness ~5.33,
+        validating the < 10.0 threshold catches semi-padding (not just pure black).
+        """
+        import numpy as np
+        from PIL import Image as PILImage
+
+        arr = np.full((height, width, 3), (100, 150, 200), dtype=np.uint8)
+        arr[:, 0:20, :] = (8, 4, 4)  # low-brightness left band
+        img = PILImage.fromarray(arr, "RGB")
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def test_low_brightness_left_band_logged(self, caplog):
+        """Left band with mean brightness ~5.33 should trigger warning."""
+        svc = self._make_service()
+        png = self._make_png_with_low_brightness_left_band(768, 576)
+        with caplog.at_level(logging.WARNING):
+            svc._validate_thumbnail(png, "768x576", "RGB", "ep-regression")
+        assert "low-brightness" in caplog.text.lower()
+        assert "left" in caplog.text.lower()
+
+    def test_normal_image_no_warning(self, caplog):
+        """Uniformly bright image should NOT trigger band warning."""
+        from PIL import Image as PILImage
+
+        svc = self._make_service()
+        img = PILImage.new("RGB", (768, 576), (100, 150, 200))
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        png = buf.getvalue()
+        with caplog.at_level(logging.WARNING):
+            svc._validate_thumbnail(png, "768x576", "RGB", "ep-ok")
+        assert "low-brightness" not in caplog.text.lower()

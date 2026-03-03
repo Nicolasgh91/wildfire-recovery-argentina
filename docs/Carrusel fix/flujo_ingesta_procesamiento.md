@@ -1,3 +1,10 @@
+> **Nota de vigencia (2026-03)**  
+> Este documento describe el flujo E2E de ingesta y procesamiento y se mantiene como **referencia extendida**.  
+> La documentación canónica y resumida del flujo actual está en:
+> - `docs/core-flows/core-ingesta/core-ingesta-overview.md`
+> - `docs/core-flows/core-pipeline-e2e/core-pipeline-overview.md`  
+> Cualquier duda de comportamiento frente al código debe resolverse usando esos archivos más `scripts/maintenance/load_firms_incremental.py` y `workers/tasks/ingestion.py`.
+
 # Flujo detallado de ingesta y procesamiento de datos de detección de incendios
 
 **Proyecto:** ForestGuard  

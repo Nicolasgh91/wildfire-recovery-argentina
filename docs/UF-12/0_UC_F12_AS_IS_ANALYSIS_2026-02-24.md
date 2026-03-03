@@ -1,3 +1,10 @@
+> **Nota de vigencia (2026-03)**  
+> Este documento describe el estado **AS-IS** previo al refactor de cuotas GEE y a la estructuración de flujos CORE.  
+> Para la vista canónica actual de UC‑F12/NDVI usar:
+> - `docs/core-flows/core-vae-ucf12-ndvi/core-vae-overview.md`  
+> - `docs/core-flows/core-vae-ucf12-ndvi/core-vae-design.md`  
+> Este archivo se conserva como análisis histórico y mapa de gaps, no como fuente de verdad vigente.
+
 # UC-F12 VAE AS-IS Analysis (2026-02-24)
 
 ## 1) Scope
