@@ -6,8 +6,10 @@ Covers:
   - _bbox_from_point: aspect ratio matching with various dimension formats
   - _validate_thumbnail: dimension mismatch and empty band detection
   - create_bbox_from_coordinates: aspect_ratio parameter
+  - apply_watermark: output integrity, metadata encoding, feature flags
 """
 import logging
+import os
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
@@ -271,3 +273,178 @@ class TestCreateBboxFromCoordinates:
         assert bbox["east"] == pytest.approx(-58.45)
         assert bbox["south"] == pytest.approx(-27.55)
         assert bbox["north"] == pytest.approx(-27.45)
+
+
+# =========================================================================
+# TestApplyWatermark
+# =========================================================================
+
+
+class TestApplyWatermark:
+    """
+    Unit tests for apply_watermark() in app/utils/watermark.py.
+
+    Guards against:
+      - Output size collapse (the 2.2 KB all-zeros bug from pixel-loop reconstruction)
+      - UnicodeEncodeError in PngInfo.add_text() for non-latin-1 metadata
+      - Dimension mutation
+      - Silent data destruction (mean brightness check)
+    """
+
+    @staticmethod
+    def _make_rgb_png(width: int = 768, height: int = 576, color=(100, 150, 60)) -> bytes:
+        """Create a solid-color RGB PNG that resembles a GEE satellite thumbnail."""
+        from PIL import Image as PILImage
+
+        img = PILImage.new("RGB", (width, height), color)
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
+    @staticmethod
+    def _open_bytes(data: bytes):
+        from PIL import Image as PILImage
+
+        return PILImage.open(BytesIO(data))
+
+    def test_output_size_and_dimensions_preserved(self):
+        """
+        apply_watermark() on a valid 768x576 RGB PNG must:
+          - Return output between 10 KB and 500 KB.
+          - Preserve original pixel dimensions.
+          - Produce an image that PIL can re-open.
+        """
+        from datetime import date
+
+        from app.utils.watermark import apply_watermark
+
+        png = self._make_rgb_png(768, 576)
+        result = apply_watermark(png, acquisition_date=date(2026, 2, 8), label="Test")
+
+        assert isinstance(result, bytes)
+        assert 10_000 <= len(result) <= 500_000, (
+            f"Result size {len(result)} bytes outside expected 10 KB-500 KB range"
+        )
+        img = self._open_bytes(result)
+        assert img.size == (768, 576)
+
+    def test_output_pixels_are_not_all_black(self):
+        """
+        The watermarked output must not be all-zero (all-black/transparent).
+        Guards against pixel-loop reconstruction that silently fills with zeros.
+        """
+        import numpy as np
+
+        from app.utils.watermark import apply_watermark
+
+        png = self._make_rgb_png(768, 576, color=(100, 150, 60))
+        result = apply_watermark(png)
+
+        img = self._open_bytes(result).convert("RGB")
+        arr = np.array(img)
+        mean_brightness = arr.mean()
+        assert mean_brightness > 10.0, (
+            f"Mean pixel brightness {mean_brightness:.2f} is suspiciously low; "
+            "image may be blank or destroyed"
+        )
+
+    def test_non_ascii_metadata_does_not_raise(self):
+        """
+        Metadata containing non-latin-1 characters (CJK, emoji, accented chars
+        outside latin-1) must not raise an exception. This is the direct regression
+        test for the original 'argument 2 must be 4-item tuple, not str' error.
+        """
+        from app.utils.watermark import apply_watermark
+
+        png = self._make_rgb_png()
+        metadata = {
+            "source": "Sentinel-2",
+            "region": "C\u00f3rdoba \u4e2d\u56fd",  # 'Córdoba' + CJK characters
+            "label": "Fuego \U0001f525",             # emoji (beyond latin-1)
+        }
+        result = apply_watermark(png, metadata=metadata)
+
+        assert isinstance(result, bytes)
+        assert len(result) > 1_000
+        self._open_bytes(result)  # Must be a valid, openable PNG
+
+    def test_disable_watermark_all_returns_original_bytes(self, monkeypatch):
+        """
+        With DISABLE_WATERMARK_ALL=true, apply_watermark() must return
+        exactly the original input bytes unchanged.
+        """
+        from app.utils.watermark import apply_watermark
+
+        monkeypatch.setenv("DISABLE_WATERMARK_ALL", "true")
+        png = self._make_rgb_png()
+        result = apply_watermark(png)
+        assert result == png
+
+    def test_disable_watermark_logo_still_applies_text(self, monkeypatch):
+        """
+        With DISABLE_WATERMARK_LOGO=true, text watermark still runs;
+        result must be a valid, non-trivial PNG.
+        """
+        from datetime import date
+
+        from app.utils.watermark import apply_watermark
+
+        monkeypatch.setenv("DISABLE_WATERMARK_LOGO", "true")
+        png = self._make_rgb_png()
+        result = apply_watermark(png, acquisition_date=date(2026, 1, 15))
+
+        assert isinstance(result, bytes)
+        assert len(result) > 10_000
+        self._open_bytes(result)
+
+    def test_metadata_with_none_values_skipped(self):
+        """
+        None values in the metadata dict must be silently skipped,
+        not cause a TypeError or AttributeError in add_text().
+        """
+        from app.utils.watermark import apply_watermark
+
+        png = self._make_rgb_png()
+        metadata = {
+            "source": "Sentinel-2",
+            "cloud_cover": None,
+            "label": "Fire",
+        }
+        result = apply_watermark(png, metadata=metadata)
+        assert isinstance(result, bytes)
+        assert len(result) > 10_000
+
+    def test_output_passes_pil_verify(self):
+        """
+        The watermarked output must pass PIL's structural verification
+        (no truncated IDAT chunks, no malformed chunk headers).
+        """
+        from datetime import date
+
+        from PIL import Image as PILImage
+
+        from app.utils.watermark import apply_watermark
+
+        png = self._make_rgb_png()
+        result = apply_watermark(
+            png,
+            acquisition_date=date(2026, 2, 8),
+            metadata={"vis_type": "RGB", "satellite": "SENTINEL-2"},
+        )
+        # verify() raises if PNG is structurally invalid
+        PILImage.open(BytesIO(result)).verify()
+
+    def test_pil_unavailable_returns_original(self, monkeypatch):
+        """
+        When PIL_AVAILABLE is False, apply_watermark() must return
+        the original bytes unchanged without raising.
+        """
+        import app.utils.watermark as wm_module
+
+        monkeypatch.setattr(wm_module, "PIL_AVAILABLE", False)
+
+        from app.utils.watermark import apply_watermark
+
+        dummy = self._make_rgb_png(64, 48)
+        result = apply_watermark(dummy)
+        assert result == dummy
