@@ -1,3 +1,9 @@
+> **Nota (2026-03)**  
+> Esta copia se mantiene solo por compatibilidad histórica.  
+> El archivo vivo y referenciado desde el índice se encuentra en:  
+> `docs/1_home/thumbnails/PNG_CORRUPTION_FIX_SUMMARY.md`.  
+> Para operación diaria usar además los docs bajo `docs/core-flows/core-preproceso-imagenes/`.
+
 # PNG Corruption Fix - IMPLEMENTATION COMPLETE
 
 ## 🎯 Problem Identified

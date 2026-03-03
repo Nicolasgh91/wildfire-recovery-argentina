@@ -74,7 +74,8 @@ def create_bbox_from_coordinates(
     lat: float,
     lon: float,
     buffer_degrees: float = 0.01,
-    aspect_ratio: float = 1.0,
+    *,
+    aspect_ratio: float,
 ) -> Dict[str, float]:
     """
     Create bbox in GEE format from center coordinates.

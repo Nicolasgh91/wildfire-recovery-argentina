@@ -1,8 +1,14 @@
 # Auditoría: flujo de ingesta vs. código real
 
-**Fecha:** 2026-02-24
-**Fuente de verdad:** `docs/Carrusel fix/flujo_ingesta_procesamiento.md`
+**Fecha:** 2026-02-24  
+**Fuente de verdad analizada:** `docs/Carrusel fix/flujo_ingesta_procesamiento.md`  
 **Método:** Cruce manual de cada afirmación del documento contra el código real del repositorio.
+
+> **Nota de vigencia (2026-03)**  
+> Este archivo se mantiene como **auditoría histórica**. Las conclusiones relevantes ya se reflejan en:
+> - `docs/core-flows/core-ingesta/core-ingesta-design.md` (diseño actual)  
+> - `docs/core-flows/core-pipeline-e2e/core-pipeline-design.md` (visión global)  
+> Ante discrepancias, priorizar esos documentos y el código fuente.
 
 ---
 

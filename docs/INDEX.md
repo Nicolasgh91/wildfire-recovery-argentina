@@ -1,4 +1,4 @@
-﻿# indice de documentacion
+# indice de documentacion
 
 Ultima actualizacion: 22 de febrero de 2026.
 
@@ -13,6 +13,16 @@ Este indice separa documentacion vigente (canonica) de documentacion historica (
 - `docs/product/estado-real-del-producto.md` - semaforo de estado y top 5 de cierre
 - `docs/product/diferenciacion-mercado.md` - relevamiento externo con citas
 - `docs/product/matriz-inconsistencias-2026-02-22.md` - diagnostico de consistencia
+
+### flujos CORE (datos → UI)
+
+- `docs/core-flows/README.md` - mapa de documentos por flujo CORE
+- `docs/core-flows/core-ingesta/core-ingesta-overview.md` - ingesta FIRMS → fire_detections/fire_events
+- `docs/core-flows/core-preproceso-imagenes/core-preproceso-overview.md` - thumbnails, watermark y fixes PNG
+- `docs/core-flows/core-vae-ucf12-ndvi/core-vae-overview.md` - VAE / UC‑F12 / NDVI
+- `docs/core-flows/core-inferencia-y-hd/core-inferencia-overview.md` - recurrencia, calidad, exploracion HD
+- `docs/core-flows/core-ui-analisis/core-ui-overview.md` - UI de analisis, mapas y capas
+- `docs/core-flows/core-pipeline-e2e/core-pipeline-overview.md` - pipeline end‑to‑end de datos
 
 ### experiencia frontend
 

@@ -1,3 +1,11 @@
+> **Nota de vigencia (2026-03)**  
+> Este documento describe el flujo de ingesta y carrusel en detalle y sigue siendo útil como **referencia conceptual**.  
+> Sin embargo, la fuente canónica actual para el flujo de ingesta y pipeline E2E son:
+> - `docs/core-flows/core-ingesta/core-ingesta-overview.md`
+> - `docs/core-flows/core-ingesta/core-ingesta-design.md`
+> - `docs/core-flows/core-pipeline-e2e/core-pipeline-overview.md`  
+> Para topología de workers y contenedores, ver también `docs/containers/workers.md`.
+
 # Carousel Thumbnail Flow: Analysis & Fix Plan
 
 ## Flow Summary
