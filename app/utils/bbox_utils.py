@@ -70,26 +70,35 @@ def validate_and_convert_bbox(bbox: Dict[str, float]) -> Dict[str, float]:
     
     raise ValueError(f"Invalid bbox format. Expected keys: west/south/east/north or min_lon/max_lon/min_lat/max_lat. Got: {available_keys}")
 
-def create_bbox_from_coordinates(lat: float, lon: float, buffer_degrees: float = 0.01) -> Dict[str, float]:
+def create_bbox_from_coordinates(
+    lat: float,
+    lon: float,
+    buffer_degrees: float = 0.01,
+    aspect_ratio: float = 1.0,
+) -> Dict[str, float]:
     """
     Create bbox in GEE format from center coordinates.
-    
+
     Args:
         lat: Latitude coordinate
-        lon: Longitude coordinate  
-        buffer_degrees: Buffer around center point in degrees (default 0.01 ≈ 1km)
-        
+        lon: Longitude coordinate
+        buffer_degrees: Buffer around center point in degrees (used as half-height)
+        aspect_ratio: Width/height ratio. 1.0 = square, 1.333 = 4:3.
+
     Returns:
         Bbox in GEE format
     """
-    logger.info(f"🔍 [BBOX] Creating bbox from lat={lat:.4f}, lon={lon:.4f}, buffer={buffer_degrees}")
-    
+    half_height = buffer_degrees
+    half_width = half_height * aspect_ratio
+
+    logger.info(f"🔍 [BBOX] Creating bbox from lat={lat:.4f}, lon={lon:.4f}, buffer={buffer_degrees}, ar={aspect_ratio}")
+
     bbox = {
-        'west': lon - buffer_degrees,
-        'east': lon + buffer_degrees,
-        'south': lat - buffer_degrees,
-        'north': lat + buffer_degrees,
+        'west': lon - half_width,
+        'east': lon + half_width,
+        'south': lat - half_height,
+        'north': lat + half_height,
     }
-    
+
     logger.info(f"✅ [BBOX] Created bbox: {bbox}")
     return bbox
