@@ -857,11 +857,23 @@ class GEEService:
                 vis_image = vis_image.resample(method)
 
             # Generar thumbnail
+            # Si dimensions es "WxH" (ej. "768x576"), pasar width/height separados:
+            # getThumbURL interpreta "WxH" como tamaño máximo del eje mayor y ajusta
+            # el otro eje según el AR real de la geometría, causando padding negro.
+            # Con width+height explícitos GEE produce exactamente el canvas solicitado.
+            if isinstance(dimensions, str) and "x" in dimensions.lower():
+                w_str, h_str = dimensions.lower().split("x", 1)
+                thumb_w, thumb_h = int(w_str.strip()), int(h_str.strip())
+                size_params: dict = {"width": thumb_w, "height": thumb_h}
+            else:
+                # int, float, o string numérico (ej. 512, 512.0, "512", "512.0")
+                size_params = {"dimensions": int(float(dimensions))}
+
             url = vis_image.getThumbURL(
                 {
                     "region": geometry,
-                    "dimensions": dimensions,
                     "format": format,
+                    **size_params,
                     **vis_params,
                 }
             )

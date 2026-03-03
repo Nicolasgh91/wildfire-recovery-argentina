@@ -1,6 +1,10 @@
 """
 Unit tests for thumbnail generation pipeline hardening.
 
+Additional coverage (TestGetThumbnailUrlSizeParams):
+  - get_thumbnail_url(): "WxH" → width/height kwargs (no dimensions key)
+  - get_thumbnail_url(): int or numeric-string → dimensions int (no width/height)
+
 Covers:
   - parse_dimensions: all format variations and edge cases
   - _bbox_from_point: aspect ratio matching with various dimension formats
@@ -543,3 +547,133 @@ class TestBlackStripeRegression:
         with caplog.at_level(logging.WARNING):
             svc._validate_thumbnail(png, "768x576", "RGB", "ep-ok")
         assert "low-brightness" not in caplog.text.lower()
+
+
+# =========================================================================
+# TestGetThumbnailUrlSizeParams
+# =========================================================================
+
+
+class TestGetThumbnailUrlSizeParams:
+    """
+    Verify that get_thumbnail_url() passes the correct size kwargs to
+    getThumbURL depending on the format of the `dimensions` argument.
+
+    Root cause: passing dimensions="WxH" lets GEE choose canvas size
+    by max-axis → floating-point bbox AR mismatch → black padding strips.
+    Fix: parse "WxH" and pass width/height as separate integers.
+    """
+
+    @staticmethod
+    def _make_gee_service():
+        """Return a GEEService with authentication and rate-limiting bypassed."""
+        from app.services.gee_service import GEEService
+
+        svc = object.__new__(GEEService)
+        svc._initialized = True
+        svc._request_count = 0
+        # _rate_limited_request executes its callable directly (no actual rate limit)
+        svc._rate_limited_request = lambda func, *a, **kw: func(*a, **kw)
+        return svc
+
+    @staticmethod
+    def _make_mock_image(captured: dict):
+        """Return a mock ee.Image whose getThumbURL captures its kwargs."""
+        import ee
+
+        img = MagicMock(spec=ee.Image)
+        img.select.return_value = img
+        img.resample.return_value = img
+
+        def _capture_thumb_url(params):
+            captured.update(params)
+            return "https://thumburl.example/test"
+
+        img.getThumbURL = _capture_thumb_url
+        return img
+
+    @staticmethod
+    def _make_mock_bbox():
+        return {"west": -58.55, "south": -27.55, "east": -58.45, "north": -27.45}
+
+    def test_wxh_string_passes_width_height(self):
+        """
+        dimensions="768x576" must produce width=768, height=576 in getThumbURL
+        params and must NOT include a 'dimensions' key.
+        """
+        import ee
+
+        svc = self._make_gee_service()
+        captured: dict = {}
+        mock_image = self._make_mock_image(captured)
+
+        with patch("app.services.gee_service.ee") as mock_ee:
+            mock_ee.Geometry.Rectangle.return_value = MagicMock()
+            mock_ee.Image = MagicMock()
+            # Make image.select() return our mock_image so resample path works
+            mock_image.select.return_value = mock_image
+
+            svc.get_thumbnail_url(
+                image=mock_image,
+                bbox=self._make_mock_bbox(),
+                vis_type="RGB",
+                dimensions="768x576",
+                format="png",
+            )
+
+        assert captured.get("width") == 768, f"Expected width=768, got: {captured}"
+        assert captured.get("height") == 576, f"Expected height=576, got: {captured}"
+        assert "dimensions" not in captured, (
+            f"'dimensions' key must be absent when using WxH string, got: {captured}"
+        )
+
+    def test_int_passes_dimensions_legacy(self):
+        """
+        dimensions=512 (int) must produce dimensions=512 in getThumbURL params
+        and must NOT include 'width' or 'height' keys.
+        """
+        svc = self._make_gee_service()
+        captured: dict = {}
+        mock_image = self._make_mock_image(captured)
+
+        with patch("app.services.gee_service.ee") as mock_ee:
+            mock_ee.Geometry.Rectangle.return_value = MagicMock()
+            mock_image.select.return_value = mock_image
+
+            svc.get_thumbnail_url(
+                image=mock_image,
+                bbox=self._make_mock_bbox(),
+                vis_type="RGB",
+                dimensions=512,
+                format="png",
+            )
+
+        assert captured.get("dimensions") == 512, f"Expected dimensions=512, got: {captured}"
+        assert "width" not in captured, f"'width' must be absent for int input, got: {captured}"
+        assert "height" not in captured, f"'height' must be absent for int input, got: {captured}"
+
+    def test_numeric_string_passes_dimensions_legacy(self):
+        """
+        dimensions="512" (numeric string) must produce dimensions=512 and
+        must NOT include 'width' or 'height' keys.
+        Also validates float strings like "512.0" are handled correctly.
+        """
+        svc = self._make_gee_service()
+        captured: dict = {}
+        mock_image = self._make_mock_image(captured)
+
+        with patch("app.services.gee_service.ee") as mock_ee:
+            mock_ee.Geometry.Rectangle.return_value = MagicMock()
+            mock_image.select.return_value = mock_image
+
+            svc.get_thumbnail_url(
+                image=mock_image,
+                bbox=self._make_mock_bbox(),
+                vis_type="RGB",
+                dimensions="512",
+                format="png",
+            )
+
+        assert captured.get("dimensions") == 512, f"Expected dimensions=512, got: {captured}"
+        assert "width" not in captured, f"'width' must be absent for numeric string, got: {captured}"
+        assert "height" not in captured, f"'height' must be absent for numeric string, got: {captured}"
