@@ -19,12 +19,6 @@ except Exception:  # pragma: no cover - optional dependency
     PngImagePlugin = None  # type: ignore
     PIL_AVAILABLE = False
 
-try:
-    import numpy as np
-    NUMPY_AVAILABLE = True
-except ImportError:
-    NUMPY_AVAILABLE = False
-
 
 def _format_date(value: Optional[date | datetime]) -> str:
     if isinstance(value, datetime):
@@ -32,76 +26,6 @@ def _format_date(value: Optional[date | datetime]) -> str:
     if isinstance(value, date):
         return value.isoformat()
     return ""
-
-
-def _fix_corrupted_png(png_bytes: bytes) -> bytes:
-    """
-    Fix corrupted PNG by reconstructing from pixel data.
-    
-    This handles the case where PNG metadata corruption prevents
-    normal PIL operations like save() or numpy conversion.
-    """
-    try:
-        # Try to load the image
-        img = Image.open(BytesIO(png_bytes))
-        
-        # Test if it's corrupted by attempting save
-        test_output = BytesIO()
-        img.save(test_output, format='PNG')
-        return png_bytes  # Not corrupted, return original
-        
-    except Exception:
-        # Image is corrupted, reconstruct it
-        logger.info("Reconstructing corrupted PNG from pixel data")
-        
-        try:
-            # Reload the image (it might open but fail on save)
-            img = Image.open(BytesIO(png_bytes))
-            width, height = img.size
-            
-            if not NUMPY_AVAILABLE:
-                logger.warning("NumPy not available, cannot fix corrupted PNG")
-                return png_bytes
-            
-            # Create new array and copy pixels manually
-            if img.mode == 'RGBA':
-                arr = np.zeros((height, width, 4), dtype=np.uint8)
-                
-                # Copy pixels manually
-                for y in range(height):
-                    for x in range(width):
-                        try:
-                            pixel = img.getpixel((x, y))
-                            arr[y, x] = pixel
-                        except Exception:
-                            # Use transparent pixel if getpixel fails
-                            arr[y, x] = [0, 0, 0, 0]
-            else:
-                # Convert to RGBA first
-                img_rgba = img.convert('RGBA')
-                arr = np.zeros((height, width, 4), dtype=np.uint8)
-                
-                for y in range(height):
-                    for x in range(width):
-                        try:
-                            pixel = img_rgba.getpixel((x, y))
-                            arr[y, x] = pixel
-                        except Exception:
-                            arr[y, x] = [0, 0, 0, 0]
-            
-            # Create new image from array
-            fixed_img = Image.fromarray(arr, 'RGBA')
-            
-            # Save without metadata
-            output = BytesIO()
-            fixed_img.save(output, format='PNG', compress_level=6)
-            
-            logger.info("Successfully reconstructed corrupted PNG")
-            return output.getvalue()
-            
-        except Exception as e:
-            logger.warning("Failed to reconstruct corrupted PNG: %s", e)
-            return png_bytes
 
 
 def apply_watermark(
@@ -114,35 +38,25 @@ def apply_watermark(
 ) -> bytes:
     """
     Apply a watermark with logo (bottom-right) and date text (bottom-left).
-    When Pillow is unavailable, returns the original bytes.
-    
-    Feature flags:
-    - DISABLE_WATERMARK_LOGO: Skip logo processing if set to 'true', '1', or 'yes'
-    - DISABLE_WATERMARK_ALL: Skip all watermark processing if set to 'true', '1', or 'yes'
+    When Pillow is unavailable, returns the original bytes unchanged.
+
+    Feature flags (environment variables):
+      DISABLE_WATERMARK_ALL  - skip all watermark processing
+      DISABLE_WATERMARK_LOGO - skip logo only; text watermark still applied
     """
     if not PIL_AVAILABLE:
         logger.warning("Pillow not available; skipping watermark")
         return image_bytes
 
-    # Check feature flags
     disable_all = os.environ.get("DISABLE_WATERMARK_ALL", "").lower() in {"true", "1", "yes"}
     if disable_all:
         logger.info("Watermark completely disabled via DISABLE_WATERMARK_ALL")
         return image_bytes
-        
+
     disable_logo = os.environ.get("DISABLE_WATERMARK_LOGO", "").lower() in {"true", "1", "yes"}
     if disable_logo:
         logger.info("Watermark logo disabled via DISABLE_WATERMARK_LOGO")
         logo_path = None
-
-    # Fix corrupted input if needed
-    try:
-        test_img = Image.open(BytesIO(image_bytes))
-        test_output = BytesIO()
-        test_img.save(test_output, format='PNG')
-    except Exception:
-        logger.info("Input PNG appears corrupted, attempting reconstruction")
-        image_bytes = _fix_corrupted_png(image_bytes)
 
     try:
         base = Image.open(BytesIO(image_bytes)).convert("RGBA")
@@ -188,31 +102,36 @@ def apply_watermark(
                 for key, value in metadata.items():
                     if value is None:
                         continue
-                    pnginfo.add_text(str(key), str(value))
+                    # PNG tEXt chunks require latin-1 encoding; replace any
+                    # non-representable characters rather than raising at the C level.
+                    safe_value = str(value).encode("latin-1", errors="replace").decode("latin-1")
+                    pnginfo.add_text(str(key), safe_value)
             except Exception as metadata_exc:
                 logger.warning("Failed to create PNG metadata: %s", metadata_exc)
                 pnginfo = None
 
-        # Save without redundant convert() call - combined is already RGBA
         try:
             combined.save(output, format="PNG", pnginfo=pnginfo, compress_level=6)
             result = output.getvalue()
-            
-            # Validate the result before returning
-            try:
-                test_img = Image.open(BytesIO(result))
-                # Quick numpy test to catch corruption early
-                import numpy as np
-                arr = np.array(test_img)
-                logger.debug("Watermark applied successfully, size: %d bytes", len(result))
-                return result
-            except Exception as validation_exc:
-                logger.warning("Watermark produced corrupted PNG, falling back: %s", validation_exc)
+
+            # A genuine 768x576 satellite PNG at compress_level=6 is always >10 KB.
+            # Anything smaller indicates the image data was destroyed.
+            if len(result) < 10_000:
+                logger.warning(
+                    "Watermark result suspiciously small (%d bytes); falling back to original",
+                    len(result),
+                )
                 return image_bytes
-                
+
+            # Validate PNG structure without decoding all pixels (cheaper than np.array).
+            Image.open(BytesIO(result)).verify()
+            logger.debug("Watermark applied successfully, size: %d bytes", len(result))
+            return result
+
         except Exception as save_exc:
             logger.warning("Failed to save watermarked PNG, falling back: %s", save_exc)
             return image_bytes
+
     except Exception as exc:  # pragma: no cover - safe fallback
         logger.warning("Failed to apply watermark: %s", exc)
         return image_bytes
