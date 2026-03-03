@@ -7,10 +7,14 @@
 
 ## Qué se implementó (código ya comiteado)
 
+> Nota 2026-03: este walkthrough fue escrito antes de la consolidación de workers en `worker-fast` y `worker-gee`.  
+> El diseño actual de contenedores y colas está documentado en `docs/containers/workers.md`.  
+> Donde este documento hable de un contenedor dedicado `worker-reports`, hoy la cola `reports` es consumida por `worker-fast`.
+
 | Archivo | Cambio |
 |---|---|
 | [storage_service.py](file:///c:/Users/nicog/wildfire-recovery-argentina/app/services/storage_service.py) | Backend `oci` vía boto3 S3-compatible |
-| [docker-compose.yml](file:///c:/Users/nicog/wildfire-recovery-argentina/docker-compose.yml) | Nuevo servicio `worker-reports`; OCI env vars en todos los workers; `ENVIRONMENT` dinámico |
+| [docker-compose.yml](file:///c:/Users/nicog/wildfire-recovery-argentina/docker-compose.yml) | Actualización de workers para usar OCI, colas alineadas con Celery y `ENVIRONMENT` dinámico |
 | [.env.template](file:///c:/Users/nicog/wildfire-recovery-argentina/.env.template) | Sección OCI; depreca MinIO/GCS legacy |
 | [fix_stale_minio_urls.sql](file:///c:/Users/nicog/wildfire-recovery-argentina/scripts/fix_stale_minio_urls.sql) | Limpia URLs `127.0.0.1:9000` de DB |
 
@@ -70,19 +74,19 @@ git pull origin main
 ### PASO 3 — Rebuild y restart de contenedores
 
 ```bash
-# Rebuild solo los servicios modificados
-docker compose build --no-cache api worker-analysis worker-reports
+# Rebuild de servicios relevantes para storage y reportes
+docker compose build --no-cache api worker-fast worker-gee
 
-# Levantar todo (crea worker-reports si no existía)
+# Levantar todo
 docker compose up -d
 
-# Verificar que worker-reports está corriendo
-docker compose ps | grep worker-reports
+# Verificar que los workers principales están corriendo
+docker compose ps | grep worker-fast
 ```
 
 Resultado esperado:
 ```
-forestguard-worker-reports   running   ...
+forestguard-worker-fast   running   ...
 ```
 
 ---
@@ -149,7 +153,7 @@ Resultado esperado: `{"processed": N, "updated": N, "skipped": ..., "errors": []
 | **V-02 Reports** | `curl -X POST .../reports/judicial -H "Authorization: Bearer <token>"` | 200 con `pdf_url`, **no 503** |
 | **V-03 Explorations** | `curl -X POST .../explorations/<id>/generate -H "Idempotency-Key: ..."` | 202 Accepted, **no 503** |
 | **V-04 DB limpia** | `SELECT COUNT(*) FROM satellite_images WHERE thumbnail_url LIKE 'http://127%'` | 0 |
-| **V-05 Worker reports** | `docker compose ps \| grep worker-reports` | `running` |
+| **V-05 Workers Celery** | `docker compose ps \| grep worker-fast` | `running` |
 | **V-06 Browser** | Abrir Home, DevTools → Network | Imágenes cargan desde URLs OCI, no `127.0.0.1` |
 
 ---

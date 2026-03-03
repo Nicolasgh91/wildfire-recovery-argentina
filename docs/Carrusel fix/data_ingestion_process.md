@@ -36,6 +36,10 @@ flowchart LR
 
 ## Root Cause
 
+> Nota 2026-03: este documento refleja el estado previo a la consolidación de workers en `worker-fast` y `worker-gee`.  
+> En el diseño actual, la cola `analysis`/`vae` es atendida por `worker-gee`, que ya tiene las variables GEE configuradas.  
+> Para la topología vigente ver `docs/containers/workers.md`. El análisis siguiente se mantiene como histórico.
+
 ### `worker-analysis` is missing GEE env vars
 
 The [docker-compose.yml](file:///c:/Users/nicog/wildfire-recovery-argentina/docker-compose.yml) `worker-analysis` service (line 211) has **OCI storage vars** (correct ✓), but has **zero GEE vars** (❌). Only `worker-reports` (line 266) has `GEE_PROJECT_ID` and `GEE_SERVICE_ACCOUNT_EMAIL`.

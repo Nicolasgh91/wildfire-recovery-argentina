@@ -23,35 +23,39 @@ Como ninguna de las dos cosas ocurrió desde el deploy, las tablas están vacía
 
 ## Parte 1: verificación de BD (ejecutar en la VM vía SSH)
 
-### 1.1 Verificar que el worker-vae está corriendo
+> Nota 2026-03: la topología actual consolidó los workers en `worker-fast` y `worker-gee`.  
+> La cola `vae` (UC-F12 / VAE) hoy es consumida por el contenedor `forestguard-worker-gee`.  
+> Donde este documento menciona `worker-vae`, usar `worker-gee` y ver `docs/containers/workers.md`.
+
+### 1.1 Verificar que el worker-gee está corriendo
 
 ```bash
 ssh opc@<PROD_VM_HOST>
 
-# Ver que el container worker-vae existe y está running
-docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "worker|vae|beat"
+# Ver que el container worker-gee existe y está running
+docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "worker|gee|beat"
 ```
 
 **Esperado:**
 ```
-forestguard-worker-vae       Up X minutes
+forestguard-worker-gee       Up X minutes
 forestguard-celery-beat      Up X hours
-forestguard-worker-analysis  Up X hours
+forestguard-worker-fast      Up X hours
 ```
 
-Si `worker-vae` no aparece:
+Si `worker-gee` no aparece:
 ```bash
 cd /home/opc
-docker compose up -d worker-vae
-docker logs --tail 20 forestguard-worker-vae
+docker compose up -d worker-gee
+docker logs --tail 20 forestguard-worker-gee
 ```
 
 ### 1.2 Verificar que la cola vae está configurada
 
 ```bash
-# Ver que el worker escucha la cola vae
-docker logs forestguard-worker-vae 2>&1 | head -20
-# Buscar línea tipo: "celery@... ready" con "queues: vae"
+# Ver que el worker escucha las colas analysis y vae
+docker logs forestguard-worker-gee 2>&1 | head -20
+# Buscar línea tipo: "queues: analysis, vae"
 ```
 
 ### 1.3 Verificar estado de las tablas de monitoreo
@@ -148,12 +152,12 @@ db.close()
 
 ```bash
 # 2. Ejecutar worker de recovery para UN evento específico
-docker exec forestguard-worker-vae celery -A workers.celery_app call \
+docker exec forestguard-worker-gee celery -A workers.celery_app call \
   workers.tasks.recovery.analyze_recovery \
   --args='["<FIRE_EVENT_ID>"]'
 
 # 3. Monitorear logs en tiempo real
-docker logs --tail 50 -f forestguard-worker-vae
+docker logs --tail 50 -f forestguard-worker-gee
 ```
 
 **Esperado en logs:**
@@ -187,7 +191,7 @@ db.close()
 ### Opción B: trigger de destruction para un evento
 
 ```bash
-docker exec forestguard-worker-vae celery -A workers.celery_app call \
+docker exec forestguard-worker-gee celery -A workers.celery_app call \
   workers.tasks.destruction.detect_destruction \
   --args='["<FIRE_EVENT_ID>"]'
 ```
@@ -196,11 +200,11 @@ docker exec forestguard-worker-vae celery -A workers.celery_app call \
 
 ```bash
 # Ejecutar batch de recovery (máx 50 eventos por defecto)
-docker exec forestguard-worker-vae celery -A workers.celery_app call \
+docker exec forestguard-worker-gee celery -A workers.celery_app call \
   workers.tasks.recovery.batch_recovery_analysis
 
 # Ejecutar batch de destruction
-docker exec forestguard-worker-vae celery -A workers.celery_app call \
+docker exec forestguard-worker-gee celery -A workers.celery_app call \
   workers.tasks.destruction.batch_destruction_detection
 ```
 
@@ -282,8 +286,8 @@ db.close()
 
 ```
 INFRAESTRUCTURA
-[ ] worker-vae está running en docker ps
-[ ] worker-vae escucha cola 'vae'
+[ ] worker-gee está running en docker ps
+[ ] worker-gee escucha colas 'analysis' y 'vae'
 [ ] celery-beat está running
 
 BASE DE DATOS (post ejecución manual)
@@ -309,21 +313,21 @@ FRONTEND
 
 ## Troubleshooting
 
-### "worker-vae no arranca"
+### "worker-gee no arranca"
 ```bash
-docker logs forestguard-worker-vae 2>&1 | tail -30
+docker logs forestguard-worker-gee 2>&1 | tail -30
 # Buscar: ModuleNotFoundError, ConnectionError, authentication errors
 ```
 
 Causa probable: faltan variables de entorno GEE. Verificar:
 ```bash
-docker exec forestguard-worker-vae env | grep GEE
+docker exec forestguard-worker-gee env | grep GEE
 # Debe mostrar GEE_PROJECT_ID, GEE_SERVICE_ACCOUNT_EMAIL, GEE_PRIVATE_KEY_PATH
 ```
 
 ### "Worker arranca pero el task falla"
 ```bash
-docker logs forestguard-worker-vae 2>&1 | grep -i "error\|failed\|exception" | tail -20
+docker logs forestguard-worker-gee 2>&1 | grep -i "error\|failed\|exception" | tail -20
 ```
 
 Causas probables:

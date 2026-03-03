@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
@@ -39,10 +40,25 @@ def apply_watermark(
     """
     Apply a watermark with logo (bottom-right) and date text (bottom-left).
     When Pillow is unavailable, returns the original bytes.
+    
+    Feature flags:
+    - DISABLE_WATERMARK_LOGO: Skip logo processing if set to 'true', '1', or 'yes'
+    - DISABLE_WATERMARK_ALL: Skip all watermark processing if set to 'true', '1', or 'yes'
     """
     if not PIL_AVAILABLE:
         logger.warning("Pillow not available; skipping watermark")
         return image_bytes
+
+    # Check feature flags
+    disable_all = os.environ.get("DISABLE_WATERMARK_ALL", "").lower() in {"true", "1", "yes"}
+    if disable_all:
+        logger.info("Watermark completely disabled via DISABLE_WATERMARK_ALL")
+        return image_bytes
+        
+    disable_logo = os.environ.get("DISABLE_WATERMARK_LOGO", "").lower() in {"true", "1", "yes"}
+    if disable_logo:
+        logger.info("Watermark logo disabled via DISABLE_WATERMARK_LOGO")
+        logo_path = None
 
     try:
         base = Image.open(BytesIO(image_bytes)).convert("RGBA")

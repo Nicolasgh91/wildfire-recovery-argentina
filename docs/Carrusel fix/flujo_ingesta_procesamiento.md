@@ -538,8 +538,11 @@ Este mecanismo funciona incluso si el episodio estaba en `'extinct'`, siempre qu
 
 ### 5.5 Infraestructura (docker-compose)
 
-| Servicio | Container | Colas que consume |
-|----------|-----------|-------------------|
+> Nota 2026-03: la tabla siguiente refleja una topología anterior con múltiples workers dedicados.  
+> La configuración actual usa `worker-fast` y `worker-gee` como workers consolidados; ver `docs/containers/workers.md` para el detalle vigente.
+
+| Servicio (legacy) | Container | Colas que consume |
+|-------------------|-----------|-------------------|
 | `worker-ingestion` | `forestguard-worker-ingestion` | `ingestion` |
 | `worker-clustering` | `forestguard-worker-clustering` | `clustering` |
 | `worker-analysis` | `forestguard-worker-analysis` | `analysis` |

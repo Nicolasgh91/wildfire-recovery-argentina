@@ -6,6 +6,12 @@
 
 ---
 
+> Nota 2026-03: varias secciones de este documento se refieren a una topología de workers  
+> con contenedores separados (`worker-ingestion`, `worker-clustering`, `worker-analysis`, `worker-reports`, `worker-vae`).  
+> El estado actual usa `worker-fast` y `worker-gee` como workers consolidados.  
+> Para el mapeo actualizado de colas → contenedores consultar `docs/containers/workers.md`.  
+> El análisis de consistencia código ↔ flujo sigue siendo útil como auditoría histórica.
+
 ## Consistencias confirmadas
 
 - **Ingesta (worker):** El worker `download_firms_daily` en `workers/tasks/ingestion.py` descarga de FIRMS delegando a `scripts.load_firms_incremental.run_incremental_pipeline`. El script calcula `h3_index` (resolución 8, `compute_h3_index` en línea 194), genera `detection_hash` SHA-256 (líneas 170-191) con los campos documentados, setea `is_processed = FALSE` y `fire_event_id = NULL` (líneas 520-521). Cola: `ingestion`. Schedule: `crontab(hour=0, minute=0)` = 00:00 UTC.

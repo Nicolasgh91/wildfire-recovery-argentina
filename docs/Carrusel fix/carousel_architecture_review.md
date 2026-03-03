@@ -6,6 +6,11 @@
 
 ---
 
+> Nota 2026-03: este documento analiza una versión anterior de la arquitectura de workers  
+> con servicios dedicados (`worker-ingestion`, `worker-clustering`, `worker-analysis`, `worker-reports`, `worker-vae`).  
+> La topología actual consolida esas funciones en `worker-fast` y `worker-gee` (ver `docs/containers/workers.md`).  
+> Los hallazgos funcionales siguen siendo válidos como referencia histórica, pero los nombres de contenedor deben leerse en ese contexto.
+
 ## A) Resumen ejecutivo
 
 ### 5 hallazgos críticos
