@@ -135,7 +135,7 @@ export default function MapPage() {
           fires={mapItems}
           selectedFire={selectedFire}
           onFireSelect={setSelectedFire}
-          height="h-full"
+          height="h-full md:h-[80vh]"
         />
       </Suspense>
 
@@ -143,7 +143,7 @@ export default function MapPage() {
         variant="secondary"
         size="icon"
         className="absolute left-4 top-4 md:hidden"
-        style={{ zIndex: Z_INDEX.MAP_OVERLAYS }}
+        style={{ zIndex: 40 }}
         onClick={() => setShowSidebar(!showSidebar)}
       >
         {showSidebar ? <X className="h-4 w-4" /> : <List className="h-4 w-4" />}
@@ -151,8 +151,8 @@ export default function MapPage() {
 
       {showSidebar && (
         <Card
-          className="absolute right-4 top-4 hidden h-[calc(100%-2rem)] w-80 flex-col gap-0 py-0 md:flex"
-          style={{ zIndex: Z_INDEX.MAP_OVERLAYS }}
+          className="absolute right-4 top-4 hidden h-[calc(100%-2rem)] w-80 flex-col gap-0 py-0 md:flex md:max-h-[calc(100vh-6rem)]"
+          style={{ zIndex: 40 }}
         >
           <CardHeader className="p-6 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -223,7 +223,7 @@ export default function MapPage() {
       {showSidebar && (
         <Card
           className="absolute bottom-4 left-4 right-4 !py-0 md:hidden"
-          style={{ zIndex: Z_INDEX.MAP_OVERLAYS }}
+          style={{ zIndex: 40 }}
         >
           <CardContent className="px-3 py-2">
             <ScrollArea className="w-full whitespace-nowrap">

@@ -60,11 +60,11 @@ function AppShell({ children }: { children: ReactNode }) {
   const { isAuthenticated, signOut } = useAuth()
   const isMapPage = pathname === '/map'
   const hideChrome = pathname === '/login' || pathname === '/register' || pathname === '/'
-  const shellClass = isMapPage ? 'flex h-screen flex-col' : 'flex min-h-screen flex-col'
+  const shellClass = isMapPage ? 'flex h-screen md:min-h-screen flex-col' : 'flex min-h-screen flex-col'
   const mainClass = hideChrome
     ? 'flex-1'
     : isMapPage
-      ? 'flex-1 overflow-hidden pt-0 pb-11 md:pt-24 md:pb-0'
+      ? 'flex-1 overflow-hidden md:overflow-visible pt-0 pb-11 md:pt-24 md:pb-0'
       : 'flex-1 pt-0 pb-24 md:pt-24 md:pb-0'
 
   useIdleTimer({
