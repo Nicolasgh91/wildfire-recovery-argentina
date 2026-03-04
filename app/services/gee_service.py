@@ -35,6 +35,11 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import requests
 
 try:
+    from googleapiclient.errors import HttpError as _HttpError
+except ImportError:
+    _HttpError = None  # googleapiclient no instalado (tests pueden mockear)
+
+try:
     import ee
 
     _EE_IMPORT_ERROR = None
@@ -131,6 +136,40 @@ VIS_PARAMS = {
 # Rate limits (respetando cuota GEE)
 CALLS_PER_SECOND = 1
 CALLS_PER_DAY = 50000
+
+# Thumbnail endpoint: límite empírico de píxeles de entrada (getPixels).
+# DT-011: en el futuro GEE_THUMB_MAX_PIXELS puede ser configurable por env.
+GEE_THUMB_MAX_PIXELS = 4096 * 3072  # ~12.6M, margen conservador
+GEE_THUMB_MIN_SCALE_DEG = 0.0002  # ~22m/px en Argentina
+GEE_THUMB_MAX_RETRIES = 2  # 1 intento inicial + 2 retries = 3 total
+GEE_THUMB_BACKOFF_BASE = 2.0  # segundos (backoff exponencial)
+
+
+def _compute_safe_scale(
+    bbox: Dict[str, float], max_pixels: int = GEE_THUMB_MAX_PIXELS
+) -> float:
+    """Calcula un scale (deg/px) que mantiene bbox_w * bbox_h / scale^2 <= max_pixels.
+
+    Nunca devuelve menos que GEE_THUMB_MIN_SCALE_DEG para preservar la calidad
+    base (~22m/px). DT-009: loguea WARNING cuando el scale es anormalmente alto.
+    """
+    bbox_w = bbox["east"] - bbox["west"]
+    bbox_h = bbox["north"] - bbox["south"]
+    if bbox_w <= 0 or bbox_h <= 0:
+        return GEE_THUMB_MIN_SCALE_DEG
+
+    min_scale = (bbox_w * bbox_h / max_pixels) ** 0.5
+    safe_scale = max(min_scale, GEE_THUMB_MIN_SCALE_DEG)
+
+    if safe_scale > GEE_THUMB_MIN_SCALE_DEG * 5:
+        logger.warning(
+            "GEE thumbnail scale elevado: %.6f deg/px para bbox=%s (limite=%d px)",
+            safe_scale,
+            bbox,
+            max_pixels,
+        )
+
+    return safe_scale
 
 
 # =============================================================================
@@ -760,9 +799,11 @@ class GEEService:
             nbr_pre = pre_image.normalizedDifference(["B8", "B12"])
             nbr_post = post_image.normalizedDifference(["B8", "B12"])
             dnbr = nbr_pre.subtract(nbr_post)
-            # scale=0.0002 °/px ≠22m en latitud (EPSG:4326 usa grados como unidad).
-            # scale=20 significaria 20 GRADOS/px → bbox <1px → thumbnail 1x1.
-            dnbr = dnbr.reproject(crs="EPSG:4326", scale=0.0002)
+            # clip(geometry) antes de reproject limita el computo al bbox
+            # (~213K px) en lugar del tile Sentinel-2 completo (~30M px).
+            # scale dinámico mantiene píxeles totales <= GEE_THUMB_MAX_PIXELS.
+            safe_scale = _compute_safe_scale(bbox)
+            dnbr = dnbr.clip(geometry).reproject(crs="EPSG:4326", scale=safe_scale)
             vis_params = VIS_PARAMS.get("DNBR", {"min": -0.5, "max": 0.5}).copy()
 
             if isinstance(dimensions, str) and "x" in dimensions.lower():
@@ -780,7 +821,29 @@ class GEEService:
             )
             return url
 
-        return self._rate_limited_request(_get_url)
+        last_exc = None
+        for attempt in range(GEE_THUMB_MAX_RETRIES + 1):
+            try:
+                return self._rate_limited_request(_get_url)
+            except Exception as exc:
+                status = getattr(getattr(exc, "resp", None), "status", None)
+                is_500 = _HttpError is not None and isinstance(exc, _HttpError) and status == 500
+                if is_500 and attempt < GEE_THUMB_MAX_RETRIES:
+                    wait = GEE_THUMB_BACKOFF_BASE ** attempt
+                    logger.warning(
+                        "GEE thumbnail 500 (intento %d/%d) para vis_type=DNBR. "
+                        "Reintentando en %.1fs. Error: %s",
+                        attempt + 1,
+                        GEE_THUMB_MAX_RETRIES + 1,
+                        wait,
+                        exc,
+                    )
+                    sleep(wait)
+                    last_exc = exc
+                    continue
+                raise
+        if last_exc is not None:
+            raise last_exc
 
     def download_dnbr_thumbnail(
         self,
@@ -871,7 +934,12 @@ class GEEService:
             # CRITICO: scale en EPSG:4326 esta en GRADOS, no en metros.
             #   scale=20   → 20 deg/px → bbox 0.1° = 0.005px → imagen 1x1  (BUG)
             #   scale=0.0002 → 0.0002 deg/px ≈ 22m/px → bbox OK  → 768x576  (FIX)
-            vis_image = vis_image.reproject(crs="EPSG:4326", scale=0.0002)
+            # clip(geometry) ANTES de reproject limita el computo al bbox
+            # (~213K px) en lugar del tile Sentinel-2 completo (~30M px).
+            # Sin clip(), GEE agota recursos en :getPixels y devuelve HTTP 500.
+            # scale dinámico mantiene píxeles totales <= GEE_THUMB_MAX_PIXELS.
+            safe_scale = _compute_safe_scale(bbox)
+            vis_image = vis_image.clip(geometry).reproject(crs="EPSG:4326", scale=safe_scale)
 
             # Parsear dimensions: string "WxH" se pasa tal cual,
             # int/float se convierte a entero.
@@ -891,7 +959,30 @@ class GEEService:
 
             return url
 
-        return self._rate_limited_request(_get_url)
+        last_exc = None
+        for attempt in range(GEE_THUMB_MAX_RETRIES + 1):
+            try:
+                return self._rate_limited_request(_get_url)
+            except Exception as exc:
+                status = getattr(getattr(exc, "resp", None), "status", None)
+                is_500 = _HttpError is not None and isinstance(exc, _HttpError) and status == 500
+                if is_500 and attempt < GEE_THUMB_MAX_RETRIES:
+                    wait = GEE_THUMB_BACKOFF_BASE ** attempt
+                    logger.warning(
+                        "GEE thumbnail 500 (intento %d/%d) para vis_type=%s. "
+                        "Reintentando en %.1fs. Error: %s",
+                        attempt + 1,
+                        GEE_THUMB_MAX_RETRIES + 1,
+                        vis_type,
+                        wait,
+                        exc,
+                    )
+                    sleep(wait)
+                    last_exc = exc
+                    continue
+                raise
+        if last_exc is not None:
+            raise last_exc
 
     def get_download_url(
         self,
