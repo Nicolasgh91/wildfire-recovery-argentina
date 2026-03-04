@@ -864,7 +864,7 @@ class GEEService:
             if isinstance(dimensions, str) and "x" in dimensions.lower():
                 w_str, h_str = dimensions.lower().split("x", 1)
                 thumb_w, thumb_h = int(w_str.strip()), int(h_str.strip())
-                size_params: dict = {"width": thumb_w, "height": thumb_h}
+                size_params: dict = {"width": thumb_w, "height": thumb_h, "crs": "EPSG:4326"}
             else:
                 # int, float, o string numérico (ej. 512, 512.0, "512", "512.0")
                 size_params = {"dimensions": int(float(dimensions))}
