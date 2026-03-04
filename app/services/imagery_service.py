@@ -599,7 +599,7 @@ class ImageryService:
                         end_date=today,
                         max_cloud_cover=float(threshold),
                     )
-                    image = self._gee.get_best_image(collection)
+                    image = self._gee.get_best_image(collection, bbox=bbox)
                 return image, False, int(threshold)
             except GEEImageNotFoundError:
                 continue

@@ -796,25 +796,74 @@ class GEEService:
 
         return self._rate_limited_request(_get_info)
 
+    def _calculate_spatial_coverage(
+        self, image: ee.Image, bbox: Dict[str, float], scale: int = 60
+    ) -> float:
+        """
+        Calcula el porcentaje de cobertura de datos válidos sobre el bbox.
+
+        Args:
+            image: Imagen Sentinel-2
+            bbox: Bounding box con keys 'west', 'south', 'east', 'north'
+            scale: Resolución en metros (default 60m para balance velocidad/precisión)
+
+        Returns:
+            float: Porcentaje de cobertura (0-100)
+        """
+        self._ensure_authenticated()
+
+        def _calc_coverage():
+            geometry = _bbox_to_geometry(bbox)
+
+            # Crear máscara de datos válidos usando banda B4 (siempre presente)
+            # Cualquier píxel con datos válidos en B4 cuenta como cobertura
+            valid_mask = image.select("B4").mask()
+
+            # Calcular estadísticas de la máscara
+            stats = valid_mask.reduceRegion(
+                reducer=ee.Reducer.mean(),
+                geometry=geometry,
+                scale=scale,
+                maxPixels=1e9,
+            ).getInfo()
+
+            # mean de la máscara = proporción de píxeles válidos (0-1)
+            coverage_fraction = stats.get("B4", 0) or 0
+            coverage_percent = coverage_fraction * 100
+
+            return min(coverage_percent, 100.0)
+
+        return self._rate_limited_request(_calc_coverage)
+
     def get_best_image(
         self,
         collection: ee.ImageCollection,
         target_date: Optional[date] = None,
         prefer_low_cloud: bool = True,
         max_cloud_cover: Optional[float] = 30.0,
+        min_coverage: float = 95.0,
+        max_candidates: int = 10,
+        bbox: Optional[Dict[str, float]] = None,
     ) -> ee.Image:
         """
         Obtiene la mejor imagen de la colección.
 
-        Criterios de selección:
-        1. Si target_date: imagen más cercana a esa fecha con nubes < max_cloud_cover
-        2. Si prefer_low_cloud: imagen con menor cobertura de nubes
+        Criterios de selección (en orden de prioridad):
+        1. Cobertura de datos válidos sobre bbox >= min_coverage (default 95%, solo si bbox se proporciona)
+        2. Si target_date: imagen más cercana a esa fecha
+        3. Menor cobertura de nubes (CLOUDY_PIXEL_PERCENTAGE)
+
+        Si ninguna imagen cumple min_coverage, se selecciona la de mayor cobertura disponible.
+        Si bbox no se proporciona, se usa la lógica legacy (sin evaluación de cobertura).
 
         Args:
             collection: Colección de imágenes
             target_date: Fecha objetivo (opcional)
-            prefer_low_cloud: Priorizar baja nubosidad
+            prefer_low_cloud: Priorizar baja nubosidad (deprecated, siempre True)
             max_cloud_cover: Máximo porcentaje de nubes cuando se usa target_date
+            min_coverage: Mínimo porcentaje de cobertura espacial (default 95.0)
+            max_candidates: Número máximo de candidatas a evaluar (default 10)
+            bbox: Bounding box para evaluar cobertura espacial (opcional)
 
         Returns:
             ee.Image: Mejor imagen según criterios
@@ -825,8 +874,39 @@ class GEEService:
         self._ensure_authenticated()
 
         def _get_best():
+            # Si no hay bbox, usar lógica legacy (sin evaluación de cobertura)
+            if bbox is None:
+                if target_date:
+                    target_millis = ee.Date(target_date.strftime("%Y-%m-%d")).millis()
+
+                    def add_date_diff(image):
+                        diff = (
+                            ee.Number(image.date().millis()).subtract(target_millis).abs()
+                        )
+                        return image.set("date_diff", diff)
+
+                    sorted_collection = collection
+                    if max_cloud_cover is not None:
+                        sorted_collection = sorted_collection.filter(
+                            ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", max_cloud_cover)
+                        )
+                    sorted_collection = sorted_collection.map(add_date_diff).sort(
+                        "date_diff"
+                    )
+                else:
+                    sorted_collection = collection.sort("CLOUDY_PIXEL_PERCENTAGE")
+
+                first = sorted_collection.first()
+                info = first.getInfo()
+                if not info:
+                    raise GEEImageNotFoundError(
+                        "No se encontraron imágenes que cumplan los criterios"
+                    )
+                return first
+
+            # Nueva lógica con evaluación de cobertura espacial
+            # 1. Obtener top-N candidatas por nubosidad/fecha (server-side)
             if target_date:
-                # Ordenar por distancia a la fecha objetivo
                 target_millis = ee.Date(target_date.strftime("%Y-%m-%d")).millis()
 
                 def add_date_diff(image):
@@ -840,23 +920,87 @@ class GEEService:
                     sorted_collection = sorted_collection.filter(
                         ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", max_cloud_cover)
                     )
-                sorted_collection = sorted_collection.map(add_date_diff).sort(
+                candidates = sorted_collection.map(add_date_diff).sort(
                     "date_diff"
-                )
+                ).limit(max_candidates)
             else:
-                # Ordenar por nubosidad
-                sorted_collection = collection.sort("CLOUDY_PIXEL_PERCENTAGE")
+                candidates = collection.sort("CLOUDY_PIXEL_PERCENTAGE").limit(
+                    max_candidates
+                )
 
-            first = sorted_collection.first()
-
-            # Verificar que existe
-            info = first.getInfo()
+            # 2. Traer candidatas a client-side
+            info = candidates.getInfo()
             if not info:
                 raise GEEImageNotFoundError(
                     "No se encontraron imágenes que cumplan los criterios"
                 )
 
-            return first
+            features = info.get("features", [])
+            if not features:
+                raise GEEImageNotFoundError(
+                    "No se encontraron imágenes que cumplan los criterios"
+                )
+
+            # 3. Evaluar cobertura espacial de cada candidata (client-side)
+            scored = []
+            for feat in features:
+                img_id = feat["id"]
+                img = ee.Image(img_id)
+
+                try:
+                    coverage = self._calculate_spatial_coverage(img, bbox, scale=60)
+                except Exception as e:
+                    logger.warning(
+                        f"Could not calculate coverage for {img_id}: {e}"
+                    )
+                    coverage = 0.0
+
+                cloud_pct = feat["properties"].get("CLOUDY_PIXEL_PERCENTAGE", 100.0)
+
+                # Para target_date, también guardar date_diff
+                date_diff = (
+                    feat["properties"].get("date_diff", float("inf"))
+                    if target_date
+                    else None
+                )
+
+                scored.append(
+                    {
+                        "img_id": img_id,
+                        "coverage": coverage,
+                        "cloud_pct": cloud_pct,
+                        "date_diff": date_diff,
+                    }
+                )
+
+            # 4. Filtrar por cobertura >= min_coverage; fallback a mayor cobertura
+            high_cov = [s for s in scored if s["coverage"] >= min_coverage]
+
+            if high_cov:
+                logger.info(
+                    f"Found {len(high_cov)}/{len(scored)} images with coverage >= {min_coverage}%"
+                )
+                # Entre las de alta cobertura, elegir según criterio secundario
+                if target_date:
+                    # Ordenar por date_diff (más cercana a target_date)
+                    best = min(high_cov, key=lambda x: x["date_diff"])
+                else:
+                    # Ordenar por menor nubosidad
+                    best = min(high_cov, key=lambda x: x["cloud_pct"])
+            else:
+                # Ninguna cumple min_coverage: elegir la de mayor cobertura disponible
+                logger.warning(
+                    f"No images with coverage >= {min_coverage}%, "
+                    f"selecting best available (max coverage)"
+                )
+                best = max(scored, key=lambda x: x["coverage"])
+
+            logger.info(
+                f"Selected image: {best['img_id']}, "
+                f"coverage={best['coverage']:.1f}%, clouds={best['cloud_pct']:.2f}%"
+            )
+
+            return ee.Image(best["img_id"])
 
         return self._rate_limited_request(_get_best)
 
