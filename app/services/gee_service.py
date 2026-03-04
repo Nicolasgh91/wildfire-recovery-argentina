@@ -360,17 +360,6 @@ def _render_normalized_difference(
     return Image.fromarray(rgb_uint8, mode="RGB")
 
 
-def _thumb_size_params(dimensions: Union[int, str]) -> dict:
-    """Normaliza el parámetro dimensions a dict para getThumbURL.
-
-    - String con 'x' (ej: '768x576'): se pasa tal cual.
-    - int o float: se convierte a entero.
-    """
-    if isinstance(dimensions, str) and "x" in dimensions.lower():
-        return {"dimensions": dimensions}
-    return {"dimensions": int(float(dimensions))}
-
-
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
@@ -1132,9 +1121,6 @@ class GEEService:
 
         Usa el endpoint :getPixels de GEE vía getThumbURL. La URL es válida
         por ~2 horas.
-
-        NOTA: para descarga de bytes, usar download_dnbr_thumbnail(), que usa
-        rendering local y no depende de :getPixels.
         """
         self._ensure_authenticated()
 
@@ -1143,31 +1129,28 @@ class GEEService:
             nbr_pre = pre_image.normalizedDifference(["B8", "B12"])
             nbr_post = post_image.normalizedDifference(["B8", "B12"])
             dnbr = nbr_pre.subtract(nbr_post)
-            # clip(geometry) antes de reproject limita el computo al bbox
-            # (~213K px) en lugar del tile Sentinel-2 completo (~30M px).
-            # scale dinámico mantiene píxeles totales <= GEE_THUMB_MAX_PIXELS.
-            safe_scale = _compute_safe_scale(bbox)
-            dnbr = dnbr.clip(geometry).reproject(crs="EPSG:4326", scale=safe_scale)
-            vis_params = VIS_PARAMS.get("DNBR", {"min": -0.5, "max": 0.5}).copy()
+
+            vis_cfg = VIS_PARAMS.get("DNBR", {"min": -0.5, "max": 0.5})
+            rendered = dnbr.visualize(**{
+                k: v for k, v in vis_cfg.items() if k != "bands"
+            })
+            # Preservar transparencia de píxeles sin datos (nubes, borde de órbita)
+            rendered = rendered.updateMask(dnbr.mask())
+            rendered = rendered.clip(geometry)
 
             if isinstance(dimensions, str) and "x" in dimensions.lower():
-                size_params: dict = _thumb_size_params(dimensions)
+                dim_str = dimensions
+            elif isinstance(dimensions, (int, float)):
+                dim_str = _bbox_to_dimensions(bbox, max_dim=int(dimensions))
             else:
-                if isinstance(dimensions, (int, float)):
-                    max_dim = int(dimensions)
-                    dims = _bbox_to_dimensions(bbox, max_dim=max_dim)
-                else:
-                    dims = _bbox_to_dimensions(bbox)
-                size_params = _thumb_size_params(dims)
+                dim_str = _bbox_to_dimensions(bbox)
 
-            url = dnbr.getThumbURL(
-                {
-                    "region": geometry,
-                    "format": format,
-                    **size_params,
-                    **vis_params,
-                }
-            )
+            url = rendered.getThumbURL({
+                "region": geometry,
+                "dimensions": dim_str,
+                "format": format,
+                "crs": "EPSG:4326",
+            })
             return url
 
         return self._with_thumbnail_retry(_get_url, "DNBR")
@@ -1180,61 +1163,11 @@ class GEEService:
         dimensions: int = 512,
         format: str = "png",
     ) -> bytes:
-        """Descarga thumbnail dNBR renderizado localmente como bytes."""
-        pre_bands = self.download_raw_bands(pre_image, bbox, ["B8", "B12"])
-        post_bands = self.download_raw_bands(post_image, bbox, ["B8", "B12"])
-
-        eps = 1e-10
-        pre_nbr = (pre_bands[:, :, 0] - pre_bands[:, :, 1]) / (
-            pre_bands[:, :, 0] + pre_bands[:, :, 1] + eps
+        """Descarga thumbnail dNBR como bytes (server-side via GEE)."""
+        url = self.get_dnbr_thumbnail_url(
+            pre_image, post_image, bbox, dimensions=dimensions, format=format
         )
-        post_nbr = (post_bands[:, :, 0] - post_bands[:, :, 1]) / (
-            post_bands[:, :, 0] + post_bands[:, :, 1] + eps
-        )
-
-        dnbr = (pre_nbr - post_nbr).astype(np.float32)
-
-        vis_config = VIS_PARAMS.get(
-            "DNBR",
-            {
-                "min": -0.5,
-                "max": 0.5,
-                "palette": [
-                    "#00FF00",
-                    "#FFFF00",
-                    "#FF7F00",
-                    "#FF0000",
-                    "#000000",
-                ],
-            },
-        )
-        vmin = float(vis_config["min"])
-        vmax = float(vis_config["max"])
-        palette = vis_config.get(
-            "palette",
-            ["#00FF00", "#FFFF00", "#FF7F00", "#FF0000", "#000000"],
-        )
-
-        denom = vmax - vmin or 1.0
-        normalized = np.clip((dnbr - vmin) / denom, 0, 1)
-
-        if _HAS_MATPLOTLIB and LinearSegmentedColormap is not None:
-            cmap = LinearSegmentedColormap.from_list("dnbr", palette, N=256)
-            colored = (cmap(normalized)[..., :3] * 255).astype(np.uint8)
-        else:
-            colored = _manual_colormap(normalized, palette)
-
-        img = Image.fromarray(colored, mode="RGB")
-
-        dims = _bbox_to_dimensions(bbox, max_dim=dimensions)
-        w, h = map(int, dims.lower().split("x"))
-        if img.size != (w, h):
-            img = img.resize((w, h), Image.LANCZOS)
-
-        buffer = io.BytesIO()
-        save_format = "JPEG" if format.lower() in ("jpg", "jpeg") else "PNG"
-        img.save(buffer, format=save_format)
-        return buffer.getvalue()
+        return self._http_download_with_retry(url, context_label="DNBR")
 
     # =========================================================================
     # MÉTODOS DE VISUALIZACIÓN Y DESCARGA
@@ -1253,80 +1186,68 @@ class GEEService:
 
         Usa el endpoint :getPixels de GEE vía getThumbURL. La URL es válida
         por ~2 horas.
-
-        NOTA: para descarga de bytes (carousel, reportes), usar
-        download_thumbnail(), que usa rendering local y no depende de
-        :getPixels.
         """
         self._ensure_authenticated()
 
         def _get_url():
             geometry = _bbox_to_geometry(bbox)
-
             vis_key = vis_type.upper()
 
-            # Seleccionar visualización
+            # --- Paso 1: construir imagen pre-renderizada con visualize() ---
+            # visualize() produce un RGB 8-bit server-side; GEE usa la resolución
+            # nativa de cada banda y delega el resize a getThumbURL(dimensions).
+            # Esto elimina el reproject() explícito que causaba HTTP 500 en
+            # :getPixels para imágenes SWIR (20m nativos) sobre bboxes grandes.
             if vis_key == "NDVI":
                 nir = image.select("B8")
                 red = image.select("B4")
-                vis_image = nir.subtract(red).divide(nir.add(red))
-                vis_params = VIS_PARAMS["NDVI"].copy()
+                index_img = nir.subtract(red).divide(nir.add(red))
+                rendered = index_img.visualize(**{
+                    k: v for k, v in VIS_PARAMS["NDVI"].items() if k != "bands"
+                })
+                # Preservar transparencia de píxeles sin datos (nubes, borde de órbita)
+                rendered = rendered.updateMask(index_img.mask())
+
             elif vis_key in ("NBR", "SCIENCE", "BURN_SEVERITY"):
                 nir = image.select("B8")
                 swir = image.select("B12")
-                vis_image = nir.subtract(swir).divide(nir.add(swir))
-                vis_params = VIS_PARAMS.get("NBR", {"min": -0.5, "max": 0.5}).copy()
+                index_img = nir.subtract(swir).divide(nir.add(swir))
+                vis_cfg = VIS_PARAMS.get(vis_key, VIS_PARAMS.get("NBR"))
+                rendered = index_img.visualize(**{
+                    k: v for k, v in vis_cfg.items() if k != "bands"
+                })
+                rendered = rendered.updateMask(index_img.mask())
+
             elif vis_key in VIS_PARAMS and "bands" in VIS_PARAMS[vis_key]:
-                vis_image = image.select(VIS_PARAMS[vis_key]["bands"])
-                vis_params = {
-                    k: v for k, v in VIS_PARAMS[vis_key].items() if k != "bands"
-                }
+                cfg = VIS_PARAMS[vis_key]
+                rendered = image.visualize(
+                    bands=cfg["bands"],
+                    **{k: v for k, v in cfg.items() if k != "bands"}
+                )
+                rendered = rendered.updateMask(image.select(0).mask())
+
             else:
-                vis_image = image.select(BANDS["RGB"])
-                vis_params = {"min": 0, "max": 3000}
+                rendered = image.visualize(bands=BANDS["RGB"], min=0, max=3000)
+                rendered = rendered.updateMask(image.select(0).mask())
 
-            if resample:
-                method = resample.lower()
-                if method not in {"nearest", "bilinear", "bicubic"}:
-                    raise ValueError(f"Metodo de resample invalido: {resample}")
-                vis_image = vis_image.resample(method)
+            # --- Paso 2: clip al bbox (sin reproject) ---
+            rendered = rendered.clip(geometry)
 
-            # Normalizar proyeccion a EPSG:4326 antes de generar thumbnail.
-            # En EPSG:4326, 1 grado lat = 1 grado lon en espacio de pixeles,
-            # asi un bbox 4:3 en grados produce exactamente 4:3 en pixeles.
-            # CRITICO: scale en EPSG:4326 esta en GRADOS, no en metros.
-            #   scale=20   → 20 deg/px → bbox 0.1° = 0.005px → imagen 1x1  (BUG)
-            #   scale=0.0002 → 0.0002 deg/px ≈ 22m/px → bbox OK  → 768x576  (FIX)
-            # clip(geometry) ANTES de reproject limita el computo al bbox
-            # (~213K px) en lugar del tile Sentinel-2 completo (~30M px).
-            # Sin clip(), GEE agota recursos en :getPixels y devuelve HTTP 500.
-            # scale dinámico mantiene píxeles totales <= GEE_THUMB_MAX_PIXELS.
-            safe_scale = _compute_safe_scale(bbox)
-            vis_image = vis_image.clip(geometry).reproject(crs="EPSG:4326", scale=safe_scale)
-
-            # Parsear dimensions:
-            # - String "WxH" se pasa tal cual (backward compatibility).
-            # - int/float o None se convierten usando _bbox_to_dimensions para
-            #   respetar el aspect ratio del bbox y evitar franjas vacías.
+            # --- Paso 3: dimensions proporcional al aspect ratio del bbox ---
+            # resample ignorado: visualize() + dimensions maneja el rescalado internamente
             if isinstance(dimensions, str) and "x" in dimensions.lower():
-                size_params: dict = _thumb_size_params(dimensions)
+                dim_str = dimensions
+            elif isinstance(dimensions, (int, float)):
+                dim_str = _bbox_to_dimensions(bbox, max_dim=int(dimensions))
             else:
-                if isinstance(dimensions, (int, float)):
-                    max_dim = int(dimensions)
-                    dims = _bbox_to_dimensions(bbox, max_dim=max_dim)
-                else:
-                    dims = _bbox_to_dimensions(bbox)
-                size_params = _thumb_size_params(dims)
+                dim_str = _bbox_to_dimensions(bbox)
 
-            url = vis_image.getThumbURL(
-                {
-                    "region": geometry,
-                    "format": format,
-                    **size_params,
-                    **vis_params,
-                }
-            )
-
+            url = rendered.getThumbURL({
+                "region": geometry,
+                "dimensions": dim_str,
+                "format": format,
+                "crs": "EPSG:4326",
+            })
             return url
 
         return self._with_thumbnail_retry(_get_url, vis_type)
@@ -1385,65 +1306,22 @@ class GEEService:
         resample: Optional[str] = None,
         format: str = "png",
     ) -> bytes:
-        """Descarga thumbnail como bytes PNG/JPG usando rendering local.
-
-        Flujo: download_raw_bands → render local → resize → encode.
+        """Descarga thumbnail como bytes PNG/JPG (server-side via GEE).
 
         Args:
             image: Imagen de GEE.
             bbox: Bounding box.
             vis_type: Tipo de visualización (RGB, SWIR, NDVI, NBR, etc.).
             dimensions: Tamaño máximo en píxeles (int o string "WxH").
-            resample: Parámetro mantenido por compatibilidad; no aplica en rendering local.
+            resample: Parámetro mantenido por compatibilidad; ignorado.
             format: Formato de salida ('png', 'jpg').
 
         Returns:
             bytes: Contenido de la imagen PNG/JPG.
         """
-        _ = resample  # resample no aplica en rendering local (resize usa LANCZOS).
-
-        vis_key = vis_type.upper()
-        vis_config = VIS_PARAMS.get(vis_key, VIS_PARAMS["RGB"])
-        band_config = _VIS_BANDS.get(vis_key, _VIS_BANDS["RGB"])
-
-        raw = self.download_raw_bands(image, bbox, band_config["bands"])
-
-        if band_config["strategy"] == "normalized_diff":
-            img = _render_normalized_difference(
-                raw[:, :, 0],
-                raw[:, :, 1],
-                float(vis_config.get("min", -0.5)),
-                float(vis_config.get("max", 0.5)),
-                vis_config.get(
-                    "palette",
-                    ["green", "yellow", "red"],
-                ),
-            )
-        else:
-            img = _render_band_selection(
-                raw,
-                vis_config.get("min", 0),
-                vis_config.get("max", 3000),
-                vis_config.get("gamma", None),
-            )
-
-        if isinstance(dimensions, str) and "x" in dimensions.lower():
-            dims = dimensions
-        else:
-            if isinstance(dimensions, (int, float)):
-                max_dim = int(dimensions)
-                dims = _bbox_to_dimensions(bbox, max_dim=max_dim)
-            else:
-                dims = _bbox_to_dimensions(bbox)
-
-        w, h = map(int, dims.lower().split("x"))
-        if img.size != (w, h):
-            img = img.resize((w, h), Image.LANCZOS)
-
-        buffer = io.BytesIO()
-        save_format = "JPEG" if format.lower() in ("jpg", "jpeg") else "PNG"
-        img.save(buffer, format=save_format)
-        return buffer.getvalue()
+        # resample ignorado: visualize() + dimensions maneja el rescalado internamente
+        url = self.get_thumbnail_url(image, bbox, vis_type, dimensions, resample, format)
+        return self._http_download_with_retry(url, context_label=vis_type)
 
     # =========================================================================
     # MÉTODOS DE SERIES TEMPORALES (PARA UC-06, UC-11/12)
