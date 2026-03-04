@@ -21,13 +21,11 @@ Versión: 1.0.0
 
 from __future__ import annotations
 
-import hashlib
+import json
 import logging
 import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from functools import lru_cache
-from io import BytesIO
 from pathlib import Path
 from time import sleep
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -172,6 +170,29 @@ def _compute_safe_scale(
     return safe_scale
 
 
+def _bbox_to_dimensions(bbox: dict, max_dim: int = 768) -> str:
+    """Calcula dimensions WxH respetando el aspect ratio del bbox.
+
+    Garantiza que width y height <= max_dim y que el aspect ratio
+    del thumbnail coincide con el del bbox, eliminando franjas vacías.
+    """
+    bbox_w = abs(bbox["east"] - bbox["west"])
+    bbox_h = abs(bbox["north"] - bbox["south"])
+
+    if bbox_w <= 0 or bbox_h <= 0:
+        return f"{max_dim}x{max_dim}"
+
+    aspect = bbox_w / bbox_h
+    if aspect >= 1:
+        w = max_dim
+        h = max(1, round(max_dim / aspect))
+    else:
+        h = max_dim
+        w = max(1, round(max_dim * aspect))
+
+    return f"{w}x{h}"
+
+
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
@@ -182,11 +203,11 @@ class ImageMetadata:
     """Metadata de una imagen Sentinel-2."""
 
     image_id: str
-    acquisition_date: date
-    cloud_cover_percent: float
-    satellite: str
-    tile_id: str
-    sun_elevation: float
+    acquisition_date: Optional[date] = None
+    cloud_cover_percent: float = 0.0
+    satellite: str = "Sentinel-2"
+    tile_id: str = ""
+    sun_elevation: float = 0.0
     processing_level: str = "L2A"
 
 
@@ -204,7 +225,7 @@ class NDVIResult:
 
 @dataclass
 class ImageResult:
-    """Resultado de obtener una imagen."""
+    """DEPRECATED: no se usa activamente. Candidato a eliminación en fase 3."""
 
     thumbnail_url: str
     download_url: Optional[str]
@@ -535,7 +556,8 @@ class GEEService:
                         cloud_cover_percent=props.get("CLOUDY_PIXEL_PERCENTAGE", 0),
                         satellite=props.get("SPACECRAFT_NAME", "Sentinel-2"),
                         tile_id=props.get("MGRS_TILE", ""),
-                        sun_elevation=props.get("MEAN_SOLAR_ZENITH_ANGLE", 0),
+                        sun_elevation=90
+                        - props.get("MEAN_SOLAR_ZENITH_ANGLE", 0),
                     )
                 )
             return results
@@ -809,7 +831,12 @@ class GEEService:
             if isinstance(dimensions, str) and "x" in dimensions.lower():
                 size_params: dict = {"dimensions": dimensions}
             else:
-                size_params = {"dimensions": int(float(dimensions)) if not isinstance(dimensions, int) else dimensions}
+                if isinstance(dimensions, (int, float)):
+                    max_dim = int(dimensions)
+                    dims = _bbox_to_dimensions(bbox, max_dim=max_dim)
+                else:
+                    dims = _bbox_to_dimensions(bbox)
+                size_params = {"dimensions": dims}
 
             url = dnbr.getThumbURL(
                 {
@@ -941,12 +968,19 @@ class GEEService:
             safe_scale = _compute_safe_scale(bbox)
             vis_image = vis_image.clip(geometry).reproject(crs="EPSG:4326", scale=safe_scale)
 
-            # Parsear dimensions: string "WxH" se pasa tal cual,
-            # int/float se convierte a entero.
+            # Parsear dimensions:
+            # - String "WxH" se pasa tal cual (backward compatibility).
+            # - int/float o None se convierten usando _bbox_to_dimensions para
+            #   respetar el aspect ratio del bbox y evitar franjas vacías.
             if isinstance(dimensions, str) and "x" in dimensions.lower():
                 size_params: dict = {"dimensions": dimensions}
             else:
-                size_params = {"dimensions": int(float(dimensions))}
+                if isinstance(dimensions, (int, float)):
+                    max_dim = int(dimensions)
+                    dims = _bbox_to_dimensions(bbox, max_dim=max_dim)
+                else:
+                    dims = _bbox_to_dimensions(bbox)
+                size_params = {"dimensions": dims}
 
             url = vis_image.getThumbURL(
                 {
@@ -1058,9 +1092,25 @@ class GEEService:
             image, bbox, vis_type, dimensions, resample, format
         )
 
-        response = requests.get(url, timeout=60)
-        response.raise_for_status()
-
+        for attempt in range(GEE_THUMB_MAX_RETRIES + 1):
+            response = requests.get(url, timeout=60)
+            if response.status_code < 500:
+                response.raise_for_status()
+                return response.content
+            if attempt < GEE_THUMB_MAX_RETRIES:
+                wait = GEE_THUMB_BACKOFF_BASE ** attempt
+                logger.warning(
+                    "GEE getPixels 5xx (intento %d/%d) para vis_type=%s. "
+                    "Reintentando en %.1fs. status=%s",
+                    attempt + 1,
+                    GEE_THUMB_MAX_RETRIES + 1,
+                    vis_type,
+                    wait,
+                    response.status_code,
+                )
+                sleep(wait)
+                continue
+            response.raise_for_status()
         return response.content
 
     # =========================================================================

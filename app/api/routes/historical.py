@@ -76,7 +76,7 @@ try:
     from app.services.ers_service import ReportRequest as ERSReportRequest
     from app.services.ers_service import ReportStatus as ERSReportStatus
     from app.services.ers_service import ReportType as ERSReportType
-    from app.services.gee_service import GEEService
+    from app.services.gee_service import GEEService, get_gee_service
     from app.services.storage_service import StorageService
     from app.services.vae_service import VAEService
 except ImportError:
@@ -84,7 +84,7 @@ except ImportError:
     from app.services.ers_service import ReportRequest as ERSReportRequest
     from app.services.ers_service import ReportStatus as ERSReportStatus
     from app.services.ers_service import ReportType as ERSReportType
-    from app.services.gee_service import GEEService
+    from app.services.gee_service import GEEService, get_gee_service
     from app.services.storage_service import StorageService
     from app.services.vae_service import VAEService
 
@@ -109,13 +109,6 @@ router = APIRouter(
 def get_ers_service() -> ERSService:
     """Factory para ERS Service."""
     return ERSService()
-
-
-def get_gee_service() -> GEEService:
-    """Factory para GEE Service."""
-    service = GEEService()
-    service.authenticate()
-    return service
 
 
 # =============================================================================
