@@ -760,7 +760,9 @@ class GEEService:
             nbr_pre = pre_image.normalizedDifference(["B8", "B12"])
             nbr_post = post_image.normalizedDifference(["B8", "B12"])
             dnbr = nbr_pre.subtract(nbr_post)
-            dnbr = dnbr.reproject(crs="EPSG:4326", scale=20)
+            # scale=0.0002 °/px ≠22m en latitud (EPSG:4326 usa grados como unidad).
+            # scale=20 significaria 20 GRADOS/px → bbox <1px → thumbnail 1x1.
+            dnbr = dnbr.reproject(crs="EPSG:4326", scale=0.0002)
             vis_params = VIS_PARAMS.get("DNBR", {"min": -0.5, "max": 0.5}).copy()
 
             if isinstance(dimensions, str) and "x" in dimensions.lower():
@@ -866,8 +868,10 @@ class GEEService:
             # Normalizar proyeccion a EPSG:4326 antes de generar thumbnail.
             # En EPSG:4326, 1 grado lat = 1 grado lon en espacio de pixeles,
             # asi un bbox 4:3 en grados produce exactamente 4:3 en pixeles.
-            # scale=20 corresponde a la resolucion de las bandas SWIR (B11/B12).
-            vis_image = vis_image.reproject(crs="EPSG:4326", scale=20)
+            # CRITICO: scale en EPSG:4326 esta en GRADOS, no en metros.
+            #   scale=20   → 20 deg/px → bbox 0.1° = 0.005px → imagen 1x1  (BUG)
+            #   scale=0.0002 → 0.0002 deg/px ≈ 22m/px → bbox OK  → 768x576  (FIX)
+            vis_image = vis_image.reproject(crs="EPSG:4326", scale=0.0002)
 
             # Parsear dimensions: string "WxH" se pasa tal cual,
             # int/float se convierte a entero.
