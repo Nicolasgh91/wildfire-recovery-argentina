@@ -802,7 +802,7 @@ class TestGetThumbnailUrlProjectionNormalization:
                 format="png",
             )
 
-        mock_image.reproject.assert_called_once_with(crs="EPSG:4326", scale=20)
+        mock_image.reproject.assert_called_once_with(crs="EPSG:4326", scale=0.0002)
 
     @pytest.mark.parametrize("vis_type", ["RGB", "SWIR", "NBR", "NDVI", "FALSE_COLOR"])
     def test_reproject_called_for_all_vis_types(self, vis_type):
@@ -822,7 +822,7 @@ class TestGetThumbnailUrlProjectionNormalization:
                 format="png",
             )
 
-        mock_image.reproject.assert_called_once_with(crs="EPSG:4326", scale=20)
+        mock_image.reproject.assert_called_once_with(crs="EPSG:4326", scale=0.0002)
 
 
 # =========================================================================
