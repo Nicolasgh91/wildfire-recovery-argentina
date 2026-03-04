@@ -1078,6 +1078,9 @@ class GEEService:
                 {
                     "expression": selected,
                     "fileFormat": "NUMPY_NDARRAY",
+                    "region": geometry,
+                    "scale": scale,
+                    "crs": "EPSG:4326",
                 }
             )
 
