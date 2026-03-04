@@ -760,12 +760,19 @@ class GEEService:
             nbr_pre = pre_image.normalizedDifference(["B8", "B12"])
             nbr_post = post_image.normalizedDifference(["B8", "B12"])
             dnbr = nbr_pre.subtract(nbr_post)
+            dnbr = dnbr.reproject(crs="EPSG:4326", scale=20)
             vis_params = VIS_PARAMS.get("DNBR", {"min": -0.5, "max": 0.5}).copy()
+
+            if isinstance(dimensions, str) and "x" in dimensions.lower():
+                size_params: dict = {"dimensions": dimensions}
+            else:
+                size_params = {"dimensions": int(float(dimensions)) if not isinstance(dimensions, int) else dimensions}
+
             url = dnbr.getThumbURL(
                 {
                     "region": geometry,
-                    "dimensions": dimensions,
                     "format": format,
+                    **size_params,
                     **vis_params,
                 }
             )
@@ -856,17 +863,17 @@ class GEEService:
                     raise ValueError(f"Metodo de resample invalido: {resample}")
                 vis_image = vis_image.resample(method)
 
-            # Generar thumbnail
-            # Si dimensions es "WxH" (ej. "768x576"), pasar width/height separados:
-            # getThumbURL interpreta "WxH" como tamaño máximo del eje mayor y ajusta
-            # el otro eje según el AR real de la geometría, causando padding negro.
-            # Con width+height explícitos GEE produce exactamente el canvas solicitado.
+            # Normalizar proyeccion a EPSG:4326 antes de generar thumbnail.
+            # En EPSG:4326, 1 grado lat = 1 grado lon en espacio de pixeles,
+            # asi un bbox 4:3 en grados produce exactamente 4:3 en pixeles.
+            # scale=20 corresponde a la resolucion de las bandas SWIR (B11/B12).
+            vis_image = vis_image.reproject(crs="EPSG:4326", scale=20)
+
+            # Parsear dimensions: string "WxH" se pasa tal cual,
+            # int/float se convierte a entero.
             if isinstance(dimensions, str) and "x" in dimensions.lower():
-                w_str, h_str = dimensions.lower().split("x", 1)
-                thumb_w, thumb_h = int(w_str.strip()), int(h_str.strip())
-                size_params: dict = {"width": thumb_w, "height": thumb_h, "crs": "EPSG:4326"}
+                size_params: dict = {"dimensions": dimensions}
             else:
-                # int, float, o string numérico (ej. 512, 512.0, "512", "512.0")
                 size_params = {"dimensions": int(float(dimensions))}
 
             url = vis_image.getThumbURL(

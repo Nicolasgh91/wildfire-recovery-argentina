@@ -133,3 +133,144 @@
 - `test_reports_auth.py`: test reconvertido a verificar que `POST /reports/historical` sin token retorna 401 (ruta JWT existente, comportamiento correcto).
 
 ---
+
+## DT-008: Thumbnail black stripe — fixes fallidos y solución definitiva
+
+**Componente:** `app/services/gee_service.py` (`get_thumbnail_url`, `get_dnbr_thumbnail_url`)
+**Detectado en:** diagnóstico carrusel thumbnails (2026-03)
+**Severidad:** Alta
+**Estado:** ✅ RESUELTO (2026-03-04)
+
+**Contexto:** Los thumbnails satelitales de 768×576 px (ratio 4:3) aparecían con franjas negras verticales (padding). La causa raíz es que en la proyección UTM nativa de Sentinel-2, 1° lat ≠ 1° lon en píxeles, por lo que un bbox 4:3 en grados no producía 4:3 en píxeles.
+
+### Cronología de fixes
+
+| Fix | Cambio | Resultado | Por qué falló |
+|-----|--------|-----------|---------------|
+| 1: bbox AR | `delta_lon = delta_lat * (w/h)` en `_bbox_from_point()` | bbox correcto en grados, pero franja persiste | Necesario pero insuficiente: UTM ≠ equiangular |
+| 2: width/height | `{"width": 768, "height": 576}` en `getThumbURL` | Thumbnail 1×1 px | `width`/`height` NO son params válidos de la API de thumbnails de GEE |
+| 3: crs en params | `"crs": "EPSG:4326"` en dict de `getThumbURL` | Error "inconsistent projections" | `crs` en params solo declara CRS de salida; bandas con resoluciones distintas (B4 10m vs B11/B12 20m) causan conflicto |
+| 4: reproject + w/h | `vis_image.reproject("EPSG:4326", scale=20)` + `{"width": 768, "height": 576}` | Thumbnail 1×1 px | `width`/`height` siguen siendo inválidos |
+| **5: reproject + dimensions** | `vis_image.reproject(crs="EPSG:4326", scale=20)` + `{"dimensions": "768x576"}` | **768×576 exacto, sin padding** | **SOLUCIÓN DEFINITIVA** |
+
+### Solución definitiva (Fix 5)
+
+```python
+# 1. Normalizar proyección antes de generar thumbnail
+vis_image = vis_image.reproject(crs="EPSG:4326", scale=20)
+
+# 2. Pasar dimensions como string "WxH" — GEE produce canvas exacto
+size_params = {"dimensions": "768x576"}
+
+# 3. getThumbURL SIN width/height separados, SIN crs en params
+url = vis_image.getThumbURL({"region": geometry, "format": "png", **size_params, **vis_params})
+```
+
+**Por qué funciona:**
+- En EPSG:4326, GEE muestrea equiangularmente: 1° lat = 1° lon en espacio de píxeles.
+- Un bbox `0.10666° × 0.08°` (ratio 4:3 en grados) → ratio 4:3 en píxeles.
+- `dimensions="768x576"` (string) produce el canvas exacto sin padding.
+- `scale=20` corresponde a la resolución de las bandas SWIR (B11/B12 a 20m).
+
+**Archivos modificados:**
+- `app/services/gee_service.py`: `get_thumbnail_url()` y `get_dnbr_thumbnail_url()`
+- `tests/unit/test_thumbnail_pipeline.py`: tests reescritos + clases nuevas (`TestGetThumbnailUrlProjectionNormalization`, `TestBboxProjectionConsistency`)
+
+### Verificación en producción
+
+**Paso A — Reset cache episodio de prueba:**
+```bash
+docker exec -i forestguard-api python -c "
+import os, sqlalchemy
+from urllib.parse import quote_plus
+user = os.environ['DB_USER']
+password = quote_plus(os.environ['DB_PASSWORD'])
+host = os.environ['DB_HOST']
+port = os.environ.get('DB_PORT', '6543')
+name = os.environ.get('DB_NAME', 'postgres')
+url = f'postgresql://{user}:{password}@{host}:{port}/{name}'
+engine = sqlalchemy.create_engine(url)
+with engine.begin() as conn:
+    r = conn.execute(sqlalchemy.text(\"\"\"
+        UPDATE fire_episodes
+        SET slides_data = NULL,
+            last_gee_image_id = NULL,
+            slides_status = 'pending'
+        WHERE id = '5bd52c45-70c3-43f0-bccf-ccf7be86286c'
+    \"\"\"))
+    print(f'Rows updated: {r.rowcount}')
+"
+```
+
+**Paso B — Disparar regeneración:**
+```bash
+docker exec -it forestguard-worker-gee celery \
+  -A workers.celery_app call \
+  workers.tasks.carousel_task.generate_carousel \
+  --kwargs='{"force_refresh": true}' \
+  --queue=analysis
+```
+
+**Paso C — Monitorear:**
+```bash
+docker logs --tail 50 -f forestguard-worker-gee 2>&1 \
+  | grep -iE "5bd52c45|succeeded|completed|error"
+```
+
+**Paso D — Diagnóstico de brillo post-regeneración:**
+```bash
+THUMB_URL=$(docker exec -i forestguard-api python -c "
+import os, sqlalchemy
+from urllib.parse import quote_plus
+user = os.environ['DB_USER']
+password = quote_plus(os.environ['DB_PASSWORD'])
+host = os.environ['DB_HOST']
+port = os.environ.get('DB_PORT', '6543')
+name = os.environ.get('DB_NAME', 'postgres')
+url = f'postgresql://{user}:{password}@{host}:{port}/{name}'
+engine = sqlalchemy.create_engine(url)
+with engine.connect() as conn:
+    row = conn.execute(sqlalchemy.text(\"\"\"
+        SELECT slides_data->0->>'thumbnail_url'
+        FROM fire_episodes
+        WHERE id = '5bd52c45-70c3-43f0-bccf-ccf7be86286c'
+    \"\"\")).scalar()
+    print(row or '')
+")
+
+curl -sL "\$THUMB_URL" -o /tmp/thumb_check.png
+docker cp /tmp/thumb_check.png forestguard-api:/tmp/thumb_check.png
+
+docker exec -i forestguard-api python -c "
+from PIL import Image
+import numpy as np, os
+img = np.array(Image.open('/tmp/thumb_check.png').convert('RGB'), dtype=float)
+h, w = img.shape[:2]
+size_kb = os.path.getsize('/tmp/thumb_check.png') / 1024
+left_b  = img[:, :5, :].mean()
+right_b = img[:, -5:, :].mean()
+ratio   = w / h
+print(f'Tamaño:         {size_kb:.0f} KB')
+print(f'Dimensiones:    ({w}, {h})')
+print(f'Ratio:          {ratio:.4f}')
+print(f'Brillo col izq: {left_b:.2f}')
+print(f'Brillo col der: {right_b:.2f}')
+ok = (left_b > 10 and right_b > 10
+      and (w, h) == (768, 576)
+      and 500 < size_kb < 1200)
+print('-> ACEPTADO' if ok else '-> RECHAZADO')
+"
+```
+
+**Criterio de aceptación:**
+```
+Dimensiones:    (768, 576)
+Ratio:          1.3333
+Brillo col izq: > 10.0
+Brillo col der: > 10.0
+Tamaño:         500–1200 KB
+Tests:          todos pasan
+Legacy code:    eliminado
+```
+
+---

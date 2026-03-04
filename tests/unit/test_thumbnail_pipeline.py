@@ -2,8 +2,14 @@
 Unit tests for thumbnail generation pipeline hardening.
 
 Additional coverage (TestGetThumbnailUrlSizeParams):
-  - get_thumbnail_url(): "WxH" → width/height kwargs (no dimensions key)
+  - get_thumbnail_url(): "WxH" → dimensions="WxH" string (NOT width/height separate)
   - get_thumbnail_url(): int or numeric-string → dimensions int (no width/height)
+
+Additional coverage (TestGetThumbnailUrlProjectionNormalization):
+  - get_thumbnail_url(): reproject(crs="EPSG:4326", scale=20) called for all vis_types
+
+Additional coverage (TestBboxProjectionConsistency):
+  - bbox 4:3 ratio in degrees, validate_thumbnail rejections
 
 Covers:
   - parse_dimensions: all format variations and edge cases
@@ -559,9 +565,10 @@ class TestGetThumbnailUrlSizeParams:
     Verify that get_thumbnail_url() passes the correct size kwargs to
     getThumbURL depending on the format of the `dimensions` argument.
 
-    Root cause: passing dimensions="WxH" lets GEE choose canvas size
-    by max-axis → floating-point bbox AR mismatch → black padding strips.
-    Fix: parse "WxH" and pass width/height as separate integers.
+    Fix 5 (definitive): reproject(crs="EPSG:4326", scale=20) normalizes
+    projection so bbox 4:3 in degrees = 4:3 in pixels, then pass
+    dimensions="WxH" as string (NOT width/height separate keys, NOT crs
+    in params dict).
     """
 
     @staticmethod
@@ -584,6 +591,7 @@ class TestGetThumbnailUrlSizeParams:
         img = MagicMock(spec=ee.Image)
         img.select.return_value = img
         img.resample.return_value = img
+        img.reproject.return_value = img
 
         def _capture_thumb_url(params):
             captured.update(params)
@@ -596,13 +604,11 @@ class TestGetThumbnailUrlSizeParams:
     def _make_mock_bbox():
         return {"west": -58.55, "south": -27.55, "east": -58.45, "north": -27.45}
 
-    def test_wxh_string_passes_width_height(self):
+    def test_wxh_string_passes_dimensions_string(self):
         """
-        dimensions="768x576" must produce width=768, height=576 in getThumbURL
-        params and must NOT include a 'dimensions' key.
+        dimensions="768x576" must produce dimensions="768x576" (string) in
+        getThumbURL params. Must NOT include 'width' or 'height' as separate keys.
         """
-        import ee
-
         svc = self._make_gee_service()
         captured: dict = {}
         mock_image = self._make_mock_image(captured)
@@ -610,7 +616,6 @@ class TestGetThumbnailUrlSizeParams:
         with patch("app.services.gee_service.ee") as mock_ee:
             mock_ee.Geometry.Rectangle.return_value = MagicMock()
             mock_ee.Image = MagicMock()
-            # Make image.select() return our mock_image so resample path works
             mock_image.select.return_value = mock_image
 
             svc.get_thumbnail_url(
@@ -621,11 +626,69 @@ class TestGetThumbnailUrlSizeParams:
                 format="png",
             )
 
-        assert captured.get("width") == 768, f"Expected width=768, got: {captured}"
-        assert captured.get("height") == 576, f"Expected height=576, got: {captured}"
-        assert "dimensions" not in captured, (
-            f"'dimensions' key must be absent when using WxH string, got: {captured}"
+        assert captured.get("dimensions") == "768x576", (
+            f"Expected dimensions='768x576' (string), got: {captured}"
         )
+        assert "width" not in captured, (
+            f"'width' key must be absent — width/height separate keys are invalid "
+            f"GEE API params, got: {captured}"
+        )
+        assert "height" not in captured, (
+            f"'height' key must be absent — width/height separate keys are invalid "
+            f"GEE API params, got: {captured}"
+        )
+
+    def test_wxh_string_does_not_pass_width_height(self):
+        """
+        Explicit regression test: width/height as separate keys in getThumbURL
+        produces 1x1 px thumbnails (Fix 2 bug). Ensure they are NEVER present.
+        """
+        svc = self._make_gee_service()
+        captured: dict = {}
+        mock_image = self._make_mock_image(captured)
+
+        with patch("app.services.gee_service.ee") as mock_ee:
+            mock_ee.Geometry.Rectangle.return_value = MagicMock()
+            mock_image.select.return_value = mock_image
+
+            svc.get_thumbnail_url(
+                image=mock_image,
+                bbox=self._make_mock_bbox(),
+                vis_type="SWIR",
+                dimensions="768x576",
+                format="png",
+            )
+
+        assert "width" not in captured, f"'width' must never appear in getThumbURL params: {captured}"
+        assert "height" not in captured, f"'height' must never appear in getThumbURL params: {captured}"
+
+    def test_no_crs_in_thumb_params(self):
+        """
+        getThumbURL must NOT receive 'crs' in its params dict.
+        CRS normalization is handled by reproject(), not by getThumbURL params.
+        Passing crs in params causes 'inconsistent projections' errors (Fix 3 bug).
+        """
+        for dims in ["768x576", 512, "512"]:
+            svc = self._make_gee_service()
+            captured: dict = {}
+            mock_image = self._make_mock_image(captured)
+
+            with patch("app.services.gee_service.ee") as mock_ee:
+                mock_ee.Geometry.Rectangle.return_value = MagicMock()
+                mock_image.select.return_value = mock_image
+
+                svc.get_thumbnail_url(
+                    image=mock_image,
+                    bbox=self._make_mock_bbox(),
+                    vis_type="RGB",
+                    dimensions=dims,
+                    format="png",
+                )
+
+            assert "crs" not in captured, (
+                f"'crs' must not be in getThumbURL params for dimensions={dims!r}, "
+                f"got: {captured}"
+            )
 
     def test_int_passes_dimensions_legacy(self):
         """
@@ -656,7 +719,6 @@ class TestGetThumbnailUrlSizeParams:
         """
         dimensions="512" (numeric string) must produce dimensions=512 and
         must NOT include 'width' or 'height' keys.
-        Also validates float strings like "512.0" are handled correctly.
         """
         svc = self._make_gee_service()
         captured: dict = {}
@@ -677,3 +739,163 @@ class TestGetThumbnailUrlSizeParams:
         assert captured.get("dimensions") == 512, f"Expected dimensions=512, got: {captured}"
         assert "width" not in captured, f"'width' must be absent for numeric string, got: {captured}"
         assert "height" not in captured, f"'height' must be absent for numeric string, got: {captured}"
+
+
+# =========================================================================
+# TestGetThumbnailUrlProjectionNormalization
+# =========================================================================
+
+
+class TestGetThumbnailUrlProjectionNormalization:
+    """
+    Verify that vis_image.reproject(crs="EPSG:4326", scale=20) is called
+    before getThumbURL for ALL vis_types.
+
+    Fix 5: In EPSG:4326, 1° lat = 1° lon in pixel space, so a bbox 4:3
+    in degrees produces exactly 4:3 in pixels. scale=20 matches the
+    coarsest SWIR bands (B11/B12 at 20m).
+    """
+
+    @staticmethod
+    def _make_gee_service():
+        from app.services.gee_service import GEEService
+
+        svc = object.__new__(GEEService)
+        svc._initialized = True
+        svc._request_count = 0
+        svc._rate_limited_request = lambda func, *a, **kw: func(*a, **kw)
+        return svc
+
+    @staticmethod
+    def _make_mock_image():
+        import ee
+
+        img = MagicMock(spec=ee.Image)
+        img.select.return_value = img
+        img.resample.return_value = img
+        img.reproject.return_value = img
+        # Computed images (subtract, divide, normalizedDifference) also return img
+        img.subtract.return_value = img
+        img.divide.return_value = img
+        img.add.return_value = img
+        img.getThumbURL.return_value = "https://thumburl.example/test"
+        return img
+
+    @staticmethod
+    def _make_mock_bbox():
+        return {"west": -58.55, "south": -27.55, "east": -58.45, "north": -27.45}
+
+    def test_reproject_called_with_epsg4326_scale20(self):
+        """reproject must be called with crs='EPSG:4326' and scale=20."""
+        svc = self._make_gee_service()
+        mock_image = self._make_mock_image()
+
+        with patch("app.services.gee_service.ee") as mock_ee:
+            mock_ee.Geometry.Rectangle.return_value = MagicMock()
+            mock_image.select.return_value = mock_image
+
+            svc.get_thumbnail_url(
+                image=mock_image,
+                bbox=self._make_mock_bbox(),
+                vis_type="RGB",
+                dimensions="768x576",
+                format="png",
+            )
+
+        mock_image.reproject.assert_called_once_with(crs="EPSG:4326", scale=20)
+
+    @pytest.mark.parametrize("vis_type", ["RGB", "SWIR", "NBR", "NDVI", "FALSE_COLOR"])
+    def test_reproject_called_for_all_vis_types(self, vis_type):
+        """reproject must be called for every vis_type, not just RGB."""
+        svc = self._make_gee_service()
+        mock_image = self._make_mock_image()
+
+        with patch("app.services.gee_service.ee") as mock_ee:
+            mock_ee.Geometry.Rectangle.return_value = MagicMock()
+            mock_image.select.return_value = mock_image
+
+            svc.get_thumbnail_url(
+                image=mock_image,
+                bbox=self._make_mock_bbox(),
+                vis_type=vis_type,
+                dimensions="768x576",
+                format="png",
+            )
+
+        mock_image.reproject.assert_called_once_with(crs="EPSG:4326", scale=20)
+
+
+# =========================================================================
+# TestBboxProjectionConsistency
+# =========================================================================
+
+
+class TestBboxProjectionConsistency:
+    """
+    Verify that the bbox 4:3 in degrees produces 4:3 in pixels
+    when using EPSG:4326 + reproject, and that _validate_thumbnail
+    correctly rejects bad thumbnails.
+    """
+
+    @staticmethod
+    def _make_imagery_service(dimensions="768x576", buffer_deg=0.04):
+        svc = object.__new__(ImageryService)
+        svc.db = MagicMock()
+        svc._gee = MagicMock()
+        svc._storage = MagicMock()
+        svc._resolve_thumb_dimensions = MagicMock(return_value=dimensions)
+        svc._resolve_bbox_buffer_degrees = MagicMock(return_value=buffer_deg)
+        return svc
+
+    @staticmethod
+    def _make_png(width, height, color=(100, 150, 200)):
+        from PIL import Image as PILImage
+
+        img = PILImage.new("RGB", (width, height), color)
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def test_bbox_ratio_degrees(self):
+        """_bbox_from_point with dims 768x576 produces (east-west)/(north-south) ≈ 1.3333."""
+        svc = self._make_imagery_service("768x576", 0.04)
+        bbox = svc._bbox_from_point(-27.5, -58.5)
+
+        bbox_w = bbox["east"] - bbox["west"]
+        bbox_h = bbox["north"] - bbox["south"]
+        ratio = bbox_w / bbox_h
+        assert ratio == pytest.approx(768.0 / 576.0, rel=1e-6), (
+            f"bbox ratio {ratio:.6f} should be {768.0/576.0:.6f} (4:3)"
+        )
+
+    def test_validate_thumbnail_rejects_1x1(self):
+        """_validate_thumbnail must raise ValueError for 1x1 PNG (Fix 2 regression)."""
+        svc = self._make_imagery_service()
+        png_1x1 = self._make_png(1, 1)
+        with pytest.raises(ValueError, match="dimension mismatch"):
+            svc._validate_thumbnail(png_1x1, "768x576", "RGB", "ep-1x1")
+
+    def test_validate_thumbnail_rejects_wrong_dimensions(self):
+        """_validate_thumbnail rejects any dimension != target (beyond ±1px)."""
+        svc = self._make_imagery_service()
+        png_wrong = self._make_png(640, 480)
+        with pytest.raises(ValueError, match="dimension mismatch"):
+            svc._validate_thumbnail(png_wrong, "768x576", "RGB", "ep-wrong")
+
+    def test_validate_thumbnail_rejects_left_black_stripe(self, caplog):
+        """PNG 768x576 with left-column brightness ~5.0 → warning logged."""
+        import numpy as np
+        from PIL import Image as PILImage
+
+        svc = self._make_imagery_service()
+        arr = np.full((576, 768, 3), (100, 150, 200), dtype=np.uint8)
+        arr[:, :5, :] = (5, 5, 5)  # left 5px very dark
+        img = PILImage.fromarray(arr, "RGB")
+        buf = BytesIO()
+        img.save(buf, format="PNG")
+        png = buf.getvalue()
+
+        with caplog.at_level(logging.WARNING):
+            svc._validate_thumbnail(png, "768x576", "RGB", "ep-stripe")
+        assert "low-brightness" in caplog.text.lower()
+        assert "left" in caplog.text.lower()
