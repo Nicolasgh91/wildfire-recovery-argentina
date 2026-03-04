@@ -170,6 +170,31 @@ def _compute_safe_scale(
     return safe_scale
 
 
+def _bbox_to_geometry(bbox: Dict[str, float]) -> "ee.Geometry.Rectangle":
+    """Construye ee.Geometry.Rectangle a partir de un dict bbox.
+
+    Args:
+        bbox: dict con keys 'west', 'south', 'east', 'north'
+
+    Returns:
+        ee.Geometry.Rectangle
+
+    Raises:
+        ValueError: si el bbox es inválido (east <= west o north <= south)
+    """
+    east = bbox["east"]
+    west = bbox["west"]
+    north = bbox["north"]
+    south = bbox["south"]
+
+    if east <= west:
+        raise ValueError(f"bbox inválido: east ({east}) <= west ({west})")
+    if north <= south:
+        raise ValueError(f"bbox inválido: north ({north}) <= south ({south})")
+
+    return ee.Geometry.Rectangle([west, south, east, north])
+
+
 def _bbox_to_dimensions(bbox: dict, max_dim: int = 768) -> str:
     """Calcula dimensions WxH respetando el aspect ratio del bbox.
 
@@ -191,6 +216,17 @@ def _bbox_to_dimensions(bbox: dict, max_dim: int = 768) -> str:
         w = max(1, round(max_dim * aspect))
 
     return f"{w}x{h}"
+
+
+def _thumb_size_params(dimensions: Union[int, str]) -> dict:
+    """Normaliza el parámetro dimensions a dict para getThumbURL.
+
+    - String con 'x' (ej: '768x576'): se pasa tal cual.
+    - int o float: se convierte a entero.
+    """
+    if isinstance(dimensions, str) and "x" in dimensions.lower():
+        return {"dimensions": dimensions}
+    return {"dimensions": int(float(dimensions))}
 
 
 # =============================================================================
@@ -449,6 +485,73 @@ class GEEService:
         if not self._initialized:
             self.authenticate()
 
+    def _with_thumbnail_retry(self, get_url_fn, context_label: str = "thumbnail") -> str:
+        """Ejecuta get_url_fn con retry y backoff para HTTP 500 de GEE.
+
+        Args:
+            get_url_fn: callable que genera la URL (se pasa a _rate_limited_request)
+            context_label: etiqueta para logging (ej: 'NDVI', 'DNBR', 'SWIR')
+
+        Returns:
+            str: URL del thumbnail
+
+        Raises:
+            La última excepción si se agotan los reintentos.
+        """
+        last_exc = None
+        for attempt in range(GEE_THUMB_MAX_RETRIES + 1):
+            try:
+                return self._rate_limited_request(get_url_fn)
+            except Exception as exc:
+                status = getattr(getattr(exc, "resp", None), "status", None)
+                is_500 = (
+                    _HttpError is not None
+                    and isinstance(exc, _HttpError)
+                    and status == 500
+                )
+                if is_500 and attempt < GEE_THUMB_MAX_RETRIES:
+                    wait = GEE_THUMB_BACKOFF_BASE ** attempt
+                    logger.warning(
+                        "GEE thumbnail 500 (intento %d/%d) para %s. "
+                        "Reintentando en %.1fs. Error: %s",
+                        attempt + 1,
+                        GEE_THUMB_MAX_RETRIES + 1,
+                        context_label,
+                        wait,
+                        exc,
+                    )
+                    sleep(wait)
+                    last_exc = exc
+                    continue
+                raise
+        if last_exc is not None:
+            raise last_exc
+
+    def _http_download_with_retry(
+        self, url: str, context_label: str = "thumbnail", timeout: int = 60
+    ) -> bytes:
+        """Descarga bytes desde una URL de GEE con retry para 5xx."""
+        for attempt in range(GEE_THUMB_MAX_RETRIES + 1):
+            response = requests.get(url, timeout=timeout)
+            if response.status_code < 500:
+                response.raise_for_status()
+                return response.content
+            if attempt < GEE_THUMB_MAX_RETRIES:
+                wait = GEE_THUMB_BACKOFF_BASE ** attempt
+                logger.warning(
+                    "GEE download 5xx (intento %d/%d) para %s. "
+                    "Reintentando en %.1fs. status=%s",
+                    attempt + 1,
+                    GEE_THUMB_MAX_RETRIES + 1,
+                    context_label,
+                    wait,
+                    response.status_code,
+                )
+                sleep(wait)
+                continue
+            response.raise_for_status()
+        return response.content
+
     @sleep_and_retry
     @limits(calls=CALLS_PER_SECOND, period=1)
     def _rate_limited_request(self, func, *args, **kwargs):
@@ -502,9 +605,7 @@ class GEEService:
         self._ensure_authenticated()
 
         # Crear geometría
-        geometry = ee.Geometry.Rectangle(
-            [bbox["west"], bbox["south"], bbox["east"], bbox["north"]]
-        )
+        geometry = _bbox_to_geometry(bbox)
 
         # Formatear fechas
         start_str = start_date.strftime("%Y-%m-%d")
@@ -694,9 +795,7 @@ class GEEService:
             ndvi = nir.subtract(red).divide(nir.add(red)).rename("NDVI")
 
             # Geometría para estadísticas
-            geometry = ee.Geometry.Rectangle(
-                [bbox["west"], bbox["south"], bbox["east"], bbox["north"]]
-            )
+            geometry = _bbox_to_geometry(bbox)
 
             # Calcular estadísticas
             stats = ndvi.reduceRegion(
@@ -780,9 +879,7 @@ class GEEService:
             swir2 = image.select("B12")  # SWIR2 - 20m
             nbr = nir.subtract(swir2).divide(nir.add(swir2)).rename("NBR")
 
-            geometry = ee.Geometry.Rectangle(
-                [bbox["west"], bbox["south"], bbox["east"], bbox["north"]]
-            )
+            geometry = _bbox_to_geometry(bbox)
 
             stats = nbr.reduceRegion(
                 reducer=ee.Reducer.mean()
@@ -815,9 +912,7 @@ class GEEService:
         self._ensure_authenticated()
 
         def _get_url():
-            geometry = ee.Geometry.Rectangle(
-                [bbox["west"], bbox["south"], bbox["east"], bbox["north"]]
-            )
+            geometry = _bbox_to_geometry(bbox)
             nbr_pre = pre_image.normalizedDifference(["B8", "B12"])
             nbr_post = post_image.normalizedDifference(["B8", "B12"])
             dnbr = nbr_pre.subtract(nbr_post)
@@ -829,14 +924,14 @@ class GEEService:
             vis_params = VIS_PARAMS.get("DNBR", {"min": -0.5, "max": 0.5}).copy()
 
             if isinstance(dimensions, str) and "x" in dimensions.lower():
-                size_params: dict = {"dimensions": dimensions}
+                size_params: dict = _thumb_size_params(dimensions)
             else:
                 if isinstance(dimensions, (int, float)):
                     max_dim = int(dimensions)
                     dims = _bbox_to_dimensions(bbox, max_dim=max_dim)
                 else:
                     dims = _bbox_to_dimensions(bbox)
-                size_params = {"dimensions": dims}
+                size_params = _thumb_size_params(dims)
 
             url = dnbr.getThumbURL(
                 {
@@ -848,29 +943,7 @@ class GEEService:
             )
             return url
 
-        last_exc = None
-        for attempt in range(GEE_THUMB_MAX_RETRIES + 1):
-            try:
-                return self._rate_limited_request(_get_url)
-            except Exception as exc:
-                status = getattr(getattr(exc, "resp", None), "status", None)
-                is_500 = _HttpError is not None and isinstance(exc, _HttpError) and status == 500
-                if is_500 and attempt < GEE_THUMB_MAX_RETRIES:
-                    wait = GEE_THUMB_BACKOFF_BASE ** attempt
-                    logger.warning(
-                        "GEE thumbnail 500 (intento %d/%d) para vis_type=DNBR. "
-                        "Reintentando en %.1fs. Error: %s",
-                        attempt + 1,
-                        GEE_THUMB_MAX_RETRIES + 1,
-                        wait,
-                        exc,
-                    )
-                    sleep(wait)
-                    last_exc = exc
-                    continue
-                raise
-        if last_exc is not None:
-            raise last_exc
+        return self._with_thumbnail_retry(_get_url, "DNBR")
 
     def download_dnbr_thumbnail(
         self,
@@ -890,9 +963,7 @@ class GEEService:
             dimensions=dimensions,
             format=format,
         )
-        response = requests.get(url, timeout=60)
-        response.raise_for_status()
-        return response.content
+        return self._http_download_with_retry(url, "DNBR")
 
     # =========================================================================
     # MÉTODOS DE VISUALIZACIÓN Y DESCARGA
@@ -923,9 +994,7 @@ class GEEService:
         self._ensure_authenticated()
 
         def _get_url():
-            geometry = ee.Geometry.Rectangle(
-                [bbox["west"], bbox["south"], bbox["east"], bbox["north"]]
-            )
+            geometry = _bbox_to_geometry(bbox)
 
             vis_key = vis_type.upper()
 
@@ -973,14 +1042,14 @@ class GEEService:
             # - int/float o None se convierten usando _bbox_to_dimensions para
             #   respetar el aspect ratio del bbox y evitar franjas vacías.
             if isinstance(dimensions, str) and "x" in dimensions.lower():
-                size_params: dict = {"dimensions": dimensions}
+                size_params: dict = _thumb_size_params(dimensions)
             else:
                 if isinstance(dimensions, (int, float)):
                     max_dim = int(dimensions)
                     dims = _bbox_to_dimensions(bbox, max_dim=max_dim)
                 else:
                     dims = _bbox_to_dimensions(bbox)
-                size_params = {"dimensions": dims}
+                size_params = _thumb_size_params(dims)
 
             url = vis_image.getThumbURL(
                 {
@@ -993,30 +1062,7 @@ class GEEService:
 
             return url
 
-        last_exc = None
-        for attempt in range(GEE_THUMB_MAX_RETRIES + 1):
-            try:
-                return self._rate_limited_request(_get_url)
-            except Exception as exc:
-                status = getattr(getattr(exc, "resp", None), "status", None)
-                is_500 = _HttpError is not None and isinstance(exc, _HttpError) and status == 500
-                if is_500 and attempt < GEE_THUMB_MAX_RETRIES:
-                    wait = GEE_THUMB_BACKOFF_BASE ** attempt
-                    logger.warning(
-                        "GEE thumbnail 500 (intento %d/%d) para vis_type=%s. "
-                        "Reintentando en %.1fs. Error: %s",
-                        attempt + 1,
-                        GEE_THUMB_MAX_RETRIES + 1,
-                        vis_type,
-                        wait,
-                        exc,
-                    )
-                    sleep(wait)
-                    last_exc = exc
-                    continue
-                raise
-        if last_exc is not None:
-            raise last_exc
+        return self._with_thumbnail_retry(_get_url, vis_type)
 
     def get_download_url(
         self,
@@ -1045,9 +1091,7 @@ class GEEService:
         self._ensure_authenticated()
 
         def _get_download_url():
-            geometry = ee.Geometry.Rectangle(
-                [bbox["west"], bbox["south"], bbox["east"], bbox["north"]]
-            )
+            geometry = _bbox_to_geometry(bbox)
 
             selected_bands = bands or BANDS["RGB"]
             download_image = image.select(selected_bands)
@@ -1091,27 +1135,7 @@ class GEEService:
         url = self.get_thumbnail_url(
             image, bbox, vis_type, dimensions, resample, format
         )
-
-        for attempt in range(GEE_THUMB_MAX_RETRIES + 1):
-            response = requests.get(url, timeout=60)
-            if response.status_code < 500:
-                response.raise_for_status()
-                return response.content
-            if attempt < GEE_THUMB_MAX_RETRIES:
-                wait = GEE_THUMB_BACKOFF_BASE ** attempt
-                logger.warning(
-                    "GEE getPixels 5xx (intento %d/%d) para vis_type=%s. "
-                    "Reintentando en %.1fs. status=%s",
-                    attempt + 1,
-                    GEE_THUMB_MAX_RETRIES + 1,
-                    vis_type,
-                    wait,
-                    response.status_code,
-                )
-                sleep(wait)
-                continue
-            response.raise_for_status()
-        return response.content
+        return self._http_download_with_retry(url, vis_type)
 
     # =========================================================================
     # MÉTODOS DE SERIES TEMPORALES (PARA UC-06, UC-11/12)
