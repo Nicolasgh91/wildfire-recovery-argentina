@@ -30,7 +30,19 @@ from pathlib import Path
 from time import sleep
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import io
 import requests
+
+import numpy as np
+from PIL import Image
+
+try:
+    from matplotlib.colors import LinearSegmentedColormap
+
+    _HAS_MATPLOTLIB = True
+except ImportError:
+    LinearSegmentedColormap = None  # type: ignore[assignment]
+    _HAS_MATPLOTLIB = False
 
 try:
     from googleapiclient.errors import HttpError as _HttpError
@@ -131,6 +143,19 @@ VIS_PARAMS = {
     },
 }
 
+# Mapeo de vis_types a bandas y estrategia de rendering local.
+_VIS_BANDS = {
+    "RGB": {"bands": ["B4", "B3", "B2"], "strategy": "band_selection"},
+    "FALSE_COLOR": {"bands": ["B8", "B4", "B3"], "strategy": "band_selection"},
+    "SWIR": {"bands": ["B12", "B11", "B4"], "strategy": "band_selection"},
+    "IMPACT": {"bands": ["B12", "B8A", "B4"], "strategy": "band_selection"},
+    "REALITY": {"bands": ["B4", "B3", "B2"], "strategy": "band_selection"},
+    "NDVI": {"bands": ["B8", "B4"], "strategy": "normalized_diff"},
+    "NBR": {"bands": ["B8", "B12"], "strategy": "normalized_diff"},
+    "SCIENCE": {"bands": ["B8", "B12"], "strategy": "normalized_diff"},
+    "BURN_SEVERITY": {"bands": ["B8", "B12"], "strategy": "normalized_diff"},
+}
+
 # Rate limits (respetando cuota GEE)
 CALLS_PER_SECOND = 1
 CALLS_PER_DAY = 50000
@@ -216,6 +241,123 @@ def _bbox_to_dimensions(bbox: dict, max_dim: int = 768) -> str:
         w = max(1, round(max_dim * aspect))
 
     return f"{w}x{h}"
+
+
+def _render_band_selection(
+    bands_array: np.ndarray,
+    vis_min: Union[List[float], int, float],
+    vis_max: Union[List[float], int, float],
+    gamma: Union[List[float], int, float, None] = None,
+) -> Image.Image:
+    """Renderiza 3 bandas como imagen RGB con stretch lineal y gamma.
+
+    Args:
+        bands_array: np.ndarray shape (H, W, 3), dtype float32
+        vis_min: valor mínimo por banda (escalar o lista de 3)
+        vis_max: valor máximo por banda (escalar o lista de 3)
+        gamma: corrección gamma por banda (escalar, lista de 3, o None)
+
+    Returns:
+        PIL.Image.Image en modo RGB
+    """
+    if bands_array.ndim != 3 or bands_array.shape[2] != 3:
+        raise ValueError(
+            f"bands_array debe tener shape (H, W, 3), recibido {bands_array.shape}"
+        )
+
+    if isinstance(vis_min, (int, float)):
+        vis_min = [float(vis_min)] * 3
+    if isinstance(vis_max, (int, float)):
+        vis_max = [float(vis_max)] * 3
+
+    vmin = np.array(vis_min, dtype=np.float32).reshape(1, 1, 3)
+    vmax = np.array(vis_max, dtype=np.float32).reshape(1, 1, 3)
+
+    denom = vmax - vmin
+    denom = np.where(denom == 0, 1, denom)
+    normalized = np.clip((bands_array.astype(np.float32) - vmin) / denom, 0, 1)
+
+    if gamma is not None:
+        if isinstance(gamma, (int, float)):
+            gamma = [float(gamma)] * 3
+        g = np.array(gamma, dtype=np.float32).reshape(1, 1, 3)
+        g = np.maximum(g, 0.01)
+        normalized = np.power(normalized, 1.0 / g)
+
+    rgb_uint8 = (normalized * 255).astype(np.uint8)
+    return Image.fromarray(rgb_uint8, mode="RGB")
+
+
+def _manual_colormap(normalized: np.ndarray, palette: List[str]) -> np.ndarray:
+    """Colormap manual via interpolación lineal en numpy.
+
+    Reemplaza matplotlib.colors.LinearSegmentedColormap si no está instalado.
+    """
+    from PIL import ImageColor
+
+    colors_rgb: List[List[float]] = []
+    for c in palette:
+        r, g, b = ImageColor.getrgb(c)
+        colors_rgb.append([r / 255.0, g / 255.0, b / 255.0])
+
+    colors_arr = np.array(colors_rgb, dtype=np.float32)  # (N_colors, 3)
+    n_colors = len(colors_arr)
+    if n_colors == 0:
+        raise ValueError("palette no puede estar vacía")
+
+    indices = normalized * (n_colors - 1)
+    lower = np.floor(indices).astype(int)
+    upper = np.minimum(lower + 1, n_colors - 1)
+    frac = (indices - lower)[..., np.newaxis]
+
+    result = colors_arr[lower] * (1 - frac) + colors_arr[upper] * frac
+    return (result * 255).astype(np.uint8)
+
+
+def _render_normalized_difference(
+    band_a: np.ndarray,
+    band_b: np.ndarray,
+    vis_min: float,
+    vis_max: float,
+    palette: List[str],
+) -> Image.Image:
+    """Calcula índice normalizado (a-b)/(a+b) y aplica colormap.
+
+    Args:
+        band_a: np.ndarray shape (H, W), float32 — banda del numerador positivo (e.g. B8)
+        band_b: np.ndarray shape (H, W), float32 — banda del numerador negativo (e.g. B4)
+        vis_min: valor mínimo del rango de visualización
+        vis_max: valor máximo del rango de visualización
+        palette: lista de colores para el colormap
+
+    Returns:
+        PIL.Image.Image en modo RGB
+    """
+    if band_a.shape != band_b.shape:
+        raise ValueError(
+            f"band_a y band_b deben tener la misma shape, recibido "
+            f"{band_a.shape} y {band_b.shape}"
+        )
+
+    sum_ab = band_a.astype(np.float64) + band_b.astype(np.float64)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        index = np.where(sum_ab != 0, (band_a - band_b) / sum_ab, 0).astype(
+            np.float32
+        )
+
+    denom = vis_max - vis_min
+    if denom == 0:
+        denom = 1.0
+    normalized = np.clip((index - vis_min) / denom, 0, 1)
+
+    if _HAS_MATPLOTLIB and LinearSegmentedColormap is not None:
+        cmap = LinearSegmentedColormap.from_list("custom", palette, N=256)
+        colored = cmap(normalized)[..., :3]
+        rgb_uint8 = (colored * 255).astype(np.uint8)
+    else:
+        rgb_uint8 = _manual_colormap(normalized, palette)
+
+    return Image.fromarray(rgb_uint8, mode="RGB")
 
 
 def _thumb_size_params(dimensions: Union[int, str]) -> dict:
@@ -898,6 +1040,83 @@ class GEEService:
 
         return self._rate_limited_request(_calc_nbr)
 
+    def download_raw_bands(
+        self,
+        image: ee.Image,
+        bbox: Dict[str, float],
+        bands: List[str],
+        scale: float | None = None,
+    ) -> np.ndarray:
+        """Descarga bandas crudas como numpy array.
+
+        El flujo primario utiliza ee.data.computePixels cuando está disponible.
+        Como fallback, usa getDownloadURL(format='NPY') + HTTP GET + np.load.
+
+        Args:
+            image: imagen Sentinel-2 (con cloud mask si corresponde).
+            bbox: dict con keys west, south, east, north.
+            bands: lista de bandas requeridas (e.g. ["B12", "B11", "B4"]).
+            scale: resolución en grados EPSG:4326 (default: _compute_safe_scale).
+
+        Returns:
+            np.ndarray con shape (H, W, len(bands)), dtype float32.
+        """
+        self._ensure_authenticated()
+
+        if scale is None:
+            scale = _compute_safe_scale(bbox)
+
+        geometry = _bbox_to_geometry(bbox)
+        selected = image.select(bands).clip(geometry).reproject(
+            crs="EPSG:4326", scale=scale
+        )
+
+        def _compute_pixels() -> np.ndarray:
+            if not hasattr(ee.data, "computePixels"):
+                raise AttributeError("computePixels no disponible en ee.data")
+            return ee.data.computePixels(
+                {
+                    "expression": selected,
+                    "fileFormat": "NUMPY_NDARRAY",
+                }
+            )
+
+        def _download_npy() -> np.ndarray:
+            download_image = selected
+            url = download_image.getDownloadURL(
+                {
+                    "region": geometry,
+                    "scale": scale,
+                    "format": "NPY",
+                    "crs": "EPSG:4326",
+                }
+            )
+            content = self._http_download_with_retry(url, "raw_bands_npy", timeout=120)
+            return np.load(io.BytesIO(content))
+
+        def _compute() -> np.ndarray:
+            try:
+                return _compute_pixels()
+            except Exception as exc:
+                logger.warning(
+                    "Fallo computePixels, intentando fallback getDownloadURL NPY: %s",
+                    exc,
+                )
+                return _download_npy()
+
+        result = self._rate_limited_request(_compute)
+
+        if not isinstance(result, np.ndarray):
+            result = np.asarray(result, dtype=np.float32)
+
+        if result.nbytes > 50_000_000:
+            raise ValueError(
+                f"Array demasiado grande: {result.nbytes / 1e6:.1f} MB. "
+                f"Bbox probablemente excede el límite esperado."
+            )
+
+        return np.nan_to_num(result.astype(np.float32), nan=0.0, posinf=0.0, neginf=0.0)
+
     def get_dnbr_thumbnail_url(
         self,
         pre_image: ee.Image,
@@ -906,8 +1125,13 @@ class GEEService:
         dimensions: Union[int, str] = 512,
         format: str = "png",
     ) -> str:
-        """
-        Genera URL de thumbnail para dNBR (pre - post).
+        """Genera URL temporal de thumbnail dNBR renderizado server-side por GEE.
+
+        Usa el endpoint :getPixels de GEE vía getThumbURL. La URL es válida
+        por ~2 horas.
+
+        NOTA: para descarga de bytes, usar download_dnbr_thumbnail(), que usa
+        rendering local y no depende de :getPixels.
         """
         self._ensure_authenticated()
 
@@ -953,17 +1177,61 @@ class GEEService:
         dimensions: int = 512,
         format: str = "png",
     ) -> bytes:
-        """
-        Descarga thumbnail dNBR como bytes.
-        """
-        url = self.get_dnbr_thumbnail_url(
-            pre_image,
-            post_image,
-            bbox,
-            dimensions=dimensions,
-            format=format,
+        """Descarga thumbnail dNBR renderizado localmente como bytes."""
+        pre_bands = self.download_raw_bands(pre_image, bbox, ["B8", "B12"])
+        post_bands = self.download_raw_bands(post_image, bbox, ["B8", "B12"])
+
+        eps = 1e-10
+        pre_nbr = (pre_bands[:, :, 0] - pre_bands[:, :, 1]) / (
+            pre_bands[:, :, 0] + pre_bands[:, :, 1] + eps
         )
-        return self._http_download_with_retry(url, "DNBR")
+        post_nbr = (post_bands[:, :, 0] - post_bands[:, :, 1]) / (
+            post_bands[:, :, 0] + post_bands[:, :, 1] + eps
+        )
+
+        dnbr = (pre_nbr - post_nbr).astype(np.float32)
+
+        vis_config = VIS_PARAMS.get(
+            "DNBR",
+            {
+                "min": -0.5,
+                "max": 0.5,
+                "palette": [
+                    "#00FF00",
+                    "#FFFF00",
+                    "#FF7F00",
+                    "#FF0000",
+                    "#000000",
+                ],
+            },
+        )
+        vmin = float(vis_config["min"])
+        vmax = float(vis_config["max"])
+        palette = vis_config.get(
+            "palette",
+            ["#00FF00", "#FFFF00", "#FF7F00", "#FF0000", "#000000"],
+        )
+
+        denom = vmax - vmin or 1.0
+        normalized = np.clip((dnbr - vmin) / denom, 0, 1)
+
+        if _HAS_MATPLOTLIB and LinearSegmentedColormap is not None:
+            cmap = LinearSegmentedColormap.from_list("dnbr", palette, N=256)
+            colored = (cmap(normalized)[..., :3] * 255).astype(np.uint8)
+        else:
+            colored = _manual_colormap(normalized, palette)
+
+        img = Image.fromarray(colored, mode="RGB")
+
+        dims = _bbox_to_dimensions(bbox, max_dim=dimensions)
+        w, h = map(int, dims.lower().split("x"))
+        if img.size != (w, h):
+            img = img.resize((w, h), Image.LANCZOS)
+
+        buffer = io.BytesIO()
+        save_format = "JPEG" if format.lower() in ("jpg", "jpeg") else "PNG"
+        img.save(buffer, format=save_format)
+        return buffer.getvalue()
 
     # =========================================================================
     # MÉTODOS DE VISUALIZACIÓN Y DESCARGA
@@ -978,18 +1246,14 @@ class GEEService:
         resample: Optional[str] = None,
         format: str = "png",
     ) -> str:
-        """
-        Genera URL de thumbnail para una imagen.
+        """Genera URL temporal de thumbnail renderizado server-side por GEE.
 
-        Args:
-            image: Imagen de GEE
-            bbox: Bounding box
-            vis_type: Tipo de visualización ('RGB', 'FALSE_COLOR', 'NDVI')
-            dimensions: Tamaño máximo en píxeles
-            format: Formato de salida ('png', 'jpg')
+        Usa el endpoint :getPixels de GEE vía getThumbURL. La URL es válida
+        por ~2 horas.
 
-        Returns:
-            str: URL del thumbnail (válida por ~2 horas)
+        NOTA: para descarga de bytes (carousel, reportes), usar
+        download_thumbnail(), que usa rendering local y no depende de
+        :getPixels.
         """
         self._ensure_authenticated()
 
@@ -1118,24 +1382,65 @@ class GEEService:
         resample: Optional[str] = None,
         format: str = "png",
     ) -> bytes:
-        """
-        Descarga thumbnail como bytes.
+        """Descarga thumbnail como bytes PNG/JPG usando rendering local.
 
-        Útil para guardar en object storage o incluir en PDFs.
+        Flujo: download_raw_bands → render local → resize → encode.
 
         Args:
-            image: Imagen de GEE
-            bbox: Bounding box
-            vis_type: Tipo de visualización
-            dimensions: Tamaño en píxeles
+            image: Imagen de GEE.
+            bbox: Bounding box.
+            vis_type: Tipo de visualización (RGB, SWIR, NDVI, NBR, etc.).
+            dimensions: Tamaño máximo en píxeles (int o string "WxH").
+            resample: Parámetro mantenido por compatibilidad; no aplica en rendering local.
+            format: Formato de salida ('png', 'jpg').
 
         Returns:
-            bytes: Contenido de la imagen PNG
+            bytes: Contenido de la imagen PNG/JPG.
         """
-        url = self.get_thumbnail_url(
-            image, bbox, vis_type, dimensions, resample, format
-        )
-        return self._http_download_with_retry(url, vis_type)
+        _ = resample  # resample no aplica en rendering local (resize usa LANCZOS).
+
+        vis_key = vis_type.upper()
+        vis_config = VIS_PARAMS.get(vis_key, VIS_PARAMS["RGB"])
+        band_config = _VIS_BANDS.get(vis_key, _VIS_BANDS["RGB"])
+
+        raw = self.download_raw_bands(image, bbox, band_config["bands"])
+
+        if band_config["strategy"] == "normalized_diff":
+            img = _render_normalized_difference(
+                raw[:, :, 0],
+                raw[:, :, 1],
+                float(vis_config.get("min", -0.5)),
+                float(vis_config.get("max", 0.5)),
+                vis_config.get(
+                    "palette",
+                    ["green", "yellow", "red"],
+                ),
+            )
+        else:
+            img = _render_band_selection(
+                raw,
+                vis_config.get("min", 0),
+                vis_config.get("max", 3000),
+                vis_config.get("gamma", None),
+            )
+
+        if isinstance(dimensions, str) and "x" in dimensions.lower():
+            dims = dimensions
+        else:
+            if isinstance(dimensions, (int, float)):
+                max_dim = int(dimensions)
+                dims = _bbox_to_dimensions(bbox, max_dim=max_dim)
+            else:
+                dims = _bbox_to_dimensions(bbox)
+
+        w, h = map(int, dims.lower().split("x"))
+        if img.size != (w, h):
+            img = img.resize((w, h), Image.LANCZOS)
+
+        buffer = io.BytesIO()
+        save_format = "JPEG" if format.lower() in ("jpg", "jpeg") else "PNG"
+        img.save(buffer, format=save_format)
+        return buffer.getvalue()
 
     # =========================================================================
     # MÉTODOS DE SERIES TEMPORALES (PARA UC-06, UC-11/12)
