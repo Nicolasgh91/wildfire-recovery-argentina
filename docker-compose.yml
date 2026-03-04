@@ -120,6 +120,7 @@ services:
     container_name: forestguard-worker-fast
     restart: unless-stopped
     environment:
+      TZ: America/Argentina/Buenos_Aires
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_NAME: ${DB_NAME}
@@ -188,6 +189,7 @@ services:
     container_name: forestguard-worker-gee
     restart: unless-stopped
     environment:
+      TZ: America/Argentina/Buenos_Aires
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_NAME: ${DB_NAME}
@@ -259,6 +261,7 @@ services:
     container_name: forestguard-celery-beat
     restart: unless-stopped
     environment:
+      TZ: America/Argentina/Buenos_Aires
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_NAME: ${DB_NAME}
