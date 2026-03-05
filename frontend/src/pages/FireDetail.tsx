@@ -64,7 +64,7 @@ function resolveSeverityLevel(maxFrp?: number | null): 'high' | 'medium' | 'low'
 
 function FireDetailSkeleton() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background/15">
       <div className="h-72 md:h-96">
         <Skeleton className="h-full w-full rounded-none" />
       </div>
@@ -189,7 +189,7 @@ export default function FireDetailPage() {
 
   if (errorStatus === 404) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background/15">
         <div className="container mx-auto px-4 py-12 text-center">
           <p className="mb-4 text-lg font-semibold text-foreground">Incendio no disponible.</p>
           <Button asChild variant="secondary">
@@ -202,7 +202,7 @@ export default function FireDetailPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background/15">
         <div className="container mx-auto px-4 py-12">
           <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             <AlertTriangle className="h-4 w-4" />
@@ -215,7 +215,7 @@ export default function FireDetailPage() {
 
   if (!fire) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background/15">
         <div className="container mx-auto px-4 py-12 text-center">
           <p className="mb-4 text-lg font-semibold text-foreground">Incendio no encontrado.</p>
           <Button asChild variant="secondary">
@@ -308,7 +308,7 @@ export default function FireDetailPage() {
     ]
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background/15">
       <div className="relative">
         <div className="h-72 md:h-96">
           {mapFire ? (

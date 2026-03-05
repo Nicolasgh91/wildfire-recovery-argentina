@@ -237,7 +237,7 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
       </CardContent>
 
       <CardFooter className="border-t border-border bg-muted/30 p-4">
-        <Button className="w-full gap-2 bg-emerald-500 text-white hover:bg-emerald-600" onClick={handleViewDetails}>
+        <Button variant="secondary" className="w-full gap-2" onClick={handleViewDetails}>
           {t('viewDetails')}
           <ArrowRight className="h-4 w-4" />
         </Button>

@@ -958,7 +958,7 @@ export default function ExplorationPage() {
   const canContinueToStep3 = Boolean(draftItems.length > 0 && totalCount <= TOTAL_LIMIT)
 
   return (
-    <div className="bg-background">
+    <div className="bg-background/15">
       <AlertDialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1186,7 +1186,7 @@ export default function ExplorationPage() {
                         </Button>
                         <Button
                           type="button"
-                          variant="outline"
+                          variant="secondary"
                           onClick={() => setShowMap((prev) => !prev)}
                           className="gap-2"
                           data-testid="exploration-btn-map"
@@ -1271,7 +1271,7 @@ export default function ExplorationPage() {
                               onChange={(event) => setAdvancedId(event.target.value)}
                               placeholder={t('explorationAdvancedIdPlaceholder')}
                             />
-                            <Button variant="outline" onClick={handleLoadById} className="gap-2">
+                            <Button variant="secondary" onClick={handleLoadById} className="gap-2">
                               <Compass className="h-4 w-4" />
                               {t('explorationAdvancedIdAction')}
                             </Button>
@@ -1366,7 +1366,7 @@ export default function ExplorationPage() {
                                         type="button"
                                         size="sm"
                                         onClick={() => handleSelectFire(fire)}
-                                        variant={isSelected ? 'default' : 'outline'}
+                                        variant={isSelected ? 'default' : 'secondary'}
                                         className="gap-2"
                                       >
                                         {isSelected ? (
@@ -1392,7 +1392,7 @@ export default function ExplorationPage() {
                       {searchHasNext && (
                         <Button
                           type="button"
-                          variant="outline"
+                          variant="secondary"
                           size="sm"
                           onClick={() => handleSearch(searchPage + 1, true)}
                           disabled={searchLoading}
@@ -1440,7 +1440,7 @@ export default function ExplorationPage() {
                         </span>
                         <div className="flex items-center gap-3">
                           <Button
-                            variant="outline"
+                            variant="secondary"
                             size="icon"
                             onClick={() => handleBeforeChange(beforeCount - 1)}
                             disabled={beforeCount <= 0}
@@ -1449,7 +1449,7 @@ export default function ExplorationPage() {
                           </Button>
                           <span className="text-lg font-semibold">{beforeCount}</span>
                           <Button
-                            variant="outline"
+                            variant="secondary"
                             size="icon"
                             onClick={() => handleBeforeChange(beforeCount + 1)}
                             disabled={beforeCount >= BEFORE_LIMIT}
@@ -1465,7 +1465,7 @@ export default function ExplorationPage() {
                         </span>
                         <div className="flex items-center gap-3">
                           <Button
-                            variant="outline"
+                            variant="secondary"
                             size="icon"
                             onClick={() => handleAfterChange(afterCount - 1)}
                             disabled={afterCount <= 0}
@@ -1474,7 +1474,7 @@ export default function ExplorationPage() {
                           </Button>
                           <span className="text-lg font-semibold">{afterCount}</span>
                           <Button
-                            variant="outline"
+                            variant="secondary"
                             size="icon"
                             onClick={() => handleAfterChange(afterCount + 1)}
                             disabled={afterCount >= AFTER_LIMIT}
@@ -1503,21 +1503,21 @@ export default function ExplorationPage() {
                         </span>
                         <div className="flex flex-wrap gap-2">
                           <Button
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
                             onClick={() => handlePreset(1, 3)}
                           >
                             1 + 3
                           </Button>
                           <Button
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
                             onClick={() => handlePreset(2, 6)}
                           >
                             2 + 6
                           </Button>
                           <Button
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
                             onClick={() => handlePreset(3, 9)}
                           >
@@ -1602,7 +1602,7 @@ export default function ExplorationPage() {
                             onChange={(event) => setNewItemDate(event.target.value)}
                             max={today}
                           />
-                          <Button variant="outline" onClick={handleAddItem}>
+                          <Button variant="secondary" onClick={handleAddItem}>
                             {t('explorationAddItemAction')}
                           </Button>
                         </div>
@@ -1809,13 +1809,13 @@ export default function ExplorationPage() {
                       <div className="w-full rounded-lg border border-border bg-muted/20 p-4">
                         <p className="mb-2 text-sm font-semibold text-foreground">Reporte PDF</p>
                         {explorationPdf.status === 'generated' && explorationPdf.url && (
-                          <button
-                            type="button"
+                          <Button
+                            variant="secondary"
+                            className="gap-2"
                             onClick={() => window.open(explorationPdf.url!, '_blank')}
-                            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
                           >
-                            <span>Descargar PDF del reporte</span>
-                          </button>
+                            Descargar PDF del reporte
+                          </Button>
                         )}
                         {explorationPdf.status === 'failed' && (
                           <p className="text-sm text-amber-600">
@@ -1834,7 +1834,7 @@ export default function ExplorationPage() {
                       <p className="mb-2 text-sm font-semibold text-foreground">{t('explorationDownloadTitle')}</p>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           className="gap-2"
                           onClick={handleGenerateJudicialReport}
                           disabled={pdfGenerating || generating || syncing || !selectedFire?.id}
@@ -1843,7 +1843,7 @@ export default function ExplorationPage() {
                           {pdfGenerating ? 'Generando reporte...' : 'Descarga PDF'}
                         </Button>
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           className="gap-2"
                           disabled={syncing || needsSync || generating || !draftTitle.trim()}
                           onClick={handleSaveDraft}
@@ -1861,7 +1861,7 @@ export default function ExplorationPage() {
                         </Button>
                         {needsSync && (
                           <Button
-                            variant="outline"
+                            variant="secondary"
                             onClick={syncDraftAndQuote}
                             className="gap-2"
                           >

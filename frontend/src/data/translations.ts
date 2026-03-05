@@ -14,8 +14,8 @@ export const translations = {
     loginGuestAction: 'Acceder como invitado',
     logout: 'Cerrar Sesión',
     register: 'Registrarse',
-    registerTitle: 'Creá tu cuenta en {appName}',
-    registerSubtitle: 'Registrate para acceder a datos satelitales y reportes\\nespecializados de incendios.',
+    registerTitle: 'Registrate para poder acceder a todas las funcionalidades',
+    registerSubtitle: '',
     registerAction: 'Registrarme con email',
     registerSuccess: 'Te enviamos un link para finalizar el registro.',
     registerError: 'No se pudo iniciar el registro',
@@ -431,8 +431,8 @@ export const translations = {
 
     // Login Hero
     loginHeroTitle: 'La huella del fuego, vista desde el espacio.',
-    loginHeroSubtitle: 'Genera líneas de tiempo satelitales de incendios en Argentina.',
-    loginHeroDescription: 'Compara el antes y el después: detecta revegetación natural o construcciones no autorizadas en zonas afectadas.',
+    loginHeroSubtitle: 'Explorá el impacto del fuego y monitoreá la recuperación del terreno.',
+    loginHeroDescription: '',
     loginIdleSession: 'Sesión cerrada por inactividad',
 
     // NotFound

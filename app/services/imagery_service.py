@@ -137,7 +137,7 @@ DEFAULT_CAROUSEL_GEE_RESAMPLE = "bicubic"
 # Minimum bbox extent (degrees) to avoid extreme upscaling on small incidents.
 # ~0.05° ≈ 5.5 km → Sentinel-2 captures ~550 real pixels at 10 m/px,
 # enough for a sharp 768px thumbnail without visible pixelation.
-MIN_BBOX_SIZE = 0.05
+MIN_BBOX_SIZE = 0.04
 DEFAULT_WATERMARK_LOGO_RELATIVE_PATH = "app/assets/branding/watermark-logo.png"
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

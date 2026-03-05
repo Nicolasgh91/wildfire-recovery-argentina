@@ -107,7 +107,7 @@ function CitizenReportContent() {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background/15">
         <div className="container mx-auto max-w-2xl px-4 py-16">
           <Card className="border-primary/50 bg-primary/5">
             <CardContent className="pt-6 text-center">
@@ -127,7 +127,7 @@ function CitizenReportContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background/15">
       <div className="container mx-auto max-w-2xl px-4 py-8">
         <div className="mb-8 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
@@ -143,11 +143,10 @@ function CitizenReportContent() {
               <div key={s.number} className="flex flex-1 items-center">
                 <div className="flex flex-col items-center">
                   <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${
-                      step >= s.number
+                    className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-colors ${step >= s.number
                         ? 'border-primary bg-primary text-primary-foreground'
                         : 'border-muted bg-background text-muted-foreground'
-                    }`}
+                      }`}
                   >
                     {s.icon && <s.icon className="h-5 w-5" />}
                   </div>
@@ -157,9 +156,8 @@ function CitizenReportContent() {
                 </div>
                 {index < steps.length - 1 && (
                   <div
-                    className={`mx-2 h-0.5 flex-1 transition-colors ${
-                      step > s.number ? 'bg-primary' : 'bg-muted'
-                    }`}
+                    className={`mx-2 h-0.5 flex-1 transition-colors ${step > s.number ? 'bg-primary' : 'bg-muted'
+                      }`}
                   />
                 )}
               </div>
@@ -259,7 +257,7 @@ function CitizenReportContent() {
                       <strong>Location:</strong>{' '}
                       {selectedLocation
                         ? selectedLocation.label ||
-                          `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lon.toFixed(4)}`
+                        `${selectedLocation.lat.toFixed(4)}, ${selectedLocation.lon.toFixed(4)}`
                         : 'Not selected'}
                     </p>
                     <p>

@@ -23,7 +23,7 @@ export default function ReportsPage() {
   }
 
   return (
-    <div className="bg-background">
+    <div className="bg-background/15">
       <div className="container mx-auto max-w-4xl space-y-6 px-4 py-8">
         <div className="text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">

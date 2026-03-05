@@ -8,6 +8,7 @@ interface BrandLogoProps {
   size?: 'sm' | 'md' | 'lg'
   className?: string
   showName?: boolean
+  showIcon?: boolean
   nameClassName?: string
 }
 
@@ -17,7 +18,7 @@ const sizeMap = {
   lg: { icon: 'h-10 w-10', text: 'text-2xl font-bold', img: 'h-10' },
 }
 
-export function BrandLogo({ size = 'md', className, showName = true, nameClassName }: BrandLogoProps) {
+export function BrandLogo({ size = 'md', className, showName = true, showIcon = true, nameClassName }: BrandLogoProps) {
   const { resolvedTheme } = useTheme()
   const [imgError, setImgError] = useState(false)
   const sizes = sizeMap[size]
@@ -26,7 +27,7 @@ export function BrandLogo({ size = 'md', className, showName = true, nameClassNa
 
   return (
     <span className={cn('flex items-center gap-2', className)}>
-      {!imgError ? (
+      {showIcon && (!imgError ? (
         <img
           src={logoSrc}
           alt={BRAND.name}
@@ -35,7 +36,7 @@ export function BrandLogo({ size = 'md', className, showName = true, nameClassNa
         />
       ) : (
         <Trees className={cn(sizes.icon, 'text-primary')} />
-      )}
+      ))}
       {showName && (
         <span className={cn(sizes.text, 'text-foreground', nameClassName)}>
           {BRAND.name}

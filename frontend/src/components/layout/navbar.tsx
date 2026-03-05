@@ -47,9 +47,9 @@ function DesktopNavbar() {
 
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 hidden h-24 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:flex">
+      <header className="fixed top-0 left-0 right-0 z-50 hidden h-24 items-center justify-between border-b border-border bg-nav/[.34] px-6 backdrop-blur-md supports-[backdrop-filter]:bg-nav/60 lg:flex">
         <Link to={HOME_PATH}>
-          <BrandLogo size="md" />
+          <BrandLogo size="md" nameClassName="text-nav-foreground" />
         </Link>
 
         <nav className="flex items-center gap-1">
@@ -63,7 +63,7 @@ function DesktopNavbar() {
                   onClick={() => setLockedTargetPath(item.to)}
                   aria-label={`${t(item.labelKey)} - requiere inicio de sesion`}
                   className={cn(
-                    'flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-extrabold text-nav-foreground transition-colors hover:bg-muted hover:text-nav-hover hover:ring-1 hover:ring-border',
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -80,10 +80,10 @@ function DesktopNavbar() {
                 end={navLinkShouldUseExactMatch(item.activeMatch)}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-extrabold transition-colors hover:ring-1 hover:ring-border',
                     isActive
                       ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                      : 'text-nav-foreground hover:bg-muted hover:text-nav-hover',
                   )
                 }
               >
@@ -97,7 +97,7 @@ function DesktopNavbar() {
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="hover:bg-muted hover:text-nav-hover hover:ring-1 hover:ring-border dark:hover:bg-accent dark:hover:text-accent-foreground dark:hover:ring-0">
                 <Globe className="h-5 w-5" />
                 <span className="sr-only">{t('toggleLanguage')}</span>
               </Button>
@@ -116,6 +116,7 @@ function DesktopNavbar() {
             variant="ghost"
             size="icon"
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="hover:bg-muted hover:text-nav-hover hover:ring-1 hover:ring-border dark:hover:bg-accent dark:hover:text-accent-foreground dark:hover:ring-0"
           >
             <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
             <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -125,7 +126,7 @@ function DesktopNavbar() {
           {isAuthenticated ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
+                <Button variant="ghost" size="icon" className="rounded-full hover:bg-muted hover:text-nav-hover hover:ring-1 hover:ring-border dark:hover:bg-accent dark:hover:text-accent-foreground dark:hover:ring-0">
                   <User className="h-5 w-5" />
                 </Button>
               </DropdownMenuTrigger>

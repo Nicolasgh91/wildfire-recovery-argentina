@@ -10,7 +10,6 @@ import type { FireMapItem } from '@/types/map'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 import type { RestoreContext } from '@/types/navigation'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Z_INDEX } from '@/features/navigation/config/z-index'
 
 const FireMap = lazy(() =>
   import('@/components/fire-map').then((mod) => ({ default: mod.FireMap })),
