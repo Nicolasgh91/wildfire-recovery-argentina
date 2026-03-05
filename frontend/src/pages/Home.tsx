@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, RefreshCcw, Trees, ArrowUp, ArrowDown } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { AlertTriangle, RefreshCcw, Trees } from 'lucide-react'
 import { BrandLogo } from '@/components/brand/BrandLogo'
-import { Button } from '@/components/ui/button'
 import { useI18n } from '@/context/LanguageContext'
 import { useEpisodesByMode } from '@/hooks/queries/useEpisodesByMode'
 import { FireCardSkeleton } from '@/components/fires/fire-card'
+import { resolveStatus, GRANDES_FOCOS_HA } from '@/lib/episode-utils'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 import type { RestoreContext } from '@/types/navigation'
 
@@ -19,6 +19,8 @@ export default function HomePage() {
   const location = useLocation()
   const navigate = useNavigate()
   const [selectedProvince, setSelectedProvince] = useState('all')
+  const [soloActivos, setSoloActivos] = useState(false)
+  const [grandesFocos, setGrandesFocos] = useState(false)
   const gridRef = useRef<HTMLDivElement | null>(null)
   const [gridVisible, setGridVisible] = useState(false)
   const [slideStage, setSlideStage] = useState(1) // 1: primer thumbnail, 2: segundo, 3: tercero
@@ -77,9 +79,12 @@ export default function HomePage() {
     return displayEpisodes.filter((episode) => {
       const province = episode.provinces?.[0]
       const matchesProvince = selectedProvince === 'all' || province === selectedProvince
-      return matchesProvince
+      if (!matchesProvince) return false
+      if (soloActivos && resolveStatus(episode) !== 'active') return false
+      if (grandesFocos && (episode.estimated_area_hectares ?? 0) <= GRANDES_FOCOS_HA) return false
+      return true
     })
-  }, [displayEpisodes, selectedProvince])
+  }, [displayEpisodes, selectedProvince, soloActivos, grandesFocos])
 
   // Loading y error states
   const isLoading = loadingActive
@@ -121,29 +126,19 @@ export default function HomePage() {
             <BrandLogo size="sm" />
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="w-full min-w-0">
             <Suspense fallback={null}>
               <FireFilters
                 selectedProvince={selectedProvince}
                 onProvinceChange={setSelectedProvince}
+                sortOrder={sortOrder}
+                onSortOrderChange={setSortOrder}
+                soloActivos={soloActivos}
+                onSoloActivosChange={setSoloActivos}
+                grandesFocos={grandesFocos}
+                onGrandesFocosChange={setGrandesFocos}
               />
             </Suspense>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
-              className="gap-2"
-              title={sortOrder === 'desc' ? t('sortNewestFirst') : t('sortOldestFirst')}
-            >
-              {sortOrder === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-              {t('sortByDate')}
-            </Button>
-            <Button asChild variant="secondary" size="sm" className="ml-auto gap-2 sm:ml-0">
-              <Link to="/fires/history">
-                {t('fireHistory')}
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </Button>
           </div>
         </div>
 

@@ -23,27 +23,17 @@ import {
   getSeverityConfig,
 } from '@/types/fire'
 import type { EpisodeListItem, EpisodeStatus } from '@/types/episode'
+import { resolveStatus } from '@/lib/episode-utils'
 import { cn } from '@/lib/utils'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 import { useI18n } from '@/context/LanguageContext'
 import { RecoveryStatusBadge } from '@/components/monitoring/RecoveryStatusBadge'
-
-const VALID_STATUSES: EpisodeStatus[] = ['active', 'monitoring', 'extinct', 'closed']
 
 const STATUS_STYLES: Record<EpisodeStatus, string> = {
   active: 'border-red-200 bg-red-100 text-red-700',
   monitoring: 'border-emerald-200 bg-emerald-100 text-emerald-700',
   extinct: 'border-slate-200 bg-slate-100 text-slate-600',
   closed: 'border-slate-200 bg-slate-100 text-slate-600',
-}
-
-function resolveStatus(episode: EpisodeListItem): EpisodeStatus {
-  const status = episode.status
-  if (status && VALID_STATUSES.includes(status as EpisodeStatus)) {
-    return status as EpisodeStatus
-  }
-
-  return 'extinct'
 }
 
 function formatProvincesLabel(provinces: string[] | null | undefined, noProvinceLabel: string): string {
