@@ -43,6 +43,8 @@ Last Updated: 2026-02-08
 """
 from __future__ import annotations
 
+import ee
+
 import json
 import logging
 import os
@@ -172,6 +174,10 @@ class CarouselEpisodeRow:
     start_date: Optional[datetime]
     last_gee_image_id: Optional[str]
     gee_priority: Optional[int]
+    bbox_minx: Optional[float] = None
+    bbox_miny: Optional[float] = None
+    bbox_maxx: Optional[float] = None
+    bbox_maxy: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -436,6 +442,63 @@ class ImageryService:
             "north": lat + half_height,
         }
 
+    def _bbox_from_episode(self, episode: CarouselEpisodeRow) -> Dict[str, float]:
+        """
+        Build bbox from episode real extent when available, adjusting to
+        thumbnail aspect ratio symmetrically around the centroid.
+
+        Falls back to _bbox_from_point(lat, lon) when real bbox fields are
+        missing.  Uses ``is not None`` checks so that 0.0 (Ecuador/Greenwich)
+        is treated as a valid coordinate.
+        """
+        if (
+            episode.bbox_minx is not None
+            and episode.bbox_miny is not None
+            and episode.bbox_maxx is not None
+            and episode.bbox_maxy is not None
+        ):
+            cx = (episode.bbox_minx + episode.bbox_maxx) / 2
+            cy = (episode.bbox_miny + episode.bbox_maxy) / 2
+            w = episode.bbox_maxx - episode.bbox_minx
+            h = episode.bbox_maxy - episode.bbox_miny
+
+            dimensions = self._resolve_thumb_dimensions()
+            tw, th = parse_dimensions(dimensions)
+            target_ar = tw / th  # e.g. 768/576 = 1.333
+
+            current_ar = w / h if h > 0 else target_ar
+
+            if current_ar < target_ar:
+                # Too narrow -> expand width symmetrically
+                new_w = h * target_ar
+                half_w = new_w / 2
+                return {
+                    "west": cx - half_w,
+                    "east": cx + half_w,
+                    "south": cy - h / 2,
+                    "north": cy + h / 2,
+                }
+            elif current_ar > target_ar:
+                # Too wide -> expand height symmetrically
+                new_h = w / target_ar
+                half_h = new_h / 2
+                return {
+                    "west": cx - w / 2,
+                    "east": cx + w / 2,
+                    "south": cy - half_h,
+                    "north": cy + half_h,
+                }
+            else:
+                return {
+                    "west": episode.bbox_minx,
+                    "east": episode.bbox_maxx,
+                    "south": episode.bbox_miny,
+                    "north": episode.bbox_maxy,
+                }
+
+        # Fallback: synthetic bbox from centroid
+        return self._bbox_from_point(episode.lat, episode.lon)
+
     def _resolve_extinct_grace_days(self) -> int:
         """
         Dias post-extinct donde el episodio sigue recibiendo thumbnails.
@@ -458,7 +521,11 @@ class ImageryService:
                    centroid_lon AS lon,
                    start_date,
                    last_gee_image_id,
-                   gee_priority
+                   gee_priority,
+                   bbox_minx,
+                   bbox_miny,
+                   bbox_maxx,
+                   bbox_maxy
               FROM fire_episodes
              WHERE (
                      status IN ('active', 'monitoring')
@@ -487,6 +554,10 @@ class ImageryService:
                     gee_priority=int(row["gee_priority"])
                     if row.get("gee_priority") is not None
                     else None,
+                    bbox_minx=float(row["bbox_minx"]) if row.get("bbox_minx") is not None else None,
+                    bbox_miny=float(row["bbox_miny"]) if row.get("bbox_miny") is not None else None,
+                    bbox_maxx=float(row["bbox_maxx"]) if row.get("bbox_maxx") is not None else None,
+                    bbox_maxy=float(row["bbox_maxy"]) if row.get("bbox_maxy") is not None else None,
                 )
             )
         return results
@@ -505,7 +576,11 @@ class ImageryService:
                    centroid_lon AS lon,
                    start_date,
                    last_gee_image_id,
-                   gee_priority
+                   gee_priority,
+                   bbox_minx,
+                   bbox_miny,
+                   bbox_maxx,
+                   bbox_maxy
               FROM fire_episodes
              WHERE id = :episode_id
             """
@@ -522,6 +597,10 @@ class ImageryService:
             gee_priority=int(row["gee_priority"])
             if row.get("gee_priority") is not None
             else None,
+            bbox_minx=float(row["bbox_minx"]) if row.get("bbox_minx") is not None else None,
+            bbox_miny=float(row["bbox_miny"]) if row.get("bbox_miny") is not None else None,
+            bbox_maxx=float(row["bbox_maxx"]) if row.get("bbox_maxx") is not None else None,
+            bbox_maxy=float(row["bbox_maxy"]) if row.get("bbox_maxy") is not None else None,
         )
 
     def _fetch_representative_event(
@@ -604,7 +683,7 @@ class ImageryService:
             except GEEImageNotFoundError:
                 continue
 
-        # Fallback: oldest clear image in last 30 days
+        # Fallback: best available image in last 30 days (coverage-aware)
         try:
             with gee_semaphore.acquire_sync(timeout=120):
                 fallback_collection = self._gee.get_sentinel_collection(
@@ -613,11 +692,35 @@ class ImageryService:
                     end_date=today,
                     max_cloud_cover=30,
                 )
-                oldest = fallback_collection.sort("system:time_start")
-                image = self._first_image(oldest)
+                image = self._gee.get_best_image(
+                    fallback_collection,
+                    bbox=bbox,
+                    min_coverage=85.0,
+                    max_candidates=5,
+                )
             return image, True, 30
         except GEEImageNotFoundError:
-            return None, False, None
+            # Mosaic fallback: giant fires spanning multiple Sentinel-2 tiles
+            try:
+                with gee_semaphore.acquire_sync(timeout=120):
+                    mosaic_collection = self._gee.get_sentinel_collection(
+                        bbox=bbox,
+                        start_date=today - timedelta(days=30),
+                        end_date=today,
+                        max_cloud_cover=30,
+                    )
+                    first_info = mosaic_collection.first().getInfo()
+                    if not first_info:
+                        return None, False, None
+                    image = mosaic_collection.mosaic().clip(
+                        ee.Geometry.Rectangle([
+                            bbox["west"], bbox["south"],
+                            bbox["east"], bbox["north"],
+                        ])
+                    )
+                return image, True, 30
+            except Exception:
+                return None, False, None
 
     def _build_metadata(self, **kwargs: Any) -> Dict[str, str]:
         metadata: Dict[str, str] = {}
@@ -832,7 +935,7 @@ class ImageryService:
                 )
                 return {"status": "skipped", "reason": "cache_hit"}
 
-        bbox = self._bbox_from_point(episode.lat, episode.lon)
+        bbox = self._bbox_from_episode(episode)
         image, is_archive, used_threshold = self._select_image(bbox, thresholds)
         if image is None:
             return {"status": "skipped", "reason": "no_image"}
