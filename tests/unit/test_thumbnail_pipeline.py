@@ -27,9 +27,11 @@ import pytest
 
 from app.services.imagery_service import (
     DEFAULT_CAROUSEL_BBOX_BUFFER_DEGREES,
+    CarouselEpisodeRow,
     ImageryService,
     parse_dimensions,
 )
+from app.services.gee_service import GEEImageNotFoundError
 from app.utils.bbox_utils import create_bbox_from_coordinates
 
 
@@ -899,3 +901,290 @@ class TestBboxProjectionConsistency:
             svc._validate_thumbnail(png, "768x576", "RGB", "ep-stripe")
         assert "low-brightness" in caplog.text.lower()
         assert "left" in caplog.text.lower()
+
+
+# =========================================================================
+# TestBboxAspectRatioPreservesCentroid
+# =========================================================================
+
+
+class TestBboxAspectRatioPreservesCentroid:
+    """
+    Pure math test: expanding a real bbox to 4:3 must NEVER shift the centroid.
+    Simulates an extremely vertical fire (10km tall x 1km wide).
+    """
+
+    @staticmethod
+    def _make_service(dimensions="768x576"):
+        svc = object.__new__(ImageryService)
+        svc.db = MagicMock()
+        svc._gee = MagicMock()
+        svc._storage = MagicMock()
+        svc._resolve_thumb_dimensions = MagicMock(return_value=dimensions)
+        svc._resolve_bbox_buffer_degrees = MagicMock(return_value=0.04)
+        return svc
+
+    def test_vertical_fire_centroid_preserved(self):
+        """
+        Extremely vertical fire (10km high x 1km wide in approx degrees).
+        ~10km ≈ 0.09° lat, ~1km ≈ 0.009° lon.
+        After AR expansion to 4:3 the centroid must be identical.
+        """
+        svc = self._make_service("768x576")
+
+        # Original bbox: very tall, very narrow
+        minx, maxx = -65.0045, -64.9955  # ~1km wide
+        miny, maxy = -35.045, -34.955    # ~10km tall
+
+        original_cx = (minx + maxx) / 2
+        original_cy = (miny + maxy) / 2
+
+        episode = CarouselEpisodeRow(
+            id="ep-vertical",
+            lat=original_cy,
+            lon=original_cx,
+            start_date=None,
+            last_gee_image_id=None,
+            gee_priority=None,
+            bbox_minx=minx,
+            bbox_miny=miny,
+            bbox_maxx=maxx,
+            bbox_maxy=maxy,
+        )
+
+        bbox = svc._bbox_from_episode(episode)
+
+        new_cx = (bbox["west"] + bbox["east"]) / 2
+        new_cy = (bbox["south"] + bbox["north"]) / 2
+
+        assert new_cx == pytest.approx(original_cx, abs=1e-6), (
+            f"Centroid X shifted from {original_cx} to {new_cx}"
+        )
+        assert new_cy == pytest.approx(original_cy, abs=1e-6), (
+            f"Centroid Y shifted from {original_cy} to {new_cy}"
+        )
+
+        # Also verify 4:3 aspect ratio
+        bbox_w = bbox["east"] - bbox["west"]
+        bbox_h = bbox["north"] - bbox["south"]
+        assert bbox_w / bbox_h == pytest.approx(768.0 / 576.0, rel=1e-4)
+
+    def test_horizontal_fire_centroid_preserved(self):
+        """
+        Extremely horizontal fire: 10km wide x 1km tall.
+        AR expansion should increase height, not width.
+        """
+        svc = self._make_service("768x576")
+
+        minx, maxx = -65.045, -64.955  # ~10km wide
+        miny, maxy = -35.0045, -34.9955  # ~1km tall
+
+        original_cx = (minx + maxx) / 2
+        original_cy = (miny + maxy) / 2
+
+        episode = CarouselEpisodeRow(
+            id="ep-horizontal",
+            lat=original_cy,
+            lon=original_cx,
+            start_date=None,
+            last_gee_image_id=None,
+            gee_priority=None,
+            bbox_minx=minx,
+            bbox_miny=miny,
+            bbox_maxx=maxx,
+            bbox_maxy=maxy,
+        )
+
+        bbox = svc._bbox_from_episode(episode)
+
+        new_cx = (bbox["west"] + bbox["east"]) / 2
+        new_cy = (bbox["south"] + bbox["north"]) / 2
+
+        assert new_cx == pytest.approx(original_cx, abs=1e-6)
+        assert new_cy == pytest.approx(original_cy, abs=1e-6)
+
+
+# =========================================================================
+# TestFallbackMosaicOnGiantFires
+# =========================================================================
+
+
+class TestFallbackMosaicOnGiantFires:
+    """
+    When get_best_image raises GEEImageNotFoundError in fallback,
+    the code must call .mosaic() instead of returning (None, False, None).
+    """
+
+    @staticmethod
+    def _make_service():
+        svc = object.__new__(ImageryService)
+        svc.db = MagicMock()
+        svc._gee = MagicMock()
+        svc._storage = MagicMock()
+        svc._resolve_thumb_dimensions = MagicMock(return_value="768x576")
+        svc._resolve_bbox_buffer_degrees = MagicMock(return_value=0.04)
+        return svc
+
+    def test_mosaic_called_when_get_best_image_fails(self):
+        """
+        Simulate giant fire spanning two tiles:
+        - All threshold attempts raise GEEImageNotFoundError
+        - Fallback get_best_image also raises GEEImageNotFoundError
+        - Mosaic fallback should kick in: collection.mosaic().clip() called
+        """
+        svc = self._make_service()
+        bbox = {"west": -72.0, "south": -50.0, "east": -70.0, "north": -49.0}
+
+        # Mock GEE service: get_sentinel_collection returns a mock collection
+        mock_collection = MagicMock()
+        mock_mosaic_image = MagicMock()
+        mock_collection.mosaic.return_value = mock_mosaic_image
+        mock_mosaic_image.clip.return_value = mock_mosaic_image
+
+        # first().getInfo() returns something truthy (collection is non-empty)
+        mock_collection.first.return_value.getInfo.return_value = {"id": "fake"}
+
+        svc._gee.get_sentinel_collection.return_value = mock_collection
+        # get_best_image always fails (no single image has enough coverage)
+        svc._gee.get_best_image.side_effect = GEEImageNotFoundError("No coverage")
+
+        # Bypass gee_semaphore and ee.Geometry.Rectangle
+        with patch("app.services.imagery_service.gee_semaphore") as mock_sem, \
+             patch("app.services.imagery_service.ee") as mock_ee:
+            mock_sem.acquire_sync.return_value.__enter__ = MagicMock()
+            mock_sem.acquire_sync.return_value.__exit__ = MagicMock(return_value=False)
+            mock_ee.Geometry.Rectangle.return_value = MagicMock()
+
+            image, is_archive, threshold = svc._select_image(bbox, [10, 20, 30, 50])
+
+        # The mosaic path should have been used
+        mock_collection.mosaic.assert_called_once()
+        assert is_archive is True
+        assert threshold == 30
+        assert image is not None
+
+    def test_mosaic_returns_none_on_empty_collection(self):
+        """
+        When even the mosaic collection is empty (first().getInfo() returns None),
+        _select_image must return (None, False, None).
+        """
+        svc = self._make_service()
+        bbox = {"west": -72.0, "south": -50.0, "east": -70.0, "north": -49.0}
+
+        mock_collection = MagicMock()
+        mock_collection.first.return_value.getInfo.return_value = None
+
+        svc._gee.get_sentinel_collection.return_value = mock_collection
+        svc._gee.get_best_image.side_effect = GEEImageNotFoundError("No coverage")
+
+        with patch("app.services.imagery_service.gee_semaphore") as mock_sem:
+            mock_sem.acquire_sync.return_value.__enter__ = MagicMock()
+            mock_sem.acquire_sync.return_value.__exit__ = MagicMock(return_value=False)
+
+            image, is_archive, threshold = svc._select_image(bbox, [10, 20])
+
+        assert image is None
+        assert is_archive is False
+        assert threshold is None
+
+
+# =========================================================================
+# TestZeroCoordinateBbox
+# =========================================================================
+
+
+class TestZeroCoordinateBbox:
+    """
+    Verifies that bbox fields with value 0.0 are NOT treated as falsy.
+    0.0 is a valid geographic coordinate (Ecuador/Greenwich meridian).
+    """
+
+    @staticmethod
+    def _make_service(dimensions="768x576"):
+        svc = object.__new__(ImageryService)
+        svc.db = MagicMock()
+        svc._gee = MagicMock()
+        svc._storage = MagicMock()
+        svc._resolve_thumb_dimensions = MagicMock(return_value=dimensions)
+        svc._resolve_bbox_buffer_degrees = MagicMock(return_value=0.04)
+        return svc
+
+    def test_zero_bbox_minx_uses_real_bbox(self):
+        """bbox_minx=0.0 must NOT trigger fallback to _bbox_from_point."""
+        svc = self._make_service("768x576")
+
+        episode = CarouselEpisodeRow(
+            id="ep-equator",
+            lat=0.05,
+            lon=0.05,
+            start_date=None,
+            last_gee_image_id=None,
+            gee_priority=None,
+            bbox_minx=0.0,    # The equator/Greenwich value
+            bbox_miny=-0.05,
+            bbox_maxx=0.1,
+            bbox_maxy=0.05,
+        )
+
+        bbox = svc._bbox_from_episode(episode)
+
+        # If the code fell back to _bbox_from_point, the bbox would be
+        # centered on (0.05, 0.05) with buffer 0.04 — different coords.
+        # With real bbox, the centroid should be (0.05, 0.0)
+        cx = (bbox["west"] + bbox["east"]) / 2
+        cy = (bbox["south"] + bbox["north"]) / 2
+
+        assert cx == pytest.approx(0.05, abs=1e-6), (
+            f"Centroid lon should be ~0.05 (from real bbox), got {cx}. "
+            "Likely fell back to _bbox_from_point because 0.0 was treated as falsy."
+        )
+        assert cy == pytest.approx(0.0, abs=1e-6), (
+            f"Centroid lat should be ~0.0 (from real bbox), got {cy}."
+        )
+
+    def test_zero_bbox_miny_uses_real_bbox(self):
+        """bbox_miny=0.0 must NOT trigger fallback."""
+        svc = self._make_service("768x576")
+
+        episode = CarouselEpisodeRow(
+            id="ep-greenwich",
+            lat=0.05,
+            lon=30.0,
+            start_date=None,
+            last_gee_image_id=None,
+            gee_priority=None,
+            bbox_minx=29.95,
+            bbox_miny=0.0,
+            bbox_maxx=30.05,
+            bbox_maxy=0.1,
+        )
+
+        bbox = svc._bbox_from_episode(episode)
+
+        cy = (bbox["south"] + bbox["north"]) / 2
+        assert cy == pytest.approx(0.05, abs=1e-6)
+
+    def test_all_zero_bbox_uses_real_bbox(self):
+        """All four bbox fields = 0.0 is geometrically degenerate but must not fallback."""
+        svc = self._make_service("768x576")
+
+        episode = CarouselEpisodeRow(
+            id="ep-origin",
+            lat=0.0,
+            lon=0.0,
+            start_date=None,
+            last_gee_image_id=None,
+            gee_priority=None,
+            bbox_minx=0.0,
+            bbox_miny=0.0,
+            bbox_maxx=0.0,
+            bbox_maxy=0.0,
+        )
+
+        # With degenerate bbox (w=0, h=0), current_ar calculation falls back
+        # to target_ar due to h=0 guard, and expands from centroid.
+        # The key assertion is that it does NOT call _bbox_from_point.
+        with patch.object(svc, "_bbox_from_point") as mock_fallback:
+            svc._bbox_from_episode(episode)
+            mock_fallback.assert_not_called()
+
