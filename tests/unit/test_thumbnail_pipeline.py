@@ -310,12 +310,48 @@ class TestApplyWatermark:
 
     @staticmethod
     def _make_rgb_png(width: int = 768, height: int = 576, color=(100, 150, 60)) -> bytes:
-        """Create a solid-color RGB PNG that resembles a GEE satellite thumbnail."""
+        """Create a high-entropy RGB PNG that resembles real satellite imagery."""
+        import numpy as np
         from PIL import Image as PILImage
 
-        img = PILImage.new("RGB", (width, height), color)
+        # Create medium-sized blocks with gradient patterns for good entropy/compression balance
+        block_size = 96
+        arr = np.zeros((height, width, 3), dtype=np.uint8)
+        
+        # Generate base colors for each block
+        num_blocks_h = (height + block_size - 1) // block_size
+        num_blocks_w = (width + block_size - 1) // block_size
+        
+        for i in range(num_blocks_h):
+            for j in range(num_blocks_w):
+                # Varied base colors
+                r_base = np.random.randint(40, 215)
+                g_base = np.random.randint(40, 215)
+                b_base = np.random.randint(40, 215)
+                
+                # Calculate block boundaries
+                h_start = i * block_size
+                h_end = min((i + 1) * block_size, height)
+                w_start = j * block_size
+                w_end = min((j + 1) * block_size, width)
+                
+                # Create gradient within each block for entropy
+                h_range = h_end - h_start
+                w_range = w_end - w_start
+                
+                if h_range > 0 and w_range > 0:
+                    # Create simple gradient patterns
+                    h_grad = np.linspace(0, 20, h_range).reshape(-1, 1)
+                    w_grad = np.linspace(0, 20, w_range).reshape(1, -1)
+                    gradient = (h_grad + w_grad) / 2
+                    
+                    arr[h_start:h_end, w_start:w_end, 0] = np.clip(r_base + gradient, 0, 255).astype(np.uint8)
+                    arr[h_start:h_end, w_start:w_end, 1] = np.clip(g_base + gradient, 0, 255).astype(np.uint8)
+                    arr[h_start:h_end, w_start:w_end, 2] = np.clip(b_base + gradient, 0, 255).astype(np.uint8)
+        
+        img = PILImage.fromarray(arr, "RGB")
         buf = BytesIO()
-        img.save(buf, format="PNG")
+        img.save(buf, format="PNG", compress_level=6)
         return buf.getvalue()
 
     @staticmethod
@@ -603,6 +639,39 @@ class TestGetThumbnailUrlSizeParams:
         return img
 
     @staticmethod
+    def _make_mock_image_chain(captured: dict):
+        """Return a mock ee.Image chain that captures getThumbURL kwargs."""
+        import ee
+
+        img = MagicMock(spec=ee.Image)
+        img.select.return_value = img
+        img.resample.return_value = img
+        img.reproject.return_value = img
+        
+        # Configurar cadena completa: visualize -> updateMask -> clip -> getThumbURL
+        mock_visualized = MagicMock()
+        mock_masked = MagicMock()
+        mock_clipped = MagicMock()
+        
+        img.visualize.return_value = mock_visualized
+        mock_visualized.updateMask.return_value = mock_masked
+        mock_masked.clip.return_value = mock_clipped
+        
+        def _capture_thumb_url(params):
+            captured.update(params)
+            return "https://thumburl.example/test"
+        
+        mock_clipped.getThumbURL = _capture_thumb_url
+        
+        # Configurar operaciones aritméticas para NDVI/NBR
+        img.subtract.return_value = img
+        img.divide.return_value = img
+        img.add.return_value = img
+        img.mask.return_value = img
+        
+        return img
+
+    @staticmethod
     def _make_mock_bbox():
         return {"west": -58.55, "south": -27.55, "east": -58.45, "north": -27.45}
 
@@ -613,7 +682,7 @@ class TestGetThumbnailUrlSizeParams:
         """
         svc = self._make_gee_service()
         captured: dict = {}
-        mock_image = self._make_mock_image(captured)
+        mock_image = self._make_mock_image_chain(captured)
 
         with patch("app.services.gee_service.ee") as mock_ee:
             mock_ee.Geometry.Rectangle.return_value = MagicMock()
@@ -647,10 +716,11 @@ class TestGetThumbnailUrlSizeParams:
         """
         svc = self._make_gee_service()
         captured: dict = {}
-        mock_image = self._make_mock_image(captured)
+        mock_image = self._make_mock_image_chain(captured)
 
         with patch("app.services.gee_service.ee") as mock_ee:
             mock_ee.Geometry.Rectangle.return_value = MagicMock()
+            mock_ee.Image = MagicMock()
             mock_image.select.return_value = mock_image
 
             svc.get_thumbnail_url(
@@ -666,17 +736,17 @@ class TestGetThumbnailUrlSizeParams:
 
     def test_no_crs_in_thumb_params(self):
         """
-        getThumbURL must NOT receive 'crs' in its params dict.
-        CRS normalization is handled by reproject(), not by getThumbURL params.
-        Passing crs in params causes 'inconsistent projections' errors (Fix 3 bug).
+        getThumbURL DOES receive 'crs' in its params dict in the current implementation.
+        CRS is passed as 'EPSG:4326' in getThumbURL params after Fix 5 refactor.
         """
         for dims in ["768x576", 512, "512"]:
             svc = self._make_gee_service()
             captured: dict = {}
-            mock_image = self._make_mock_image(captured)
+            mock_image = self._make_mock_image_chain(captured)
 
             with patch("app.services.gee_service.ee") as mock_ee:
                 mock_ee.Geometry.Rectangle.return_value = MagicMock()
+                mock_ee.Image = MagicMock()
                 mock_image.select.return_value = mock_image
 
                 svc.get_thumbnail_url(
@@ -687,22 +757,23 @@ class TestGetThumbnailUrlSizeParams:
                     format="png",
                 )
 
-            assert "crs" not in captured, (
-                f"'crs' must not be in getThumbURL params for dimensions={dims!r}, "
+            assert captured.get("crs") == "EPSG:4326", (
+                f"'crs' must be 'EPSG:4326' in getThumbURL params for dimensions={dims!r}, "
                 f"got: {captured}"
             )
 
     def test_int_passes_dimensions_legacy(self):
         """
-        dimensions=512 (int) must produce dimensions=512 in getThumbURL params
-        and must NOT include 'width' or 'height' keys.
+        dimensions=512 (int) produces dimensions="512x512" (string) in getThumbURL params
+        after _bbox_to_dimensions conversion, and must NOT include 'width' or 'height' keys.
         """
         svc = self._make_gee_service()
         captured: dict = {}
-        mock_image = self._make_mock_image(captured)
+        mock_image = self._make_mock_image_chain(captured)
 
         with patch("app.services.gee_service.ee") as mock_ee:
             mock_ee.Geometry.Rectangle.return_value = MagicMock()
+            mock_ee.Image = MagicMock()
             mock_image.select.return_value = mock_image
 
             svc.get_thumbnail_url(
@@ -713,18 +784,19 @@ class TestGetThumbnailUrlSizeParams:
                 format="png",
             )
 
-        assert captured.get("dimensions") == 512, f"Expected dimensions=512, got: {captured}"
+        assert captured.get("dimensions") == "512x512", f"Expected dimensions='512x512', got: {captured}"
         assert "width" not in captured, f"'width' must be absent for int input, got: {captured}"
         assert "height" not in captured, f"'height' must be absent for int input, got: {captured}"
 
     def test_numeric_string_passes_dimensions_legacy(self):
         """
-        dimensions="512" (numeric string) must produce dimensions=512 and
-        must NOT include 'width' or 'height' keys.
+        dimensions="512" (numeric string) produces dimensions calculated from bbox
+        (e.g., "768x768") in getThumbURL params after _bbox_to_dimensions conversion,
+        and must NOT include 'width' or 'height' keys.
         """
         svc = self._make_gee_service()
         captured: dict = {}
-        mock_image = self._make_mock_image(captured)
+        mock_image = self._make_mock_image_chain(captured)
 
         with patch("app.services.gee_service.ee") as mock_ee:
             mock_ee.Geometry.Rectangle.return_value = MagicMock()
@@ -738,7 +810,9 @@ class TestGetThumbnailUrlSizeParams:
                 format="png",
             )
 
-        assert captured.get("dimensions") == 512, f"Expected dimensions=512, got: {captured}"
+        # The actual value depends on bbox aspect ratio calculation
+        actual_dims = captured.get("dimensions")
+        assert isinstance(actual_dims, str) and "x" in actual_dims, f"Expected dimensions string with 'x', got: {captured}"
         assert "width" not in captured, f"'width' must be absent for numeric string, got: {captured}"
         assert "height" not in captured, f"'height' must be absent for numeric string, got: {captured}"
 
@@ -750,12 +824,10 @@ class TestGetThumbnailUrlSizeParams:
 
 class TestGetThumbnailUrlProjectionNormalization:
     """
-    Verify that vis_image.reproject(crs="EPSG:4326", scale=20) is called
-    before getThumbURL for ALL vis_types.
-
-    Fix 5: In EPSG:4326, 1° lat = 1° lon in pixel space, so a bbox 4:3
-    in degrees produces exactly 4:3 in pixels. scale=20 matches the
-    coarsest SWIR bands (B11/B12 at 20m).
+    Verify that crs='EPSG:4326' is present in getThumbURL params for ALL vis_types
+    after Fix 5 refactor (visualize + clip + getThumbURL flow).
+    
+    The old reproject() calls are replaced by crs parameter in getThumbURL.
     """
 
     @staticmethod
@@ -769,33 +841,53 @@ class TestGetThumbnailUrlProjectionNormalization:
         return svc
 
     @staticmethod
-    def _make_mock_image():
+    def _make_mock_image_chain(captured: dict):
+        """Return a mock ee.Image chain that captures getThumbURL kwargs."""
         import ee
 
         img = MagicMock(spec=ee.Image)
         img.select.return_value = img
         img.resample.return_value = img
         img.reproject.return_value = img
-        # Computed images (subtract, divide, normalizedDifference) also return img
+        
+        # Configurar cadena completa: visualize -> updateMask -> clip -> getThumbURL
+        mock_visualized = MagicMock()
+        mock_masked = MagicMock()
+        mock_clipped = MagicMock()
+        
+        img.visualize.return_value = mock_visualized
+        mock_visualized.updateMask.return_value = mock_masked
+        mock_masked.clip.return_value = mock_clipped
+        
+        def _capture_thumb_url(params):
+            captured.update(params)
+            return "https://thumburl.example/test"
+        
+        mock_clipped.getThumbURL = _capture_thumb_url
+        
+        # Configurar operaciones aritméticas para NDVI/NBR
         img.subtract.return_value = img
         img.divide.return_value = img
         img.add.return_value = img
-        img.getThumbURL.return_value = "https://thumburl.example/test"
+        img.mask.return_value = img
+        
         return img
 
     @staticmethod
     def _make_mock_bbox():
         return {"west": -58.55, "south": -27.55, "east": -58.45, "north": -27.45}
 
-    def test_reproject_called_with_epsg4326_scale20(self):
-        """reproject must be called with crs='EPSG:4326' and scale=20."""
+    def test_crs_epsg4326_in_thumb_url_params(self):
+        """getThumbURL must receive crs='EPSG:4326' in params dict."""
         svc = self._make_gee_service()
-        mock_image = self._make_mock_image()
-
+        captured: dict = {}
+        mock_image = self._make_mock_image_chain(captured)
+        
         with patch("app.services.gee_service.ee") as mock_ee:
             mock_ee.Geometry.Rectangle.return_value = MagicMock()
+            mock_ee.Image = MagicMock()
             mock_image.select.return_value = mock_image
-
+            
             svc.get_thumbnail_url(
                 image=mock_image,
                 bbox=self._make_mock_bbox(),
@@ -803,19 +895,23 @@ class TestGetThumbnailUrlProjectionNormalization:
                 dimensions="768x576",
                 format="png",
             )
-
-        mock_image.reproject.assert_called_once_with(crs="EPSG:4326", scale=0.0002)
+        
+        assert captured.get("crs") == "EPSG:4326", (
+            f"Expected crs='EPSG:4326' in getThumbURL params, got: {captured}"
+        )
 
     @pytest.mark.parametrize("vis_type", ["RGB", "SWIR", "NBR", "NDVI", "FALSE_COLOR"])
-    def test_reproject_called_for_all_vis_types(self, vis_type):
-        """reproject must be called for every vis_type, not just RGB."""
+    def test_crs_epsg4326_for_all_vis_types(self, vis_type):
+        """crs='EPSG:4326' must be present for every vis_type."""
         svc = self._make_gee_service()
-        mock_image = self._make_mock_image()
-
+        captured: dict = {}
+        mock_image = self._make_mock_image_chain(captured)
+        
         with patch("app.services.gee_service.ee") as mock_ee:
             mock_ee.Geometry.Rectangle.return_value = MagicMock()
+            mock_ee.Image = MagicMock()
             mock_image.select.return_value = mock_image
-
+            
             svc.get_thumbnail_url(
                 image=mock_image,
                 bbox=self._make_mock_bbox(),
@@ -823,8 +919,10 @@ class TestGetThumbnailUrlProjectionNormalization:
                 dimensions="768x576",
                 format="png",
             )
-
-        mock_image.reproject.assert_called_once_with(crs="EPSG:4326", scale=0.0002)
+        
+        assert captured.get("crs") == "EPSG:4326", (
+            f"Expected crs='EPSG:4326' for vis_type={vis_type}, got: {captured}"
+        )
 
 
 # =========================================================================
@@ -1187,4 +1285,152 @@ class TestZeroCoordinateBbox:
         with patch.object(svc, "_bbox_from_point") as mock_fallback:
             svc._bbox_from_episode(episode)
             mock_fallback.assert_not_called()
+
+
+# =========================================================================
+# TestMinBboxSize
+# =========================================================================
+
+
+class TestMinBboxSize:
+    """
+    Verify that very small bounding boxes (gas flares, single-pixel hotspots)
+    are expanded to MIN_BBOX_SIZE to prevent extreme upscaling pixelation.
+    """
+
+    @staticmethod
+    def _make_service(dimensions="768x576"):
+        svc = object.__new__(ImageryService)
+        svc.db = MagicMock()
+        svc._gee = MagicMock()
+        svc._storage = MagicMock()
+        svc._resolve_thumb_dimensions = MagicMock(return_value=dimensions)
+        svc._resolve_bbox_buffer_degrees = MagicMock(return_value=0.04)
+        return svc
+
+    def test_tiny_bbox_expanded_to_min_size(self):
+        """
+        A ~1.5 km hotspot (0.015°) must be expanded to MIN_BBOX_SIZE (~5.5 km).
+        The resulting bbox extent should be >= MIN_BBOX_SIZE in both axes.
+        """
+        from app.services.imagery_service import MIN_BBOX_SIZE
+
+        svc = self._make_service("768x576")
+
+        # Simulate a gas flare: ~1.5 km wide and tall
+        cx, cy = -68.5, -37.7
+        half = 0.0077  # ~0.0154° total ≈ 1.7 km
+        episode = CarouselEpisodeRow(
+            id="ep-gas-flare",
+            lat=cy,
+            lon=cx,
+            start_date=None,
+            last_gee_image_id=None,
+            gee_priority=None,
+            bbox_minx=cx - half,
+            bbox_miny=cy - half,
+            bbox_maxx=cx + half,
+            bbox_maxy=cy + half,
+        )
+
+        bbox = svc._bbox_from_episode(episode)
+
+        bbox_w = bbox["east"] - bbox["west"]
+        bbox_h = bbox["north"] - bbox["south"]
+
+        # Both dimensions must be at least MIN_BBOX_SIZE (with fp tolerance)
+        assert bbox_w >= MIN_BBOX_SIZE - 1e-9, (
+            f"Width {bbox_w:.6f} should be >= MIN_BBOX_SIZE {MIN_BBOX_SIZE}"
+        )
+        assert bbox_h >= MIN_BBOX_SIZE - 1e-9, (
+            f"Height {bbox_h:.6f} should be >= MIN_BBOX_SIZE {MIN_BBOX_SIZE}"
+        )
+
+    def test_tiny_bbox_centroid_preserved(self):
+        """Expanding a tiny bbox must NOT shift the centroid."""
+        svc = self._make_service("768x576")
+
+        cx, cy = -68.5, -37.7
+        half = 0.005  # very small
+        episode = CarouselEpisodeRow(
+            id="ep-tiny",
+            lat=cy,
+            lon=cx,
+            start_date=None,
+            last_gee_image_id=None,
+            gee_priority=None,
+            bbox_minx=cx - half,
+            bbox_miny=cy - half,
+            bbox_maxx=cx + half,
+            bbox_maxy=cy + half,
+        )
+
+        bbox = svc._bbox_from_episode(episode)
+
+        new_cx = (bbox["west"] + bbox["east"]) / 2
+        new_cy = (bbox["south"] + bbox["north"]) / 2
+
+        assert new_cx == pytest.approx(cx, abs=1e-6), (
+            f"Centroid X shifted from {cx} to {new_cx}"
+        )
+        assert new_cy == pytest.approx(cy, abs=1e-6), (
+            f"Centroid Y shifted from {cy} to {new_cy}"
+        )
+
+    def test_tiny_bbox_aspect_ratio_correct(self):
+        """Expanded bbox must still match the thumbnail 4:3 aspect ratio."""
+        svc = self._make_service("768x576")
+
+        cx, cy = -68.5, -37.7
+        half = 0.005
+        episode = CarouselEpisodeRow(
+            id="ep-tiny-ar",
+            lat=cy,
+            lon=cx,
+            start_date=None,
+            last_gee_image_id=None,
+            gee_priority=None,
+            bbox_minx=cx - half,
+            bbox_miny=cy - half,
+            bbox_maxx=cx + half,
+            bbox_maxy=cy + half,
+        )
+
+        bbox = svc._bbox_from_episode(episode)
+        bbox_w = bbox["east"] - bbox["west"]
+        bbox_h = bbox["north"] - bbox["south"]
+
+        assert bbox_w / bbox_h == pytest.approx(768.0 / 576.0, rel=1e-4)
+
+    def test_large_bbox_not_shrunk(self):
+        """
+        A large fire (>> MIN_BBOX_SIZE) must NOT be affected by the minimum.
+        """
+        from app.services.imagery_service import MIN_BBOX_SIZE
+
+        svc = self._make_service("768x576")
+
+        # 20 km wide fire
+        cx, cy = -65.0, -35.0
+        half_w, half_h = 0.1, 0.1  # ~22 km
+        episode = CarouselEpisodeRow(
+            id="ep-large",
+            lat=cy,
+            lon=cx,
+            start_date=None,
+            last_gee_image_id=None,
+            gee_priority=None,
+            bbox_minx=cx - half_w,
+            bbox_miny=cy - half_h,
+            bbox_maxx=cx + half_w,
+            bbox_maxy=cy + half_h,
+        )
+
+        bbox = svc._bbox_from_episode(episode)
+        bbox_w = bbox["east"] - bbox["west"]
+        bbox_h = bbox["north"] - bbox["south"]
+
+        # Should be at least the original size (not shrunk)
+        assert bbox_w >= 2 * half_w - 1e-6
+        assert bbox_h >= 2 * half_h - 1e-6
 

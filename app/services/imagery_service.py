@@ -134,6 +134,10 @@ THUMB_DIMENSIONS: Union[int, str] = "768x576"
 CAROUSEL_IMAGE_TYPE = "carousel"
 DEFAULT_CAROUSEL_BBOX_BUFFER_DEGREES = 0.04
 DEFAULT_CAROUSEL_GEE_RESAMPLE = "bicubic"
+# Minimum bbox extent (degrees) to avoid extreme upscaling on small incidents.
+# ~0.05° ≈ 5.5 km → Sentinel-2 captures ~550 real pixels at 10 m/px,
+# enough for a sharp 768px thumbnail without visible pixelation.
+MIN_BBOX_SIZE = 0.05
 DEFAULT_WATERMARK_LOGO_RELATIVE_PATH = "app/assets/branding/watermark-logo.png"
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -461,6 +465,11 @@ class ImageryService:
             cy = (episode.bbox_miny + episode.bbox_maxy) / 2
             w = episode.bbox_maxx - episode.bbox_minx
             h = episode.bbox_maxy - episode.bbox_miny
+
+            # Enforce minimum extent to prevent pixelation on small incidents
+            # (e.g. gas flares, small hotspots with only ~150 real Sentinel-2 pixels).
+            w = max(w, MIN_BBOX_SIZE)
+            h = max(h, MIN_BBOX_SIZE)
 
             dimensions = self._resolve_thumb_dimensions()
             tw, th = parse_dimensions(dimensions)
