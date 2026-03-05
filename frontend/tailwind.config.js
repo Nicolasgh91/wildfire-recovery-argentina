@@ -8,10 +8,22 @@ export default {
   theme: {
     extend: {
       colors: {
+        nav: {
+          DEFAULT: "hsl(var(--nav) / <alpha-value>)",
+          foreground: "hsl(var(--nav-foreground) / <alpha-value>)",
+          hover: "hsl(var(--nav-hover) / <alpha-value>)",
+        },
+        footer: {
+          DEFAULT: "hsl(var(--footer) / <alpha-value>)",
+          foreground: "hsl(var(--footer-foreground) / <alpha-value>)",
+          muted: "hsl(var(--footer-muted) / <alpha-value>)",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
+        "auth-page": "hsl(var(--auth-page-background))",
+        "auth-form-container": "hsl(var(--auth-form-container-bg))",
         foreground: "hsl(var(--foreground))",
         primary: {
           DEFAULT: "hsl(var(--primary))",

@@ -568,7 +568,7 @@ export default function FireHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background/15">
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6" />
 

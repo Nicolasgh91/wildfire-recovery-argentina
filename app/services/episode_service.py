@@ -439,10 +439,10 @@ class EpisodeService:
                         array_remove(array_agg(DISTINCT fe.status), NULL) AS statuses,
                         AVG(ST_Y(fe.centroid::geometry)) AS centroid_lat,
                         AVG(ST_X(fe.centroid::geometry)) AS centroid_lon,
-                        MIN(ST_X(fe.centroid::geometry)) AS bbox_minx,
-                        MIN(ST_Y(fe.centroid::geometry)) AS bbox_miny,
-                        MAX(ST_X(fe.centroid::geometry)) AS bbox_maxx,
-                        MAX(ST_Y(fe.centroid::geometry)) AS bbox_maxy
+                        MIN(ST_XMin(fe.perimeter::geometry)) AS bbox_minx,
+                        MIN(ST_YMin(fe.perimeter::geometry)) AS bbox_miny,
+                        MAX(ST_XMax(fe.perimeter::geometry)) AS bbox_maxx,
+                        MAX(ST_YMax(fe.perimeter::geometry)) AS bbox_maxy
                     FROM fire_episode_events fee
                     JOIN fire_events fe ON fe.id = fee.event_id
                     WHERE fee.episode_id = :episode_id
@@ -587,10 +587,10 @@ class EpisodeService:
                 "last_seen_at": last_seen_at,
                 "centroid_lat": row["centroid_lat"],
                 "centroid_lon": row["centroid_lon"],
-                "bbox_minx": row["bbox_minx"],
-                "bbox_miny": row["bbox_miny"],
-                "bbox_maxx": row["bbox_maxx"],
-                "bbox_maxy": row["bbox_maxy"],
+                "bbox_minx": row["bbox_minx"] if row["bbox_minx"] is not None else row["centroid_lon"],
+                "bbox_miny": row["bbox_miny"] if row["bbox_miny"] is not None else row["centroid_lat"],
+                "bbox_maxx": row["bbox_maxx"] if row["bbox_maxx"] is not None else row["centroid_lon"],
+                "bbox_maxy": row["bbox_maxy"] if row["bbox_maxy"] is not None else row["centroid_lat"],
                 "provinces": row["provinces"],
                 "event_count": event_count,
                 "detection_count": detection_count,

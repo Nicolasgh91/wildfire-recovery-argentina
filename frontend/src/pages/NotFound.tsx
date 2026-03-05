@@ -9,7 +9,7 @@ export default function NotFoundPage() {
   const { t } = useI18n()
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background/15">
       <div className="container mx-auto flex max-w-xl items-center justify-center px-4 py-20">
         <Card className="w-full border-border bg-card">
           <CardContent className="flex flex-col items-center gap-4 py-10 text-center">

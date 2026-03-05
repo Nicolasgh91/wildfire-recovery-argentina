@@ -27,7 +27,9 @@
 @layer base {
   :root {
     --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
-    --background: 0 0% 98%;
+    --background: 164 86% 16%;
+    --auth-page-background: 0 0% 100%;
+    --auth-form-container-bg: 122.88 25.49% 79.89%;
     --foreground: 40 10% 20%;
     --card: 0 0% 100%;
     --card-foreground: 40 10% 20%;
@@ -43,6 +45,12 @@
     --accent-foreground: 40 10% 25%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
+    --nav: 164 26.17% 67.88%;
+    --nav-foreground: 215 25% 27%;
+    --nav-hover: 143 64% 24%;
+    --footer: 164 86% 16%;
+    --footer-foreground: 0 0% 100%;
+    --footer-muted: 216 12% 84%;
     --border: 110 10% 88%;
     --input: 110 10% 92%;
     --ring: 155 55% 45%;
@@ -64,6 +72,8 @@
 
   .dark {
     --background: 40 10% 18%;
+    --auth-page-background: 0 0% 100%;
+    --auth-form-container-bg: 122.88 25.49% 79.89%;
     --foreground: 100 10% 95%;
     --card: 40 10% 22%;
     --card-foreground: 100 10% 95%;
@@ -95,6 +105,12 @@
     --sidebar-accent-foreground: 100 10% 95%;
     --sidebar-border: 40 10% 32%;
     --sidebar-ring: 155 55% 45%;
+    --nav: 164 26.17% 67.88%;
+    --nav-foreground: 100 10% 95%;
+    --nav-hover: 155 55% 45%;
+    --footer: 40 10% 15%;
+    --footer-foreground: 100 10% 95%;
+    --footer-muted: 40 10% 60%;
   }
 
   * {
@@ -102,6 +118,7 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
+    background-color: hsl(0deg 0% 95.44% / 58%);
+    @apply text-foreground font-sans;
   }
 }

@@ -62,8 +62,8 @@ export default function HomePage() {
 
   // Cargar episodios activos con ordenamiento
   const { data: activeData, isLoading: loadingActive, isError: errorActive, refetch: refetchActive } = useEpisodesByMode(
-    'active', 
-    DEFAULT_LIMIT, 
+    'active',
+    DEFAULT_LIMIT,
     true,
     { sort_by: 'start_date', sort_desc: sortOrder === 'desc' }
   )
@@ -114,7 +114,7 @@ export default function HomePage() {
   }, [gridVisible, displayEpisodes.length])
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background/15">
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center sm:hidden">
@@ -129,7 +129,7 @@ export default function HomePage() {
               />
             </Suspense>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
               className="gap-2"
@@ -138,7 +138,7 @@ export default function HomePage() {
               {sortOrder === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
               {t('sortByDate')}
             </Button>
-            <Button asChild variant="outline" className="ml-auto gap-2 sm:ml-0">
+            <Button asChild variant="secondary" size="sm" className="ml-auto gap-2 sm:ml-0">
               <Link to="/fires/history">
                 {t('fireHistory')}
                 <ArrowRight className="h-4 w-4" />

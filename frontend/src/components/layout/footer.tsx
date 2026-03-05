@@ -66,7 +66,7 @@ function FooterSection({ titleKey, itemIds, isAuthenticated, onExternalClick }: 
 
   return (
     <div>
-      <h3 className="mb-4 text-sm font-semibold tracking-wider text-foreground uppercase">
+      <h3 className="mb-4 text-sm font-bold tracking-wider text-foreground uppercase">
         {t(titleKey)}
       </h3>
       <ul className="flex flex-col gap-3">
@@ -75,7 +75,7 @@ function FooterSection({ titleKey, itemIds, isAuthenticated, onExternalClick }: 
             <Link
               to={item.to}
               onClick={() => window.scrollTo(0, 0)}
-              className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-primary"
+              className="flex items-center gap-2 text-sm text-footer-muted transition-colors hover:text-primary"
             >
               <item.icon className="h-4 w-4" />
               {t(item.labelKey)}
@@ -87,7 +87,7 @@ function FooterSection({ titleKey, itemIds, isAuthenticated, onExternalClick }: 
             <button
               type="button"
               onClick={() => onExternalClick(item)}
-              className="flex items-center gap-2 text-left text-sm text-muted-foreground transition-colors hover:text-primary"
+              className="flex items-center gap-2 text-left text-sm text-footer-muted transition-colors hover:text-primary"
             >
               <item.icon className="h-4 w-4" />
               {t(item.labelKey)}
@@ -112,7 +112,7 @@ function PublicSourcesColumn({ onExternalClick }: PublicSourcesProps) {
 
   return (
     <div>
-      <h3 className="mb-4 text-sm font-semibold tracking-wider text-foreground uppercase">
+      <h3 className="mb-4 text-sm font-bold tracking-wider text-foreground uppercase">
         {t('footerPublicSources')}
       </h3>
       <TooltipProvider>
@@ -122,7 +122,7 @@ function PublicSourcesColumn({ onExternalClick }: PublicSourcesProps) {
               return (
                 <li
                   key={`group-${index}`}
-                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                  className="flex items-center gap-2 text-sm text-footer-muted"
                 >
                   <ExternalLink className="h-3 w-3 shrink-0" />
                   <div className="flex items-center gap-2">
@@ -133,12 +133,12 @@ function PublicSourcesColumn({ onExternalClick }: PublicSourcesProps) {
                             <button
                               type="button"
                               onClick={() => onExternalClick(link.href, t(link.labelKey))}
-                              className="truncate text-left transition-colors hover:text-primary"
+                              className="truncate text-left text-footer-muted transition-colors hover:text-primary"
                             >
                               {t(link.labelKey)}
                             </button>
                           </TooltipTrigger>
-                          <TooltipContent>
+                          <TooltipContent className="border-footer bg-footer text-white shadow-lg dark:border-border dark:bg-popover dark:text-popover-foreground">
                             <p>{t(link.tooltipKey)}</p>
                           </TooltipContent>
                         </Tooltip>
@@ -157,13 +157,13 @@ function PublicSourcesColumn({ onExternalClick }: PublicSourcesProps) {
                     <button
                       type="button"
                       onClick={() => onExternalClick(item.href, t(item.labelKey))}
-                      className="flex items-center gap-2 text-left text-sm text-muted-foreground transition-colors hover:text-primary"
+                      className="flex items-center gap-2 text-left text-sm text-footer-muted transition-colors hover:text-primary"
                     >
                       <ExternalLink className="h-3 w-3 shrink-0" />
                       <span className="truncate">{t(item.labelKey)}</span>
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>
+                  <TooltipContent className="border-footer bg-footer text-white shadow-lg dark:border-border dark:bg-popover dark:text-popover-foreground">
                     <p>{t(item.tooltipKey)}</p>
                   </TooltipContent>
                 </Tooltip>
@@ -197,14 +197,14 @@ export function Footer() {
 
   return (
     <>
-      <footer className="hidden border-t border-border bg-card md:block">
+      <footer className="hidden border-t border-border bg-footer/[.34] text-footer-foreground md:block">
         <div className="container mx-auto px-6 py-12">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-5">
             <div className="flex flex-col gap-4">
               <div>
-                <BrandLogo size="md" />
+                <BrandLogo size="md" showIcon={false} />
               </div>
-              <p className="text-sm leading-relaxed text-muted-foreground">
+              <p className="text-sm leading-relaxed text-footer-muted">
                 {t('footerBrandLine1')} {t('footerBrandLine2')}
               </p>
             </div>
@@ -224,21 +224,21 @@ export function Footer() {
 
           <div className="mt-12 border-t border-border pt-8">
             <div className="mb-8">
-              <h3 className="mb-3 text-xs font-semibold tracking-wider text-foreground uppercase">
+              <h3 className="mb-3 text-xs font-bold tracking-wider text-foreground uppercase">
                 {t('footerLegalTitle')}
               </h3>
-              <p className="mb-2 text-xs leading-relaxed text-muted-foreground">
+              <p className="mb-2 text-xs leading-relaxed text-footer-muted">
                 {t('footerLegalP1')}
               </p>
-              <p className="text-xs leading-relaxed text-muted-foreground">
+              <p className="text-xs leading-relaxed text-footer-muted">
                 {t('footerLegalP2')}
               </p>
             </div>
             <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-footer-muted">
                 &copy; {new Date().getFullYear()} {BRAND.name} Argentina. {t('footerCopyright')}
               </p>
-              <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <div className="flex items-center gap-1 text-sm text-footer-muted">
                 <span>{t('footerMadeWith')}</span>
                 <span className="text-destructive" aria-label="corazon">
                   {'\u2764\uFE0F'}
