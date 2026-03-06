@@ -8,6 +8,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  criticalDialogContentClasses,
+  criticalDialogDescriptionClasses,
+  criticalDialogPrimaryButtonClasses,
+  criticalDialogSecondaryButtonClasses,
+  criticalDialogTitleClasses,
+} from '@/components/ui/critical-dialog-styles'
 import { useI18n } from '@/context/LanguageContext'
 import { Z_INDEX } from '@/features/navigation/config/z-index'
 
@@ -34,17 +41,26 @@ export function ExternalConfirmDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent style={{ zIndex: Z_INDEX.MODAL_CRITICAL }}>
+      <AlertDialogContent
+        style={{ zIndex: Z_INDEX.MODAL_CRITICAL }}
+        className={criticalDialogContentClasses}
+      >
         <AlertDialogHeader>
-          <AlertDialogTitle>{t('footerLeavingTitle')}</AlertDialogTitle>
-          <AlertDialogDescription>
+          <AlertDialogTitle className={criticalDialogTitleClasses}>
+            {t('footerLeavingTitle')}
+          </AlertDialogTitle>
+          <AlertDialogDescription className={criticalDialogDescriptionClasses}>
             {t('footerLeavingDescription')}
             {siteName ? ` ${siteName}` : ''}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{t('footerCancel')}</AlertDialogCancel>
-          <AlertDialogAction onClick={handleContinue}>{t('footerContinue')}</AlertDialogAction>
+        <AlertDialogFooter className="sm:justify-center gap-2">
+          <AlertDialogCancel className={criticalDialogSecondaryButtonClasses}>
+            {t('footerCancel')}
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={handleContinue} className={criticalDialogPrimaryButtonClasses}>
+            {t('footerContinue')}
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

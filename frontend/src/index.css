@@ -77,6 +77,19 @@
     --sidebar-accent-foreground: 40 10% 25%;
     --sidebar-border: 110 10% 88%;
     --sidebar-ring: 155 55% 45%;
+    /* Mobile hamburger menu (same values as global tokens; change here to theme mobile only) */
+    --mobile-nav-bg: 0 0% 98%;
+    --mobile-nav-foreground: 40 10% 20%;
+    --mobile-nav-muted: 0 0% 100%;
+    --mobile-nav-muted-foreground: 40 10% 55%;
+    --mobile-nav-primary: 155 55% 45%;
+    --mobile-nav-primary-foreground: 0 0% 100%;
+    --mobile-nav-border: 110 10% 88%;
+    --mobile-nav-section-heading: 155 55% 35%;
+    /* Critical modals (access restricted, external confirm, terms of use) */
+    --critical-dialog-bg: 164 86% 16%;
+    --critical-dialog-foreground: 0 0% 100%;
+    --critical-dialog-muted: 0 0% 75%;
   }
 
   .dark {
@@ -120,6 +133,19 @@
     --footer: 40 10% 15%;
     --footer-foreground: 100 10% 95%;
     --footer-muted: 40 10% 60%;
+    /* Mobile hamburger menu (same values as global tokens in dark) */
+    --mobile-nav-bg: 40 10% 18%;
+    --mobile-nav-foreground: 100 10% 95%;
+    --mobile-nav-muted: 40 10% 28%;
+    --mobile-nav-muted-foreground: 100 10% 65%;
+    --mobile-nav-primary: 155 55% 45%;
+    --mobile-nav-primary-foreground: 40 10% 15%;
+    --mobile-nav-border: 40 10% 32%;
+    --mobile-nav-section-heading: 100 10% 65%;
+    /* Critical modals (same as card/foreground in dark) */
+    --critical-dialog-bg: 40 10% 22%;
+    --critical-dialog-foreground: 100 10% 95%;
+    --critical-dialog-muted: 100 10% 65%;
   }
 
   * {
