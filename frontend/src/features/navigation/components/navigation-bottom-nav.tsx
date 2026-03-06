@@ -14,7 +14,7 @@ export function NavigationBottomNav({ onMenuPress }: NavigationBottomNavProps) {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-mobile-nav-border bg-mobile-nav/95 backdrop-blur supports-[backdrop-filter]:bg-mobile-nav/60 md:hidden"
       style={{ zIndex: Z_INDEX.NAVBAR }}
       aria-label={t('navMenu')}
     >
@@ -25,8 +25,8 @@ export function NavigationBottomNav({ onMenuPress }: NavigationBottomNavProps) {
           aria-label={t('home')}
           className={({ isActive }) =>
             cn(
-              'flex h-11 min-h-[44px] flex-col items-center justify-center rounded-md text-xs',
-              isActive ? 'text-primary' : 'text-muted-foreground',
+              'flex h-11 min-h-[44px] flex-col items-center justify-center rounded-md text-xs font-medium',
+              isActive ? 'text-mobile-nav-primary' : 'text-mobile-nav-foreground',
             )
           }
         >
@@ -39,8 +39,8 @@ export function NavigationBottomNav({ onMenuPress }: NavigationBottomNavProps) {
           aria-label={t('map')}
           className={({ isActive }) =>
             cn(
-              'flex h-11 min-h-[44px] flex-col items-center justify-center rounded-md text-xs',
-              isActive ? 'text-primary' : 'text-muted-foreground',
+              'flex h-11 min-h-[44px] flex-col items-center justify-center rounded-md text-xs font-medium',
+              isActive ? 'text-mobile-nav-primary' : 'text-mobile-nav-foreground',
             )
           }
         >
@@ -53,8 +53,8 @@ export function NavigationBottomNav({ onMenuPress }: NavigationBottomNavProps) {
           aria-label={t('reports')}
           className={({ isActive }) =>
             cn(
-              'flex h-11 min-h-[44px] flex-col items-center justify-center rounded-md text-xs',
-              isActive ? 'text-primary' : 'text-muted-foreground',
+              'flex h-11 min-h-[44px] flex-col items-center justify-center rounded-md text-xs font-medium',
+              isActive ? 'text-mobile-nav-primary' : 'text-mobile-nav-foreground',
             )
           }
         >
@@ -65,7 +65,7 @@ export function NavigationBottomNav({ onMenuPress }: NavigationBottomNavProps) {
           type="button"
           onClick={onMenuPress}
           aria-label={t('navMenu')}
-          className="flex h-11 min-h-[44px] flex-col items-center justify-center rounded-md text-xs text-muted-foreground"
+          className="flex h-11 min-h-[44px] flex-col items-center justify-center rounded-md text-xs font-medium text-mobile-nav-foreground"
         >
           <Menu className="h-5 w-5" />
           <span>{t('navMenu')}</span>

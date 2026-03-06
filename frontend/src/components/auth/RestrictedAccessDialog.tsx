@@ -8,6 +8,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import {
+  criticalDialogContentClasses,
+  criticalDialogDescriptionClasses,
+  criticalDialogIconClasses,
+  criticalDialogIconWrapperClasses,
+  criticalDialogPrimaryButtonClasses,
+  criticalDialogSecondaryButtonClasses,
+  criticalDialogTitleClasses,
+} from '@/components/ui/critical-dialog-styles'
 import { useI18n } from '@/context/LanguageContext'
 import { Z_INDEX } from '@/features/navigation/config/z-index'
 import { LockKeyhole } from 'lucide-react'
@@ -30,33 +39,27 @@ export function RestrictedAccessDialog({
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent
-        style={{ zIndex: Z_INDEX.MODAL_CRITICAL, backgroundColor: 'hsl(164deg 86% 16% / 79%)' }}
-        className="border-none shadow-2xl backdrop-blur-sm dark:bg-card dark:backdrop-blur-none"
+        style={{ zIndex: Z_INDEX.MODAL_CRITICAL }}
+        className={criticalDialogContentClasses}
       >
         <AlertDialogHeader>
           <div className="mb-2 flex justify-center">
-            <div className="rounded-full bg-white/10 p-3">
-              <LockKeyhole className="h-6 w-6 text-white dark:text-foreground" />
+            <div className={criticalDialogIconWrapperClasses}>
+              <LockKeyhole className={criticalDialogIconClasses} />
             </div>
           </div>
-          <AlertDialogTitle className="text-center text-white dark:text-foreground">
+          <AlertDialogTitle className={criticalDialogTitleClasses}>
             {t('protectedPageTitle')}
           </AlertDialogTitle>
-          <AlertDialogDescription className="text-center text-white/75 dark:text-muted-foreground">
+          <AlertDialogDescription className={criticalDialogDescriptionClasses}>
             {t('protectedPageMessage')}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="sm:justify-center gap-2">
-          <AlertDialogCancel
-            onClick={onGoBack}
-            className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white dark:border-border dark:bg-secondary dark:text-foreground dark:hover:bg-secondary/80"
-          >
+          <AlertDialogCancel onClick={onGoBack} className={criticalDialogSecondaryButtonClasses}>
             {t('goBack')}
           </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={onLogin}
-            className="bg-white text-footer hover:bg-white/90 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-          >
+          <AlertDialogAction onClick={onLogin} className={criticalDialogPrimaryButtonClasses}>
             {t('login')}
           </AlertDialogAction>
         </AlertDialogFooter>

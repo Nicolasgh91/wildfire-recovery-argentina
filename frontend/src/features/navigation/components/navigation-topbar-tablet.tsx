@@ -15,11 +15,11 @@ export function NavigationTopbarTablet({ onMenuPress }: NavigationTopbarTabletPr
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 hidden h-24 items-center justify-between border-b border-border bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:flex lg:hidden"
+      className="fixed top-0 left-0 right-0 hidden h-24 items-center justify-between border-b border-mobile-nav-border bg-mobile-nav/95 px-6 text-mobile-nav-foreground backdrop-blur supports-[backdrop-filter]:bg-mobile-nav/60 md:flex lg:hidden"
       style={{ zIndex: Z_INDEX.NAVBAR }}
     >
       <Link to={HOME_PATH}>
-        <BrandLogo size="md" />
+        <BrandLogo size="md" nameClassName="text-mobile-nav-foreground" />
       </Link>
       <Button
         variant="ghost"

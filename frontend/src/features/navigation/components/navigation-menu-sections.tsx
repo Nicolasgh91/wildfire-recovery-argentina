@@ -50,7 +50,7 @@ export function NavigationMenuSections({
 
         return (
           <section key={section} className="space-y-2">
-            <h3 className="px-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <h3 className="px-1 text-xs font-semibold tracking-wide text-mobile-nav-section-heading uppercase">
               {t(SECTION_LABELS[section])}
             </h3>
             <div className="space-y-1">
@@ -75,8 +75,10 @@ export function NavigationMenuSections({
                       cn(
                         'flex min-h-[44px] items-center justify-between rounded-md px-3 py-2 text-sm transition-colors',
                         isActive
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-foreground hover:bg-muted',
+                          ? 'bg-mobile-nav-primary text-mobile-nav-primary-foreground'
+                          : item.id === 'login'
+                            ? 'border border-mobile-nav-primary text-mobile-nav-primary bg-transparent hover:bg-mobile-nav-muted'
+                            : 'text-mobile-nav-foreground hover:bg-mobile-nav-muted',
                       )
                     }
                   >
@@ -93,7 +95,7 @@ export function NavigationMenuSections({
                   key={item.id}
                   type="button"
                   onClick={() => onExternalClick(item)}
-                  className="flex min-h-[44px] w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
+                  className="flex min-h-[44px] w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm text-mobile-nav-foreground transition-colors hover:bg-mobile-nav-muted"
                 >
                   <span className="flex items-center gap-2">
                     <item.icon className="h-4 w-4" />
@@ -124,7 +126,7 @@ function LockedMenuItem({
       type="button"
       onClick={() => onLockedNavigate(item.to)}
       aria-label={`${t(item.labelKey)} - requiere inicio de sesion`}
-      className="flex min-h-[44px] w-full items-center justify-between rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+      className="flex min-h-[44px] w-full items-center justify-between rounded-md border border-mobile-nav-border/60 bg-mobile-nav-muted/30 px-3 py-2 text-left text-sm text-mobile-nav-muted-foreground transition-colors hover:bg-mobile-nav-muted hover:text-mobile-nav-foreground"
     >
       <span className="flex items-center gap-2">
         <item.icon className="h-4 w-4" />

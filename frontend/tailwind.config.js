@@ -70,6 +70,21 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        "mobile-nav": {
+          DEFAULT: "hsl(var(--mobile-nav-bg) / <alpha-value>)",
+          foreground: "hsl(var(--mobile-nav-foreground) / <alpha-value>)",
+          muted: "hsl(var(--mobile-nav-muted) / <alpha-value>)",
+          "muted-foreground": "hsl(var(--mobile-nav-muted-foreground) / <alpha-value>)",
+          primary: "hsl(var(--mobile-nav-primary) / <alpha-value>)",
+          "primary-foreground": "hsl(var(--mobile-nav-primary-foreground) / <alpha-value>)",
+          border: "hsl(var(--mobile-nav-border))",
+          "section-heading": "hsl(var(--mobile-nav-section-heading))",
+        },
+        "critical-dialog": {
+          DEFAULT: "hsl(var(--critical-dialog-bg) / <alpha-value>)",
+          foreground: "hsl(var(--critical-dialog-foreground) / <alpha-value>)",
+          muted: "hsl(var(--critical-dialog-muted))",
+        },
       },
       borderRadius: {
         xl: "calc(var(--radius) + 4px)",
