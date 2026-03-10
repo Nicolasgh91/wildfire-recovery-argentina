@@ -264,24 +264,24 @@ url = 'postgresql+psycopg2://{user}:{pw}@{host}:{port}/{db}'.format(
 )
 engine = sqlalchemy.create_engine(url)
 with engine.connect() as conn:
-    row = conn.execute(sqlalchemy.text('''
+    row = conn.execute(sqlalchemy.text(\"""
         SELECT slides_data->0->>'thumbnail_url'
         FROM fire_episodes
         WHERE id = '$EPISODE_ID'
-    ''')).scalar()
+    \""")).scalar()
     print(row or '')
 ")
 
-curl -sL \"\$THUMB_URL\" -o /tmp/thumb_check.png
-docker cp /tmp/thumb_check.png forestguard-api:/tmp/thumb_check.png
+curl -sL "$THUMB_URL" -o /tmp/thumb_check.png
 
 docker exec -i forestguard-api python -c "
 from PIL import Image
-import numpy as np, os
+import numpy as np
 img = np.array(Image.open('/tmp/thumb_check.png').convert('RGB'), dtype=float)
 h, w = img.shape[:2]
+import os
 size_kb = os.path.getsize('/tmp/thumb_check.png') / 1024
-left_brightness  = img[:, :5, :].mean()
+left_brightness = img[:, :5, :].mean()
 right_brightness = img[:, -5:, :].mean()
 ratio = w / h
 print(f'Tamaño: {size_kb:.0f} KB {chr(9989) if 500 < size_kb < 1200 else chr(9888)}')
@@ -296,11 +296,14 @@ else:
 "
 ```
 
+> **Nota:** El paso de análisis requiere que `/tmp/thumb_check.png` esté accesible
+> dentro del contenedor. Alternativamente, copia el archivo al contenedor con
+> `docker cp /tmp/thumb_check.png forestguard-api:/tmp/thumb_check.png` antes de
+> ejecutar el script de Python.
+
 **Criterio de aceptación:**
 ```
 Brillo col izquierda: > 10.0  ✅
 Brillo col derecha:   > 10.0  ✅
-Tamaño archivo:       500–1200 KB ✅
 ```
-
 

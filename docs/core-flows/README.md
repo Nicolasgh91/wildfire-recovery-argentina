@@ -37,7 +37,7 @@ Este directorio agrupa la documentación **canónica** de los flujos CORE de la 
   - `docs/core-flows/core-preproceso-imagenes/core-preproceso-manual-dev.md` — **manual** (operación local, scripts de regeneración)
   - `docs/core-flows/core-preproceso-imagenes/core-preproceso-runbook.md` — **runbook** (diagnóstico de problemas de thumbnails/PNG)
   - `docs/watermark_debugging_guide.md` — **runbook/design** (guía de debugging de corrupción/watermark)
-  - `docs/development/runbooks/carousel_manual_run.md` — **runbook/manual** (ejecución manual del carrusel)
+  - `docs/archive/development/carousel_manual_run.md` — **runbook/manual** (ejecución manual del carrusel)
 
 - **Código principal asociado**:
   - `app/services/imagery_service.py`
@@ -75,7 +75,7 @@ Este directorio agrupa la documentación **canónica** de los flujos CORE de la 
   - `docs/archive/assets/assets-pipeline-technical-tasks.md` — **histórico/design** (pipeline técnico de assets: thumbnails, HD, PDFs; tareas ya ejecutadas en parte)
   - `docs/archive/assets/status_2026-02-22.md` — **histórico** (snapshot de estado a 2026‑02‑22)
   - `docs/archive/2026-02/assets-generation/` — **histórico** (planes 503 y PLAN-INTEGRACION si se consultan)
-  - `docs/development/runbooks/auth-validation.md` — **runbook** (validación de auth que impacta algunos flujos de inferencia protegidos)
+  - `docs/archive/development/auth-validation-runbook.md` — **runbook** (validación de auth que impacta algunos flujos de inferencia protegidos)
 
 - **Código principal asociado**:
   - `app/services/quality_service.py`

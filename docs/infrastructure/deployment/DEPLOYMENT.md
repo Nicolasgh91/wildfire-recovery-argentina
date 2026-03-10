@@ -178,3 +178,5 @@ Se recomienda revisar ese documento antes de intervenir manualmente la infraestr
 - `docs/infrastructure/deployment/quick-fixes.md` — guía de troubleshooting para problemas frecuentes.
 - `docs/infrastructure/deployment/immediate-fix.md` — solución multi‑arquitectura para imágenes Docker de frontend.
 - `docs/deployment/play_store/revised_plan.md` — plan vigente de Android/Play Store (diseño detallado de la pista).
+- `docs/archive/development/maintenance_scripts.md` — resumen de scripts de mantenimiento y cron recomendados para tareas diarias.
+- `docs/archive/development/scripts_readme.md` — catálogo de scripts de carga y procesamiento de datos (FIRMS histórico, áreas protegidas, cruces legales, clustering y slides).

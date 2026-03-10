@@ -5,7 +5,7 @@ Estos scripts son críticos para el funcionamiento continuo de ForestGuard en pr
 ## Scripts Críticos
 
 ### 1. `run_migration.py`
-**Propósito**: Aplicar migraciones de base de datos
+**Propósito**: Aplicar migraciones de base de datos  
 **Uso**: 
 ```bash
 # Aplicar todas las migraciones pendientes
@@ -19,7 +19,7 @@ python scripts/maintenance/run_migration.py --check
 - Después de actualizaciones que incluyan cambios en DB
 
 ### 2. `load_firms_incremental.py`
-**Propósito**: Descargar datos diarios de NASA FIRMS
+**Propósito**: Descargar datos diarios de NASA FIRMS  
 **Uso**:
 ```bash
 # Cargar datos del día anterior
@@ -33,7 +33,7 @@ python scripts/maintenance/load_firms_incremental.py --days-back 3
 - Manualmente si faltan datos recientes
 
 ### 3. `aggregate_fire_episodes.py`
-**Propósito**: Agrupar eventos de incendios en episodios para optimizar GEE
+**Propósito**: Agrupar eventos de incendios en episodios para optimizar GEE  
 **Uso**:
 ```bash
 # Procesar episodios activos
@@ -47,7 +47,7 @@ python scripts/maintenance/aggregate_fire_episodes.py --input-status active+clos
 - Antes de procesar imágenes satelitales
 
 ### 4. `run_carousel_local.py`
-**Propósito**: Generar carrusel de imágenes satelitales
+**Propósito**: Generar carrusel de imágenes satelitales  
 **Uso**:
 ```bash
 # Procesar incendios activos
@@ -145,3 +145,4 @@ Para recuperación:
 - Restaurar desde backup point-in-time de Supabase
 - Re-ejecutar migraciones si es necesario
 - Verificar integridad de datos post-recuperación
+
