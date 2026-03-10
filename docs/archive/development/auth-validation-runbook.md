@@ -1,4 +1,4 @@
-﻿# Auth Validation Runbook (ForestGuard)
+# Auth Validation Runbook (ForestGuard)
 
 Date: 2026-02-12
 Scope: Supabase Auth + Audit + Mercado Pago + Android (Capacitor)
@@ -82,3 +82,4 @@ Backend:
 - No native auth endpoints accessible (/api/v1/auth/* removed).
 - All user-protected endpoints accept Supabase JWT only.
 - Payment return works after external redirects without losing session.
+

@@ -27,7 +27,7 @@ Estado confirmado en repo:
 - Frontend ya envía plataforma:
   - `frontend/src/hooks/mutations/useCreateCheckout.ts:38`
 - Runbook menciona deep links Android, pero no existe app Android todavía:
-  - `docs/development/runbooks/auth-validation.md:75`
+  - `docs/archive/development/auth-validation-runbook.md:75`
 - Riesgo actual de sesión/tokens en almacenamiento web:
   - `frontend/src/lib/supabase.ts:14`
   - `frontend/src/services/api.ts:60`

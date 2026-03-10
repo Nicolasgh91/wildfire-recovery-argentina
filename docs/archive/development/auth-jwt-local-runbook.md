@@ -60,7 +60,7 @@ Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:8000/api/v1/payments/c
 ## Gotchas
 - Usar `access_token` de `sb-<project>-auth-token`. No usar `refresh_token` ni `provider_token`.
 - Token expirado devuelve `{"detail":"Token expirado"}`.
-- En PowerShell, `curl` es alias de `Invoke-WebRequest`. Usar `curl.exe` si querÃ©s salida tipo curl.
+- En PowerShell, `curl` es alias de `Invoke-WebRequest`. Usar `curl.exe` si querés salida tipo curl.
 - Para `/api/v1/explorations/` usar **slash final**. Sin slash, FastAPI responde 307 y PowerShell puede perder `Authorization`.
 - Si falta tabla `user_investigations` o `payment_requests`, aplicar migraciones:
   - `database/migrations/014_create_exploration_investigations.sql`
@@ -74,3 +74,4 @@ Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:8000/api/v1/payments/c
 - [x] `/api/v1/explorations/` responde `201` (create) y `200` (list).
 - [x] `/api/v1/payments/credits/balance` responde `200 OK`.
 - [x] `/api/v1/payments/checkout` responde `200 OK` (mock mode).
+
