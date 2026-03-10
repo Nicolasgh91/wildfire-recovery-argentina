@@ -48,7 +48,7 @@ Basado en `docs/Carrusel fix/auditoria_ingesta_vs_codigo.md` y revisión del có
   - Alineado con el pipeline funcional (ingesta → clustering → episodios → carrusel), pero describe una topología de workers legacy (workers dedicados por cola) ya consolidada en `worker-fast` y `worker-gee`.
 - `docs/Carrusel fix/data_ingestion_process.md`:
   - **Estado**: PARCIAL.
-  - El flujo conceptual de ingesta y carrusel sigue siendo válido, pero detalles de contenedores y variables de entorno se han actualizado. Para topología usar `docs/containers/workers.md`.
+  - El flujo conceptual de ingesta y carrusel sigue siendo válido, pero detalles de contenedores y variables de entorno se han actualizado. Para topología de workers y colas usar `docs/architecture/containers.md`.
 - `docs/Carrusel fix/auditoria_ingesta_vs_codigo.md`:
   - **Estado**: HISTÓRICO/DISEÑO.
   - La auditoría sigue siendo útil para entender las decisiones tomadas, pero el source of truth actual es este documento y el código.

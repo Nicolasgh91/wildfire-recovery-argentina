@@ -33,7 +33,7 @@ El pipeline diario canónico sigue esta secuencia (ver también `docs/INDEX.md` 
 - **Carrusel y assets**:
   - `app/services/imagery_service.py` + `gee_service.py` + `storage_service.py`.
   - `workers/tasks/carousel_task.py` (`generate_carousel`, cola `gee`).
-  - Pipeline de assets detallado en `docs/assets-generation/tareas-tecnicas-assets-pipeline.md`.
+  - Pipeline de assets (diseño histórico): `docs/archive/assets/assets-pipeline-technical-tasks.md`.
 - **VAE / monitoreo NDVI**:
   - `app/services/vae_service.py`.
   - `workers/tasks/recovery.py`, `workers/tasks/destruction.py`.
@@ -71,8 +71,8 @@ Es la herramienta recomendada para validar cambios en el pipeline end‑to‑end
 - `docs/Carrusel fix/flujo_ingesta_procesamiento.md`:
   - **Estado**: PARCIAL/HISTÓRICO.
   - El flujo conceptual sigue siendo válido, pero la topología de workers descrita es previa a la consolidación actual en colas `ingestion`/`clustering`/`analysis`/`gee`.
-- `docs/assets-generation/tareas-tecnicas-assets-pipeline.md`:
-  - **Estado**: DISEÑO.
+- `docs/archive/assets/assets-pipeline-technical-tasks.md`:
+  - **Estado**: HISTÓRICO/DISEÑO.
   - Especifica etapas y dependencias del pipeline de assets; se debe leer junto con este documento y `imagery_service.py` para obtener la imagen actual.
 - `docs/flujo-deploy.md` y `docs/infrastructure/deployment/DEPLOYMENT.md`:
   - **Estado**: OK.

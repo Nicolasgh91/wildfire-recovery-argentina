@@ -12,10 +12,10 @@ Este directorio agrupa la documentación **canónica** de los flujos CORE de la 
 ### 1. Ingesta de datos satelitales (FIRMS → detecciones/eventos)
 
 - **Documentos existentes relacionados**:
-  - `docs/Carrusel fix/data_ingestion_process.md` — **overview/design**
-  - `docs/Carrusel fix/flujo_ingesta_procesamiento.md` — **overview** (de extremo a extremo, comparte ámbito con pipeline E2E)
-  - `docs/Carrusel fix/auditoria_ingesta_vs_codigo.md` — **design** (auditoría cruzada doc ↔ código)
-  - `docs/Carrusel fix/prompt_auditoria_ingesta.md` — **histórico** (contexto de auditoría asistida)
+  - `docs/core-flows/core-ingesta/core-ingesta-overview.md` — **overview**
+  - `docs/core-flows/core-ingesta/core-ingesta-design.md` — **design** (especificación técnica de ingesta FIRMS)
+  - `docs/core-flows/core-ingesta/core-ingesta-manual-dev.md` — **manual** (operación y pruebas de ingesta)
+  - `docs/core-flows/core-ingesta/core-ingesta-runbook.md` — **runbook** (troubleshooting de ingesta)
   - `docs/UF-12/0_UC_F12_AS_IS_ANALYSIS_2026-02-24.md` — **histórico/overview** (estado AS-IS previo a la implementación nueva)
   - `docs/UF-12/2_UC_F12_implementation_spec.md` — **design** (especificación de implementación del flujo extendido UC‑F12)
   - `docs/UF-12/3_UC_F12_technical_tasks_claude_code.md` — **histórico/design** (lista técnica de tareas, ya ejecutadas en parte)
@@ -32,12 +32,11 @@ Este directorio agrupa la documentación **canónica** de los flujos CORE de la 
 ### 2. Preprocesamiento de imágenes (thumbnails, watermark, fixes PNG)
 
 - **Documentos existentes relacionados**:
-  - `docs/1_home/thumbnails/PNG_CORRUPTION_FIX_SUMMARY.md` — **design** (resumen del fix profundo de PNGs)
-  - `docs/1_home/thumbnails/WATERMARK_IMPLEMENTATION_SUMMARY.md` — **design** (diseño de watermark y variantes)
-  - `docs/1_home/thumbnails/VM_DEPLOYMENT_COMMANDS.md` — **manual/histórico** (comandos de VM usados durante el fix)
+  - `docs/core-flows/core-preproceso-imagenes/core-preproceso-overview.md` — **overview**
+  - `docs/core-flows/core-preproceso-imagenes/core-preproceso-design.md` — **design** (parámetros de visualización, watermark y fixes)
+  - `docs/core-flows/core-preproceso-imagenes/core-preproceso-manual-dev.md` — **manual** (operación local, scripts de regeneración)
+  - `docs/core-flows/core-preproceso-imagenes/core-preproceso-runbook.md` — **runbook** (diagnóstico de problemas de thumbnails/PNG)
   - `docs/watermark_debugging_guide.md` — **runbook/design** (guía de debugging de corrupción/watermark)
-  - `docs/Carrusel fix/revision_arquitectural_flujo_thumbnails.md` — **design** (revisión arquitectural del flujo de thumbnails)
-  - `docs/Carrusel fix/thumnails/plan_carrusel_urls_y_hardening.md` — **design** (plan de hardening de URLs y carrusel)
   - `docs/development/runbooks/carousel_manual_run.md` — **runbook/manual** (ejecución manual del carrusel)
 
 - **Código principal asociado**:
@@ -73,9 +72,9 @@ Este directorio agrupa la documentación **canónica** de los flujos CORE de la 
 
 - **Documentos existentes relacionados**:
   - `docs/endpoints/fires-stats-workflow.md` — **overview** (flujo de stats de incendios consumidas por UI)
-  - `docs/assets-generation/tareas-tecnicas-assets-pipeline.md` — **design/overview** (pipeline técnico de assets: thumbnails, HD, PDFs)
-  - `docs/assets-generation/503_implementation_plan.md` — **histórico/design** (plan de implementación, muchas tareas ya ejecutadas)
-  - `docs/assets-generation/status_2026-02-22.md` — **histórico** (snapshot de estado a 2026‑02‑22)
+  - `docs/archive/assets/assets-pipeline-technical-tasks.md` — **histórico/design** (pipeline técnico de assets: thumbnails, HD, PDFs; tareas ya ejecutadas en parte)
+  - `docs/archive/assets/status_2026-02-22.md` — **histórico** (snapshot de estado a 2026‑02‑22)
+  - `docs/archive/2026-02/assets-generation/` — **histórico** (planes 503 y PLAN-INTEGRACION si se consultan)
   - `docs/development/runbooks/auth-validation.md` — **runbook** (validación de auth que impacta algunos flujos de inferencia protegidos)
 
 - **Código principal asociado**:
@@ -109,9 +108,11 @@ Este directorio agrupa la documentación **canónica** de los flujos CORE de la 
 
 - **Documentos existentes relacionados**:
   - `docs/INDEX.md` — **overview** (incluye diagrama mermaid del pipeline core)
-  - `docs/Carrusel fix/flujo_ingesta_procesamiento.md` — **overview/design** (flujo completo, foco en carrusel)
+  - `docs/core-flows/core-pipeline-e2e/core-pipeline-overview.md` — **overview** (recorrido E2E de datos y assets)
+  - `docs/core-flows/core-pipeline-e2e/core-pipeline-design.md` — **design** (detalles técnicos por etapa)
+  - `docs/core-flows/core-pipeline-e2e/core-pipeline-runbook.md` — **runbook/manual** (troubleshooting E2E)
   - `docs/UF-12/uc-f12-data-flow-diagram-776569.md` — **overview** (flujo extendido con UC‑F12)
-  - `docs/assets-generation/tareas-tecnicas-assets-pipeline.md` — **design** (pipeline de assets visuales de punta a punta)
+  - `docs/archive/assets/assets-pipeline-technical-tasks.md` — **histórico/design** (pipeline de assets visuales de punta a punta)
   - `docs/project/episodes/plan_episode_flow.md` — **design/histórico** (diseño del flujo de episodios)
   - `docs/flujo-deploy.md` — **manual/overview** (flujo resumido de deploy y operación)
   - `docs/infrastructure/deployment/DEPLOYMENT.md` — **manual** (guía de despliegue canónica)

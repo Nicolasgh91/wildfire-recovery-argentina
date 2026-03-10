@@ -1,4 +1,6 @@
-# Plan Repo-Grounded de Release Android en Google Play (ForestGuard)
+# Plan repo-grounded de release android en google play (ForestGuard)
+
+> Plan detallado de release Android. El estado actual de despliegue web/backend está en `docs/infrastructure/deployment/DEPLOYMENT.md`; usar este archivo como referencia específica para la pista Android/Play Store.
 
 ## Resumen
 Objetivo: llevar el estado actual (web + backend) a un release Android publicable con AAB, cumpliendo políticas Play vigentes al **23-feb-2026**, con hardening de seguridad/privacidad, pipeline reproducible y checklist humano.

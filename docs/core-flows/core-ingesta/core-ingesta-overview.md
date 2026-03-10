@@ -18,9 +18,7 @@ Este flujo CORE cubre desde la **descarga incremental diaria de FIRMS** hasta la
 
 ### Documentos fuente relevantes
 
-- `docs/Carrusel fix/data_ingestion_process.md`
-- `docs/Carrusel fix/flujo_ingesta_procesamiento.md`
-- `docs/Carrusel fix/auditoria_ingesta_vs_codigo.md`
+- `docs/architecture/data_ingestion_flow.md`
 - `docs/UF-12/2_UC_F12_implementation_spec.md`
 - `docs/UF-12/uc-f12-data-flow-diagram-776569.md`
 
