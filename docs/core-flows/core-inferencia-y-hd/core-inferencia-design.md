@@ -7,10 +7,10 @@ Se documentarán:
   - calidad de eventos,
   - estadísticas agregadas de incendios.
 - Estrategia de selección y generación de escenas HD (según `exploration_service` y `exploration_hd_worker`).
-- Integración con el pipeline de assets (`tareas-tecnicas-assets-pipeline.md`).
+- Integración con el pipeline de assets (documento archivado en `docs/archive/assets/`).
 
 Referencias:
 
-- `docs/assets-generation/tareas-tecnicas-assets-pipeline.md`
+- `docs/archive/assets/assets-pipeline-technical-tasks.md`
 - `docs/endpoints/fires-stats-workflow.md`
 

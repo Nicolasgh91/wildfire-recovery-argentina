@@ -22,11 +22,10 @@ Este flujo CORE cubre la generación y corrección de **thumbnails y assets de i
 
 ### Documentos fuente relevantes
 
-- `docs/1_home/thumbnails/PNG_CORRUPTION_FIX_SUMMARY.md`
-- `docs/1_home/thumbnails/WATERMARK_IMPLEMENTATION_SUMMARY.md`
+- `docs/core-flows/core-preproceso-imagenes/core-preproceso-design.md`
+- `docs/core-flows/core-preproceso-imagenes/core-preproceso-manual-dev.md`
+- `docs/core-flows/core-preproceso-imagenes/core-preproceso-runbook.md`
 - `docs/watermark_debugging_guide.md`
-- `docs/Carrusel fix/revision_arquitectural_flujo_thumbnails.md`
-- `docs/Carrusel fix/thumnails/plan_carrusel_urls_y_hardening.md`
 
 Para operación detallada y troubleshooting, ver `core-preproceso-manual-dev.md` y `core-preproceso-runbook.md`.
 

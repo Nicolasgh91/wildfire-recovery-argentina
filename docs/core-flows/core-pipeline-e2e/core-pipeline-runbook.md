@@ -75,5 +75,5 @@ Referencias útiles:
 
 - `docs/INDEX.md`
 - `docs/Carrusel fix/flujo_ingesta_procesamiento.md`
-- `docs/assets-generation/tareas-tecnicas-assets-pipeline.md`
+- `docs/archive/assets/assets-pipeline-technical-tasks.md`
 

@@ -1,0 +1,25 @@
+---
+description: 
+alwaysApply: true
+---
+
+Estructura de documentación del proyecto:
+docs/
+├── STATE.md              ← Archivo maestro. Estado actual de TODO el sistema. 
+│                            El agente lo lee primero, siempre.
+├── architecture/
+│   ├── schema.md         ← Esquema de base de datos vigente (sin histórico)
+│   ├── containers.md     ← Servicios Docker, puertos, memoria, dependencias
+│   └── flows.md          ← Flujos de datos entre componentes
+├── features/
+│   ├── carousel.md       ← UC-F08R: estado implementado
+│   ├── recovery.md       ← UC-F12: estado implementado
+│   └── seo.md            ← SEO/GEO: estado implementado (este plan)
+├── tasks/
+│   └── backlog.md        ← Tareas pendientes con prioridad. Se actualiza por tarea.
+└── decisions/
+    └── adr.md            ← Architecture Decision Records: por qué se decidió X
+Reglas de mantenimiento:
+STATE.md se actualiza en cada PR que modifica comportamiento del sistema
+Los archivos en tasks/ solo contienen tareas pendientes; las completadas se mueven a adr.md como registro de decisión
+STATE.md tiene una sección "última actualización" con fecha y commit

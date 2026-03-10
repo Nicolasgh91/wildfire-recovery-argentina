@@ -14,7 +14,6 @@ Documentará las decisiones clave de:
 
 Se apoyará en:
 
-- `docs/Carrusel fix/revision_arquitectural_flujo_thumbnails.md`
-- `docs/1_home/thumbnails/PNG_CORRUPTION_FIX_SUMMARY.md`
-- `docs/1_home/thumbnails/WATERMARK_IMPLEMENTATION_SUMMARY.md`
+- `docs/watermark_debugging_guide.md`
+- `docs/core-flows/core-preproceso-imagenes/core-preproceso-overview.md`
 

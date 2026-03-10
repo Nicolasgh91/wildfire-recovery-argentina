@@ -25,7 +25,7 @@ Como ninguna de las dos cosas ocurrió desde el deploy, las tablas están vacía
 
 > Nota 2026-03: la topología actual consolidó los workers en `worker-fast` y `worker-gee`.  
 > La cola `vae` (UC-F12 / VAE) hoy es consumida por el contenedor `forestguard-worker-gee`.  
-> Donde este documento menciona `worker-vae`, usar `worker-gee` y ver `docs/containers/workers.md`.
+> Donde este documento menciona `worker-vae`, usar `worker-gee` y ver `docs/architecture/containers.md` para la topología actual de workers.
 
 ### 1.1 Verificar que el worker-gee está corriendo
 

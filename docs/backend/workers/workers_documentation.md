@@ -7,7 +7,7 @@ Las tasks se organizan por función y se enrutan a colas específicas para optim
 
 Para la topología de contenedores y qué colas consume cada uno, ver también:
 
-- `docs/containers/workers.md`
+- `docs/architecture/containers.md`
 
 ## Worker Configuration
 

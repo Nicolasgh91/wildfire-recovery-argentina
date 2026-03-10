@@ -1,4 +1,6 @@
-# Frontend Technical Debt
+# Frontend technical debt
+
+> Documento de referencia de deuda técnica. El backlog vigente se consolida en `docs/tasks/backlog.md`; usar este archivo como detalle complementario mientras las tareas sigan abiertas.
 
 ## TD-FE-001: Oversized bundle chunk warning
 - **Timestamp**: 2026-02-19T14:33:08-03:00

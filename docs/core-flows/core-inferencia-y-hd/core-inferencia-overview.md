@@ -21,7 +21,6 @@ Este flujo CORE cubre la **generación de indicadores y assets analíticos** a p
 ### Documentos fuente relevantes
 
 - `docs/endpoints/fires-stats-workflow.md`
-- `docs/assets-generation/tareas-tecnicas-assets-pipeline.md`
-- `docs/assets-generation/503_implementation_plan.md`
-- `docs/assets-generation/status_2026-02-22.md`
+- `docs/archive/assets/assets-pipeline-technical-tasks.md`
+- `docs/archive/assets/status_2026-02-22.md`
 
