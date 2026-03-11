@@ -227,6 +227,10 @@ CREATE TABLE public.fire_episodes (
   slides_data jsonb,
   last_seen_at timestamp with time zone,
   extinct_at timestamp with time zone,
+  slides_status text DEFAULT 'pending'::text CHECK (slides_status = ANY (ARRAY['pending'::text, 'processing'::text, 'ready'::text, 'failed'::text])),
+  slug text,
+  seo_title text,
+  seo_description text,
   CONSTRAINT fire_episodes_pkey PRIMARY KEY (id),
   CONSTRAINT fire_episodes_clustering_version_id_fkey FOREIGN KEY (clustering_version_id) REFERENCES public.clustering_versions(id)
 );
@@ -258,6 +262,9 @@ CREATE TABLE public.fire_events (
   h3_index bigint,
   clustering_version_id uuid,
   last_seen_at timestamp with time zone,
+  recovery_status character varying DEFAULT NULL::character varying,
+  recovery_percentage numeric DEFAULT NULL::numeric,
+  last_monitoring_date date,
   CONSTRAINT fire_events_pkey PRIMARY KEY (id),
   CONSTRAINT fire_events_clustering_version_id_fkey FOREIGN KEY (clustering_version_id) REFERENCES public.clustering_versions(id)
 );
@@ -521,6 +528,33 @@ CREATE TABLE public.satellite_images (
   CONSTRAINT satellite_images_episode_id_fkey FOREIGN KEY (episode_id) REFERENCES public.fire_episodes(id),
   CONSTRAINT satellite_images_fire_event_id_fkey FOREIGN KEY (fire_event_id) REFERENCES public.fire_events(id)
 );
+CREATE TABLE public.seo_minor_fire_quota (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  year_month text NOT NULL UNIQUE,
+  episode_ids ARRAY NOT NULL DEFAULT '{}'::uuid[],
+  url_count integer NOT NULL DEFAULT 0,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT seo_minor_fire_quota_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.seo_pages_cache (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  page_type text NOT NULL,
+  slug text NOT NULL,
+  cached_at timestamp with time zone DEFAULT now(),
+  expires_at timestamp with time zone,
+  stale_until timestamp with time zone,
+  content jsonb,
+  CONSTRAINT seo_pages_cache_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.seo_region_thresholds (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  region_slug text NOT NULL UNIQUE,
+  province_slugs ARRAY NOT NULL,
+  min_affected_area_ha integer NOT NULL DEFAULT 500,
+  label text,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT seo_region_thresholds_pkey PRIMARY KEY (id)
+);
 CREATE TABLE public.spatial_ref_sys (
   srid integer NOT NULL CHECK (srid > 0 AND srid <= 998999),
   auth_name character varying,
@@ -615,6 +649,8 @@ CREATE TABLE public.vegetation_monitoring (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  cloud_cover_pct real,
+  recovery_status character varying,
   CONSTRAINT vegetation_monitoring_pkey PRIMARY KEY (id),
   CONSTRAINT vegetation_monitoring_fire_event_id_fkey FOREIGN KEY (fire_event_id) REFERENCES public.fire_events(id),
   CONSTRAINT vegetation_monitoring_satellite_image_id_fkey FOREIGN KEY (satellite_image_id) REFERENCES public.satellite_images(id)

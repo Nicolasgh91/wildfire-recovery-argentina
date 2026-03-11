@@ -1,38 +1,36 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import fs from 'fs'
+
+function loadJson<T>(file: string, fallback: T): T {
+  const p = path.resolve(__dirname, 'public', file)
+  if (!fs.existsSync(p)) return fallback
+  return JSON.parse(fs.readFileSync(p, 'utf-8')) as T
+}
+
+const ssgRoutes = loadJson<{
+  static_routes: string[]
+  province_routes: string[]
+  zone_routes: string[]
+  episode_routes: string[]
+  total: number
+}>('ssg-routes.json', {
+  static_routes: ['/metodologia', '/acerca'],
+  province_routes: [],
+  zone_routes: [],
+  episode_routes: [],
+  total: 2,
+})
+
+const ssgSeoData = loadJson<{ episodes?: Record<string, unknown> }>('ssg-seo-data.json', {
+  episodes: {},
+})
+
+const seoIndex: Record<string, unknown> = ssgSeoData.episodes ?? {}
 
 export default defineConfig(async () => {
   const plugins = [react()]
-
-  // Dynamic import: only load @sentry/vite-plugin when actually needed.
-  // The static import was loading the entire Sentry module (~20-50 MB)
-  // into memory even in Docker builds where SENTRY_* vars are never set.
-  const sentryAuthToken = process.env.SENTRY_AUTH_TOKEN
-  const sentryOrg = process.env.SENTRY_ORG
-  const sentryProject = process.env.SENTRY_PROJECT
-
-  if (sentryAuthToken && sentryOrg && sentryProject) {
-    const { sentryVitePlugin } = await import('@sentry/vite-plugin')
-    plugins.push(
-      sentryVitePlugin({
-        authToken: sentryAuthToken,
-        org: sentryOrg,
-        project: sentryProject,
-      }),
-    )
-  }
-
-  // Optional critical CSS extraction (no-op if plugin is not installed)
-  if (process.env.USE_CRITTERS !== 'false') {
-    try {
-      // @ts-ignore
-      const { default: critters } = await import('vite-plugin-critters')
-      plugins.push(critters({ preload: 'swap', reduceInlineStyles: true }))
-    } catch (err) {
-      console.warn('vite-plugin-critters no está instalado; omitiendo extracción de CSS crítico.')
-    }
-  }
 
   // Optional bundle visualization (generates dist/stats.html)
   if (process.env.VISUALIZE === 'true') {
@@ -92,20 +90,88 @@ export default defineConfig(async () => {
     build: {
       sourcemap: generateSourcemap,
       chunkSizeWarningLimit: 500,
+      modulePreload: { polyfill: true },
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-            'vendor-map': ['leaflet', 'react-leaflet'],
-            'vendor-charts': ['recharts'],
-            'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-popover', '@radix-ui/react-select', '@radix-ui/react-tabs', '@radix-ui/react-tooltip'],
-            'vendor-query': ['@tanstack/react-query'],
-            'vendor-motion': ['framer-motion'],
-            'vendor-i18n': ['i18next', 'react-i18next'],
-            'vendor-geo': ['h3-js'],
+          manualChunks(id: string) {
+            // 1. Leaflet y plugins — solo necesarios en rutas con mapa
+            if (
+              id.includes('node_modules/leaflet') ||
+              id.includes('node_modules/react-leaflet') ||
+              id.includes('node_modules/leaflet.glify') ||
+              id.includes('node_modules/@react-leaflet')
+            ) {
+              return 'vendor-leaflet'
+            }
+
+            // 2. H3 — cálculos geoespaciales, solo en mapa/análisis
+            if (id.includes('node_modules/h3-js')) {
+              return 'vendor-h3'
+            }
+
+            // 3. Animaciones — Framer Motion, solo en componentes con transiciones
+            if (id.includes('node_modules/framer-motion')) {
+              return 'vendor-motion'
+            }
+
+            // 4. Componentes UI headless — Radix, Embla
+            if (
+              id.includes('node_modules/@radix-ui') ||
+              id.includes('node_modules/embla-carousel')
+            ) {
+              return 'vendor-ui'
+            }
+
+            // 5. Datos y estado — React Query, Zustand o similar
+            if (
+              id.includes('node_modules/@tanstack') ||
+              id.includes('node_modules/zustand')
+            ) {
+              return 'vendor-state'
+            }
+
+            // 6. React core — siempre se carga; separado para cache de larga duración
+            if (
+              id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/react-router') ||
+              id.includes('node_modules/scheduler/')
+            ) {
+              return 'vendor-react'
+            }
+
+            // 7. i18n y geo extra (recharts sin manualChunk para cargar solo en rutas con gráficos)
+            if (id.includes('node_modules/i18next') || id.includes('node_modules/react-i18next')) {
+              return 'vendor-i18n'
+            }
+            if (id.includes('node_modules/h3-js')) {
+              return 'vendor-geo'
+            }
+
+            // Dejar que el resto siga la estrategia de chunking por defecto
           },
         },
       },
-    }
+    },
+
+    ssgOptions: {
+      script: 'async',
+      formatting: 'minify',
+      includedRoutes: () => [
+        ...ssgRoutes.static_routes,
+        ...ssgRoutes.province_routes,
+        ...ssgRoutes.zone_routes,
+        ...ssgRoutes.episode_routes,
+      ],
+      onBeforePageRender: async (route: string, _html: string, appCtx: any) => {
+        const match = route.match(/^\/episodios\/(.+)$/)
+        if (!match) return
+        const slug = match[1]
+        const data = seoIndex[slug]
+        if (data && appCtx?.queryClient) {
+          appCtx.queryClient.setQueryData(['episode-seo', slug], data)
+        }
+      },
+    },
   }
 })

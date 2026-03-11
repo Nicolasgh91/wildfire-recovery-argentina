@@ -3,8 +3,8 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { Loader2 } from 'lucide-react'
 import { ThemeProvider } from '@/components/theme-provider'
 import { BRAND } from '@/config/brand'
-import { Footer } from '@/components/layout/footer'
-import { Navbar } from '@/components/layout/navbar'
+const Navbar = lazy(() => import('@/components/layout/navbar').then((m) => ({ default: m.Navbar })))
+const Footer = lazy(() => import('@/components/layout/footer').then((m) => ({ default: m.Footer })))
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import { I18nProvider } from '@/context/LanguageContext'
@@ -79,11 +79,17 @@ function AppShell({ children }: { children: ReactNode }) {
     <div className={shellClass}>
       {!hideChrome && (
         <NavigationErrorBoundary>
-          <Navbar />
+          <Suspense fallback={null}>
+            <Navbar />
+          </Suspense>
         </NavigationErrorBoundary>
       )}
       <main className={mainClass}>{children}</main>
-      {!hideChrome && <Footer />}
+      {!hideChrome && (
+        <Suspense fallback={null}>
+          <Footer />
+        </Suspense>
+      )}
     </div>
   )
 }

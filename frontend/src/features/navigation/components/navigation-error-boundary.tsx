@@ -1,5 +1,4 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import * as Sentry from '@sentry/react'
 import { NavigationErrorFallback } from '@/features/navigation/components/navigation-error-fallback'
 
 interface NavigationErrorBoundaryProps {
@@ -20,11 +19,8 @@ export class NavigationErrorBoundary extends Component<
     return { hasError: true }
   }
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    Sentry.captureException(error, {
-      tags: { area: 'navigation' },
-      extra: { info },
-    })
+  componentDidCatch(_error: Error, _info: ErrorInfo) {
+    // Errors surface via render
   }
 
   render() {

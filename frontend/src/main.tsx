@@ -8,10 +8,16 @@ import App from './App.tsx'
 import { Toaster } from '@/components/ui/sonner'
 import { Toaster as RadixToaster } from '@/components/ui/toaster'
 import { queryClient } from '@/lib/queryClient'
-import { initSentry } from '@/lib/sentry'
 import { ErrorBoundary } from '@/components/error/ErrorBoundary'
 
-initSentry()
+if (import.meta.env.PROD) {
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[ForestGuard] Unhandled rejection:', event.reason)
+  })
+  window.addEventListener('error', (event) => {
+    console.error('[ForestGuard] Global error:', event.error)
+  })
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -124,6 +124,9 @@ class Settings(BaseSettings):
     # --- URL Maestra ---
     DATABASE_URL: Optional[str] = None
 
+    # --- Paginación compartida SEO/GEO ---
+    PAGE_SIZE: int = 20
+
     model_config = SettingsConfigDict(
         env_file=".env", case_sensitive=True, extra="ignore"
     )

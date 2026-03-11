@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, Camera, Flame, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -227,9 +227,19 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
       </CardContent>
 
       <CardFooter className="border-t border-border bg-muted/30 p-4">
-        <Button variant="secondary" className="w-full gap-2" onClick={handleViewDetails}>
-          {t('viewDetails')}
-          <ArrowRight className="h-4 w-4" />
+        <Button asChild variant="secondary" className="w-full gap-2">
+          <Link
+            to={`/fires/${detailId}`}
+            onClick={(event) => {
+              // Preservar el comportamiento actual para contexto de retorno
+              event.preventDefault()
+              handleViewDetails()
+            }}
+            className="no-underline text-inherit"
+          >
+            {t('viewDetails')}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
         </Button>
       </CardFooter>
     </Card>
