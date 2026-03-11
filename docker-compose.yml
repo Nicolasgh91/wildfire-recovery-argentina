@@ -353,6 +353,8 @@ services:
     image: ghcr.io/nicolasgh91/wildfire-recovery-argentina/frontend:latest
     container_name: forestguard-frontend
     restart: unless-stopped
+    environment:
+      VITE_SITE_BASE_URL: ${SITE_BASE_URL}
     mem_limit: 32m
     depends_on:
       - api
