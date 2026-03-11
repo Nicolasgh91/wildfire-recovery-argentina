@@ -6,6 +6,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
@@ -47,6 +48,11 @@ class FireEpisode(Base):
     last_update_sat = Column(DateTime(timezone=True))
     slides_data = Column(JSONB)
     slides_status = Column(String(20), server_default=text("'pending'"))
+
+    # SEO (SEO-S-01)
+    slug = Column(Text, unique=True)
+    seo_title = Column(Text)
+    seo_description = Column(Text)
 
     clustering_version_id = Column(
         UUID(as_uuid=True), ForeignKey("clustering_versions.id")

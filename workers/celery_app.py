@@ -79,6 +79,7 @@ celery_app = Celery(
         'workers.tasks.export_task',
         'workers.tasks.pdf_generation_task',
         'workers.tasks.cleanup_assets_task',
+        'workers.tasks.seo',
     ]
 )
 
@@ -112,6 +113,7 @@ celery_app.conf.update(
         'workers.tasks.export_task.*': {'queue': 'analysis'},
         'workers.tasks.cleanup_assets_task.*': {'queue': 'analysis'},
         'workers.tasks.pdf_generation_task.*': {'queue': 'reports'},
+        'workers.tasks.seo.*': {'queue': 'default'},
     },
     
     # Retry policy
@@ -138,6 +140,16 @@ celery_app.conf.update(
             'schedule': crontab(hour=2, minute=0),  # 02:00 ART
             'kwargs': {'days_back': 90, 'max_events': 5000, 'geo_lookback_hours': 96},
             'options': {'queue': 'clustering'}
+        },
+        'seo-generate-slugs-daily': {
+            'task': 'workers.tasks.seo.generate_slugs_batch',
+            'schedule': crontab(hour=3, minute=0),  # 03:00 ART (después de clustering)
+            'options': {'queue': 'default'}
+        },
+        'seo-generate-sitemap-cache': {
+            'task': 'workers.tasks.seo.generate_sitemap_cache',
+            'schedule': crontab(minute=0, hour='*/5'),  # cada 5 h
+            'options': {'queue': 'default'}
         },
         'carousel-daily': {
             'task': 'workers.tasks.carousel_task.generate_carousel',

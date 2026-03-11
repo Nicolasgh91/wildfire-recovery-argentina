@@ -82,6 +82,10 @@ class Settings(BaseSettings):
     STORAGE_LOCAL_PATH: str = "storage"
     STORAGE_PUBLIC_URL: str = ""
     REDIS_URL: str = "redis://redis:6379/0"
+    SITE_BASE_URL: str = Field(
+        default="https://forestguard.freedynamicdns.org",
+        description="Base URL canónica del sitio (canonical, JSON-LD, sitemap). Evitar dominio temporal en producción.",
+    )
     CELERY_BROKER_URL: Optional[str] = None
     CELERY_RESULT_BACKEND: Optional[str] = None
 
