@@ -29,6 +29,9 @@ jobs:
   build-and-push:
     name: Build Frontend Image
     runs-on: ubuntu-latest
+    # Dependabot PRs no tienen acceso a repository secrets — saltar el job completo.
+    # El build real ocurre cuando el PR se mergea a main.
+    if: github.actor != 'dependabot[bot]'
     permissions:
       contents: read
       packages: write
@@ -36,8 +39,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: main
+        # Sin "ref: main" — se hace checkout del commit que disparó el evento.
+        # En PRs: checkout del HEAD del PR (para validar el código del PR).
+        # En push a main: checkout del commit mergeado.
 
       - name: Print ref and SHA
         run: |
