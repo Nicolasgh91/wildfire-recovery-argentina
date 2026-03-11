@@ -43,16 +43,10 @@ El plan asume columnas que **no existen** hoy:
 
 ### 2.2 Tabla `strategic_zones`
 
-El worker SEO-W-02 hace:
+El worker SEO-W-02 no debe consultar la tabla `strategic_zones` (no existe). En su lugar:
 
-```python
-for z in db.execute("SELECT slug FROM strategic_zones WHERE active = true"):
-```
-
-Esa tabla **no existe** en [docs/architecture/schema.md](docs/architecture/schema.md) ni en el código. Opciones:
-
-- **Recomendada para Fase 2:** No crear la tabla; en el worker usar la lista constante `STRATEGIC_ZONES` de [SEO-F-04](docs/tasks/seo_geo_technical_tasks_v9.md) (mismo origen que `build_ssg_routes_payload`) para generar las URLs de zonas en el sitemap. Así el sitemap y las rutas SSG quedan alineados sin nueva migración.
-- **Opcional posterior:** Migración que cree `strategic_zones` si se quiere administrar zonas por DB/CMS.
+- **En `app/utils/ssg_routes.py`** definir `**STRATEGIC_ZONES**` como **dict** `zone_slug -> [province_slugs]` para que: (1) el sitemap itere las claves y añada una URL por zona; (2) el endpoint `stats/counts` pueda calcular `by_zone` agregando episodios por provincia según a qué zona pertenecen.
+- Misma constante para sitemap, `build_ssg_routes_payload` y Fase 3; sin migración.
 
 ### 2.3 API y Nginx
 
@@ -91,8 +85,9 @@ Esa tabla **no existe** en [docs/architecture/schema.md](docs/architecture/schem
   - `duration_days`: si `end_date` o `last_seen_at`, `(end_date or last_seen_at - start_date).days`, sino `None`.
   - `**province_slug` (acceso seguro):** `provinces[0]` puede no existir si el arreglo está vacío (ingesta errónea). Usar: `province_name = (row["provinces"] or [None])[0]` y luego normalizar; o bien `(row["provinces"][0] if row.get("provinces") else "argentina")` antes de normalizar a slug. Así se evita `IndexError` y la caída del worker.
   - `**thumbnail_url` (extracción segura y XML sin nulos):** Usar `thumbnail_url = next((s.get("thumbnail_url") for s in (row.get("slides_data") or []) if s.get("thumbnail_url")), None)`. **Solo si `thumbnail_url` tiene valor** se inyecta el bloque `<image:image><image:loc>...</image:loc></image:image>` en el XML; si es `None` o cadena vacía, no emitir el bloque para no romper el XML ni incluir URLs vacías.
-- **Umbral:** Pasar `affected_area_ha = (row["estimated_area_hectares"] or 0)` a `classify_episode_for_sitemap`.
-- **Zonas:** No consultar `strategic_zones`. Iterar sobre la lista constante `STRATEGIC_ZONES` (definida en el mismo módulo o importada de `ssg_routes`) y añadir `_url_entry(f"/zonas/{z}", "weekly", "0.8")`.
+- **Clasificación (SEO-F-03):** No usar un único booleano `should_index_episode`. El worker debe usar `**get_regional_threshold(province_slug, thresholds) -> int`** y `**classify_episode_for_sitemap(episode, thresholds, minor_quota_used, minor_quota_max=100) -> "standard" | "minor" | "excluded"`**. Según el valor: "standard" → changefreq daily, priority 0.7; "minor" → weekly, 0.5, y consumir cuota; "excluded" → no añadir al sitemap.
+- **Cuota minor (imperativo):** Cuando se añadan episodios **minor** al sitemap (`minor_added > 0`), el worker debe **actualizar `seo_minor_fire_quota`**: `INSERT INTO seo_minor_fire_quota (year_month, url_count) VALUES (:year_month, :minor_added) ON CONFLICT (year_month) DO UPDATE SET url_count = LEAST(seo_minor_fire_quota.url_count + :minor_added, 100), updated_at = NOW()`. Sin esto la cuota de 100 minor por mes no se persiste.
+- **Zonas:** No consultar `strategic_zones`. Iterar sobre las claves del dict `STRATEGIC_ZONES` (o lista de slugs) definida en `ssg_routes.py` y añadir `_url_entry(f"/zonas/{z}", "weekly", "0.8")`.
 - **Upsert caché:** Reemplazar `db.upsert(...)` por un `INSERT INTO seo_pages_cache (...) VALUES (...) ON CONFLICT (page_type, slug) DO UPDATE SET content = EXCLUDED.content, cached_at = ..., expires_at = ..., stale_until = ...`.
 
 ### 3.4 SEO-F-02 `build_episode_jsonld`
@@ -107,9 +102,10 @@ Esa tabla **no existe** en [docs/architecture/schema.md](docs/architecture/schem
 
 ### 3.6 Nginx
 
-- **Trailing slash:** Añadir la regla 301 **antes** del `location /` del SPA para que no la capture el frontend: `location ~ ^(.+[^/])/$ { return 301 $scheme://$host$1$is_args$args; }`.
-- **Metodología:** Si se usa `location = /metodologia` con `try_files /metodologia.html`, el archivo debe existir en el root del frontend (p. ej. generado por build o estático). Si hoy no existe, documentar como tarea: “Asegurar que el build o el servidor estático exponga `/metodologia.html`” o servir la ruta desde el SPA y no desde Nginx estático.
-- **Cabeceras de proxy para `/sitemap.xml`:** En `location = /sitemap.xml` es **crítico** reenviar las cabeceras del cliente para que FastAPI registre la IP real y no la del contenedor Nginx. Incluir: `proxy_set_header X-Real-IP $remote_addr;`, `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`, `proxy_set_header X-Forwarded-Proto $scheme;`, `proxy_set_header Host $host;` (alineado al resto de locations que proxy_pass al API).
+- **Orden de locations (documentar en runbook/deuda_tecnica):** En el bloque `server` HTTPS, el orden debe ser: (1) **trailing slash** (regex), (2) `**location = /sitemap.xml`** (exact), (3) `**location = /metodologia`** (exact), (4) `**location /`** (catch-all SPA). Así `/sitemap.xml` y `/metodologia` no son capturados por el frontend.
+- **Trailing slash:** Añadir `location ~ ^(.+[^/])/$ { return 301 $scheme://$host$1$is_args$args; }` **antes** del `location /`.
+- **Metodología:** Si Nginx no sirve estáticos desde disco (frontend en otro contenedor), usar `proxy_pass` al frontend para `/metodologia`. Si se usa `try_files /metodologia.html`, el archivo debe existir donde Nginx busque; si no existe aún, documentar en deuda_tecnica. “Asegurar que el build o el servidor estático exponga `/metodologia.html`” o servir la ruta desde el SPA y no desde Nginx estático.
+- **Cabeceras de proxy para `/sitemap.xml`:** Incluir: `proxy_set_header X-Real-IP $remote_addr;`, `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`, `proxy_set_header X-Forwarded-Proto $scheme;`, `proxy_set_header Host $host;`.
 
 ### 3.7 Celery beat
 
@@ -174,13 +170,13 @@ El **nuevo documento** (p. ej. `docs/tasks/seo_geo_fase1_fase2_tareas.md`) debe:
   - **SEO-S-01 a SEO-S-04:** Sin cambios en el SQL; dejar explícito que en `fire_episodes` solo se añaden `slug`, `seo_title`, `seo_description`.  
   - **SEO-F-01:** Especificar que el caller debe pasar **siempre valor seguro**: `(provinces[0] if provinces else "argentina", start_date.year, str(id), db)`; implementación con `text()` y `:prefix`; tests con Session real o mock (incl. caso `provinces=[]`).  
   - **SEO-F-02:** Aceptar `start_date`/`end_date` o `started_at`/`ended_at`; usar siempre ISO en `temporalCoverage`; clave de área `estimated_area_hectares` si se usa.  
-  - **SEO-F-03:** Sin cambios de lógica; documentar que el `episode` dict debe llevar `affected_area_ha` (desde `estimated_area_hectares`), `province_slug`, `has_satellite_images`, `duration_days` calculados por el caller.  
-  - **SEO-F-04:** Mantener listas; para zonas, documentar que el worker de sitemap usará la misma constante `STRATEGIC_ZONES` (no DB).  
+  - **SEO-F-03:** No implementar un único `should_index_episode` booleano. Implementar `**get_regional_threshold(province_slug, thresholds) -> int`** y `**classify_episode_for_sitemap(episode, thresholds, minor_quota_used, minor_quota_max=100) -> "standard" | "minor" | "excluded"`**. El caller pasa un dict con `affected_area_ha`, `province_slug`, `has_satellite_images`, `duration_days` (derivados). Tests para los tres resultados y para la cuota.  
+  - **SEO-F-04:** En `app/utils/ssg_routes.py`: constantes `**PROVINCES`** (lista de slugs), `**STRATEGIC_ZONES`** (dict `zone_slug -> [province_slugs]` para sitemap + stats/counts), `**PAGE_SIZE`** (p. ej. 20); `**_paginated_routes(base_path, item_count) -> list[str]`**; `**build_ssg_routes_payload(episode_slugs, generated_at, episodes_per_province=None, episodes_per_zone=None) -> dict**` con `static_routes`, `province_routes`, `zone_routes`, `episode_routes`, `total`. Así Fase 3 y el endpoint `stats/counts` alimentan la paginación sin cálculos pesados en memoria.  
   - **SEO-A-03 (Nginx):** Incluir fragmento exacto para trailing slash y para `/metodologia`; indicar que debe integrarse en el `server` HTTPS existente de [nginx.conf](nginx.conf) (o el que use producción).  
   - **Verificación Fase 1:** Comandos de comprobación (migración, 301, existencia de columnas).
 4. **Fase 2 — Tareas corregidas**
   - **SEO-W-01:** Código de referencia con `SessionLocal()`, `text()` con parámetros nombrados, uso de `provinces[0] if provinces else "argentina"` y `start_date.year`; **SELECT con `FOR UPDATE SKIP LOCKED` explícito** para evitar condiciones de carrera con workers en paralelo; registro en beat (diario).  
-  - **SEO-W-02:** Query de episodios solo con columnas existentes; derivación en Python con **acceso seguro**: `province_slug` desde `(provinces[0] if provinces else "argentina")`; `thumbnail_url = next((s.get("thumbnail_url") for s in (slides_data or []) if s.get("thumbnail_url")), None)` y **solo si es truthy** inyectar `<image:image>` en el XML; zonas desde constante; upsert con `ON CONFLICT`; schedule cada 5 h; tests que no dependan de `strategic_zones`.
+  - **SEO-W-02:** Query de episodios solo con columnas existentes; derivación en Python con **acceso seguro** (province_slug, thumbnail_url condicional); usar `**classify_episode_for_sitemap`** (no booleano) para "standard" / "minor" / "excluded"; cuando **minor_added > 0**, ejecutar **INSERT en `seo_minor_fire_quota` con ON CONFLICT DO UPDATE** (url_count acotado a 100); zonas desde claves de `STRATEGIC_ZONES` en ssg_routes; upsert de `seo_pages_cache` con ON CONFLICT; schedule cada 5 h; tests que no dependan de `strategic_zones`.
   - **SEO-A-01:** Router montado con `prefix=""`; ruta `GET /sitemap.xml`; dependencia `get_redis`; lógica de caché/503/stale/headers según plan; **startup/lifespan:** si no existe fila sitemap en `seo_pages_cache`, encolar `generate_sitemap_cache.delay()` al arranque; Nginx `location = /sitemap.xml` con **cabeceras de proxy** (X-Real-IP, X-Forwarded-For, X-Forwarded-Proto, Host).
   - **SEO-A-02:** Ruta `GET /api/v1/fire-episodes/by-slug/{slug}/seo-data`; lookup por `FireEpisode.slug`; respuesta con `build_episode_jsonld` recibiendo un dict construido desde el ORM (con `start_date`/`end_date` y opcionalmente `province_name` desde `provinces[0]`).  
   - **SEO-A-0X (preparación Fase 3):** Endpoint ligero `GET /api/v1/fire-episodes/stats/counts` que devuelva el **volumen total de episodios agrupados por provincia y por zona** (p. ej. `{ "by_province": { "cordoba": 45, ... }, "by_zone": { "delta-del-parana": 12, ... } }` o equivalente). El script de exportación SSG (Fase 3) y el CI (entorno desconectado) podrán consumir este endpoint para construir la paginación de rutas estáticas sin cálculos pesados en memoria. Incluir en Fase 2 para no bloquear Fase 3.

@@ -425,6 +425,91 @@ def list_active_episodes_for_home(
 
 
 @router.get(
+    "/by-slug/{slug}/seo-data",
+    summary="Datos SEO de un episodio por slug (título, descripción, JSON-LD, canonical)",
+)
+def get_episode_seo_data(
+    slug: str,
+    db: Session = Depends(deps.get_db),
+):
+    """Devuelve título, descripción, JSON-LD Dataset, og_image y canonical para una página de episodio."""
+    from app.core.config import settings
+    from app.utils.jsonld_utils import build_episode_jsonld
+
+    episode = db.query(FireEpisode).filter(FireEpisode.slug == slug).first()
+    if not episode:
+        raise HTTPException(status_code=404, detail="Episodio no encontrado")
+
+    base_url = getattr(settings, "SITE_BASE_URL", "https://forestguard.freedynamicdns.org").rstrip("/")
+    province_name = (episode.provinces[0] if episode.provinces else "Argentina") or "Argentina"
+    thumbnail_url = None
+    if episode.slides_data:
+        thumbnail_url = next(
+            (s.get("thumbnail_url") for s in episode.slides_data if s.get("thumbnail_url")),
+            None,
+        )
+
+    episode_dict = {
+        "slug": episode.slug,
+        "seo_title": episode.seo_title,
+        "seo_description": episode.seo_description,
+        "start_date": episode.start_date,
+        "end_date": episode.end_date,
+        "bbox_minx": episode.bbox_minx,
+        "bbox_miny": episode.bbox_miny,
+        "bbox_maxx": episode.bbox_maxx,
+        "bbox_maxy": episode.bbox_maxy,
+        "province_name": province_name,
+    }
+    jsonld = build_episode_jsonld(episode_dict, base_url)
+
+    return {
+        "title": episode.seo_title,
+        "description": episode.seo_description,
+        "jsonld": jsonld,
+        "og_image": thumbnail_url,
+        "og_image_width": 1200,
+        "og_image_height": 630,
+        "canonical": f"{base_url}/episodios/{slug}",
+    }
+
+
+@router.get(
+    "/stats/counts",
+    summary="Conteos de episodios por provincia y por zona (para SSG/CI)",
+)
+def get_episode_stats_counts(db: Session = Depends(deps.get_db)):
+    """Devuelve by_province y by_zone para que el export SSG o CI construya paginación sin cálculos pesados."""
+    from app.utils.ssg_routes import PROVINCES, STRATEGIC_ZONES
+
+    # Episodios con slug; unnest(provinces) para contar por provincia (slug)
+    # provinces en DB son nombres ej. "Córdoba"; necesitamos normalizar a slug para las keys
+    from app.utils.slug_utils import normalize_province_to_slug
+
+    province_counts: dict[str, int] = {p: 0 for p in PROVINCES}
+    zone_counts: dict[str, int] = {z: 0 for z in STRATEGIC_ZONES}
+    rows = db.execute(
+        text("""
+            SELECT provinces FROM fire_episodes WHERE slug IS NOT NULL AND provinces IS NOT NULL
+        """)
+    ).fetchall()
+
+    for (provinces,) in rows:
+        if not provinces:
+            continue
+        for name in provinces:
+            slug_key = normalize_province_to_slug(name or "")
+            if slug_key in province_counts:
+                province_counts[slug_key] += 1
+        episode_province_slugs = {normalize_province_to_slug(n or "") for n in provinces}
+        for zone_slug, zone_provinces in STRATEGIC_ZONES.items():
+            if episode_province_slugs & set(zone_provinces):
+                zone_counts[zone_slug] += 1
+
+    return {"by_province": province_counts, "by_zone": zone_counts}
+
+
+@router.get(
     "/{episode_id}",
     response_model=FireEpisodeDetail,
     summary="Detalle de episodio de incendios",

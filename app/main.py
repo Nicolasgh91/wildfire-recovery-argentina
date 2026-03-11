@@ -31,6 +31,7 @@ from app.api.v1 import (
     imagery,
     payments,
     quality,
+    seo,
     webhooks,
 )
 from app.core.config import settings
@@ -134,6 +135,26 @@ async def lifespan(app: FastAPI):
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Debug mode: {settings.DEBUG}")
 
+    # SEO: encolar generación de sitemap si no existe caché (evita 503 tras primer deploy)
+    try:
+        from app.db.session import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        try:
+            row = db.execute(
+                text(
+                    "SELECT 1 FROM seo_pages_cache WHERE page_type = 'sitemap' AND slug = 'main' LIMIT 1"
+                )
+            ).fetchone()
+            if not row:
+                from workers.tasks.seo import generate_sitemap_cache
+                generate_sitemap_cache.delay()
+                logger.info("SEO: sitemap cache empty, enqueued generate_sitemap_cache")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("SEO startup check failed (migrations may not be applied): %s", e)
+
     yield
 
     # Shutdown
@@ -196,7 +217,9 @@ app.add_middleware(RequestIdMiddleware)
 # Register global exception handlers
 register_exception_handlers(app)
 
-# Include routers
+# Include routers (SEO at root for /sitemap.xml)
+app.include_router(seo.router, prefix="", tags=["seo"])
+
 app.include_router(
     fires.router, prefix=f"{settings.API_V1_PREFIX}/fires", tags=["fires"]
 )
