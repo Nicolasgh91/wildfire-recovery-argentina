@@ -40,7 +40,7 @@ COPY package.json package-lock.json ./
 # 2) Install ALL dependencies (dev deps needed for build tooling).
 #    --ignore-scripts avoids postinstall scripts that may consume memory;
 #    esbuild ships pre-built binaries so no postinstall is needed.
-RUN npm ci --ignore-scripts
+RUN npm ci --ignore-scripts --legacy-peer-deps
 
 # 3) Copy source (filtered by .dockerignore)
 COPY . .
