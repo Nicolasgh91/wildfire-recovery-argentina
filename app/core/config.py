@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: Optional[str] = None
     CELERY_RESULT_BACKEND: Optional[str] = None
 
+    # --- Monitoring / Recovery ---
+    ENABLE_RECOVERY_ENQUEUE: bool = True
+
     # --- CORS ---
     ALLOWED_ORIGINS: List[str] = Field(
         default_factory=list,

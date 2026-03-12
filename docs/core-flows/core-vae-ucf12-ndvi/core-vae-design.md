@@ -51,7 +51,7 @@ Proveer un **motor de análisis de vegetación** (VAE) que:
 
 ### 3. Estrategia de cuotas GEE
 
-Basada en `docs/UF-12/UC_F12_GEE_optimization_analysis.md` y `docs/ndvi/gee_quota_mitigation_spec_on_ndvi.md`:
+Basada en `docs/archive/ndvi-uf12/uc-f12-gee-optimization-analysis.md` y `docs/ndvi/gee_quota_mitigation_spec_on_ndvi.md`:
 
 - Un evento típico requiere:
   - Baseline NDVI (`_get_baseline_ndvi`) → 1 request.
@@ -66,10 +66,10 @@ Basada en `docs/UF-12/UC_F12_GEE_optimization_analysis.md` y `docs/ndvi/gee_quot
 
 ### 4. Alineación docs ↔ código
 
-- `docs/UF-12/0_UC_F12_AS_IS_ANALYSIS_2026-02-24.md`:
+- `docs/archive/ndvi-uf12/uc-f12-as-is-analysis-2026-02-24.md`:
   - **Estado**: HISTÓRICO.
   - Describe el estado previo al refactor de cuotas GEE y visibilidad progresiva.
-- `docs/UF-12/2_UC_F12_implementation_spec.md` y `UC_F12_GEE_optimization_analysis.md`:
+- `docs/archive/ndvi-uf12/uc-f12-implementation-spec.md` y `docs/archive/ndvi-uf12/uc-f12-gee-optimization-analysis.md`:
   - **Estado**: DISEÑO/OK (con matices).
   - Siguen siendo fuente para decisiones de arquitectura de workers y cuotas, pero varias partes se han refinado (por ejemplo, decisión de mantener endpoints `monitoring` privados).
 - `docs/ndvi/analisis_ndvi.md` y `hoja_de_ruta_ndvi_gee_v2.md`:

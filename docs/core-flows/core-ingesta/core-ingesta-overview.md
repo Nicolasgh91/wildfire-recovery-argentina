@@ -19,8 +19,8 @@ Este flujo CORE cubre desde la **descarga incremental diaria de FIRMS** hasta la
 ### Documentos fuente relevantes
 
 - `docs/architecture/data_ingestion_flow.md`
-- `docs/UF-12/2_UC_F12_implementation_spec.md`
-- `docs/UF-12/uc-f12-data-flow-diagram-776569.md`
+- `docs/archive/ndvi-uf12/uc-f12-implementation-spec.md`
+- `docs/archive/ndvi-uf12/diagrams/uc-f12-data-flow-diagram-776569.md`
 
 Para detalles operativos y troubleshooting, ver `core-ingesta-manual-dev.md` y `core-ingesta-runbook.md` en este mismo directorio.
 

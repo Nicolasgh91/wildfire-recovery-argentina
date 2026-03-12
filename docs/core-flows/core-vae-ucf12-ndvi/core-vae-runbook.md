@@ -9,7 +9,7 @@
 
 **Pasos**:
 
-1. Verificar worker `worker-gee` y colas (ver `UC_F12_testing_and_manual_workers.md`):
+1. Verificar worker `worker-gee` y colas (ver `docs/archive/ndvi-uf12/uc-f12-testing-and-manual-workers.md`):
 
 ```bash
 docker ps --format "table {{.Names}}\t{{.Status}}" | grep worker-gee
@@ -88,6 +88,6 @@ docker logs --tail 100 forestguard-worker-gee
 
 Para detalles de cuotas y arquitectura de workers, ver:
 
-- `docs/UF-12/UC_F12_testing_and_manual_workers.md`
+- `docs/archive/ndvi-uf12/uc-f12-testing-and-manual-workers.md`
 - `docs/ndvi/gee_quota_mitigation_spec_on_ndvi.md`
 

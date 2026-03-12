@@ -24,8 +24,8 @@ export const BRAND = {
     logos: {
         // For now using placeholders or existing assets logic
         // You can update these paths when new assets are available
-        light: "/assets/branding/logo-light.svg",
-        dark: "/assets/branding/logo-dark.svg",
+        light: "",  // No logo assets yet; BrandLogo renders <Trees> icon as fallback
+        dark: "",   // Update to actual SVG paths once assets are created
         // Fallback to text if logo is missing? Handled in component.
     },
 

@@ -57,10 +57,10 @@ Este documento actúa como índice canónico de **todas las rutas de despliegue 
   - Soporta rebuild selectivo de servicios (por ejemplo, solo frontend) según flags definidos en el script.
 - Scripts de SSL:
   - `scripts/setup-ssl.sh`, `scripts/renew-ssl.sh`, `scripts/renew-ssl-cron.sh`, `scripts/verify-ssl.sh` gestionan certificados y renovación.
-
+-
 Para comandos detallados, pasos manuales y escenarios extendidos de despliegue en VM, ver:
 
-- `docs/infrastructure/deployment/quick-deployment-commands.md`
+- `docs/infrastructure/deployment/vm-deployment-commands.md`
 
 ---
 
@@ -152,12 +152,38 @@ docker compose logs --tail=100 nginx
 curl -L http://localhost/health
 ```
 
+### 7.2 Variables de entorno críticas para endpoints
+
+Para que los endpoints protegidos funcionen correctamente (por ejemplo, `GET /api/v1/fires/stats`, `/audit/*` y otros endpoints con JWT/API key), las siguientes variables deben estar presentes en el contenedor `api`:
+
+- `API_KEY` y `ADMIN_API_KEY` — claves de API usadas por `require_fire_access()` y otros decoradores basados en API key.
+- `SUPABASE_URL` — URL base de Supabase; se usa para construir el `issuer` esperado y el endpoint de JWKS.
+- `SUPABASE_JWT_SECRET` / `SUPABASE_SERVICE_KEY` — secretos utilizados para validar tokens y operaciones internas relacionadas con Supabase.
+
+Síntomas típicos cuando faltan o son incorrectas:
+
+- `403 Missing/Invalid API Key` en endpoints que usan `X-API-Key`.
+- `401 Supabase URL no configurado` o `401 Token inválido` en endpoints bajo `/audit/*`.
+- `500 Internal Server Error` en `GET /fires/stats` si la auth pasa pero falla el acceso a BD o el manejo de `API_KEY`.
+
 ### 7.2 Problemas frecuentes
 
 Para diagnósticos más profundos y soluciones específicas, ver:
 
 - `docs/infrastructure/deployment/quick-fixes.md` — problemas frecuentes (nginx, frontend, API, SSL, recursos, memoria, etc.) con comandos concretos.
 - `docs/infrastructure/deployment/immediate-fix.md` — fix específico para desajustes de arquitectura (imágenes ARM64 vs AMD64) y build multi-arch.
+
+### 7.3 Redis / Celery y endpoints de lectura
+
+- En desarrollo local, cuando la API se ejecuta directamente en el host, las variables de entorno recomendadas son:
+  - `REDIS_URL=redis://localhost:6379/0`
+  - `CELERY_BROKER_URL=redis://localhost:6379/0`
+  - `CELERY_RESULT_BACKEND=redis://localhost:6379/0`
+- En despliegues Docker, los servicios que corren dentro de la red interna usan el hostname `redis`:
+  - `REDIS_URL=redis://redis:6379/0`
+  - `CELERY_BROKER_URL=redis://redis:6379/0`
+  - `CELERY_RESULT_BACKEND=redis://redis:6379/0`
+- El detalle de incendios (`GET /api/v1/fires/{fire_id}`) es un endpoint puramente de lectura sobre base de datos y no depende de Redis/Celery; errores en el broker afectan workers y tareas asíncronas (por ejemplo exportaciones masivas), pero no deberían romper la carga de detalle en la UI.
 
 ### 7.3 Procedimientos de emergencia
 
@@ -174,7 +200,7 @@ Se recomienda revisar ese documento antes de intervenir manualmente la infraestr
 ## 8. Referencias completas
 
 - `docs/architecture/containers.md` — topología de contenedores, workers y colas.
-- `docs/infrastructure/deployment/quick-deployment-commands.md` — comandos manuales de despliegue y orquestación detallados.
+- `docs/infrastructure/deployment/vm-deployment-commands.md` — comandos manuales de despliegue y orquestación detallados en la VM con imagen de frontend construida por CI.
 - `docs/infrastructure/deployment/quick-fixes.md` — guía de troubleshooting para problemas frecuentes.
 - `docs/infrastructure/deployment/immediate-fix.md` — solución multi‑arquitectura para imágenes Docker de frontend.
 - `docs/deployment/play_store/revised_plan.md` — plan vigente de Android/Play Store (diseño detallado de la pista).

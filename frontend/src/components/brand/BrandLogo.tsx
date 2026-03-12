@@ -27,7 +27,7 @@ export function BrandLogo({ size = 'md', className, showName = true, showIcon = 
 
   return (
     <span className={cn('flex items-center gap-2', className)}>
-      {showIcon && (!imgError ? (
+      {showIcon && (logoSrc && !imgError ? (
         <img
           src={logoSrc}
           alt={BRAND.name}

@@ -12,5 +12,5 @@ Se documentarán:
 Referencias:
 
 - `docs/archive/assets/assets-pipeline-technical-tasks.md`
-- `docs/endpoints/fires-stats-workflow.md`
+- `docs/archive/endpoints/fires-stats-workflow.md`
 

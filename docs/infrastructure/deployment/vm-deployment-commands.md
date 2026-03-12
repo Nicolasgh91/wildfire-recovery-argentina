@@ -1,6 +1,8 @@
-# VM Deployment Commands - CI-Built Frontend Image
+# VM Deployment Commands - Imagen de frontend construida por CI
 
-## Deploy Entrypoint Oficial (VM)
+Este runbook consolida los comandos de despliegue de VM y reemplaza al documento previo `quick-deployment-commands.md`. Para atajos de despliegue rápido, usar siempre este archivo como referencia canónica.
+
+## Deploy entrypoint oficial (VM)
 
 ```bash
 # Siempre usar el deploy versionado del repo
@@ -16,7 +18,7 @@ test -f ./deploy.sh && mv ./deploy.sh ./deploy.sh.legacy.$(date +%Y%m%d_%H%M%S) 
 chmod +x scripts/deploy.sh scripts/setup-ssl.sh scripts/renew-ssl.sh scripts/renew-ssl-cron.sh scripts/verify-ssl.sh
 ```
 
-## Phase 1: Current Container Status Verification
+## Phase 1: Current container status verification
 
 ### 1.1 Check All Running Containers
 ```bash
@@ -63,7 +65,7 @@ docker system df
 uptime
 ```
 
-## Phase 2: Pre-Deployment Preparation
+## Phase 2: Pre-deployment preparation
 
 ### 2.1 Backup Current Configuration
 ```bash
@@ -117,7 +119,7 @@ sed -i '/^    # dockerfile: Dockerfile$/a\    image: ghcr.io/nicolasgh91/wildfir
 grep -A 15 "frontend:" docker-compose.yml
 ```
 
-## Phase 3: Deployment Process
+## Phase 3: Deployment process
 
 ### 3.1 Graceful Shutdown
 ```bash
@@ -161,7 +163,7 @@ docker stats --no-stream | grep frontend
 curl -s -o /dev/null -w "%{http_code}" http://localhost/
 ```
 
-## Phase 4: Validation and Monitoring
+## Phase 4: Validation and monitoring
 
 ### 4.1 Functional Testing
 ```bash
@@ -215,7 +217,7 @@ docker compose ps frontend
 docker logs forestguard-frontend --tail 10
 ```
 
-## Success Indicators
+## Success indicators
 
 ✅ **Container Status**: Frontend container running healthy
 ✅ **Memory Usage**: Under 64MB as configured
@@ -224,7 +226,7 @@ docker logs forestguard-frontend --tail 10
 ✅ **API Connectivity**: Frontend can communicate with backend API
 ✅ **Image Source**: Using GHCR image (not local build)
 
-## Troubleshooting Commands
+## Troubleshooting commands
 
 ```bash
 # If container won't start
@@ -250,7 +252,7 @@ docker system prune -f
 docker compose restart frontend
 ```
 
-## Verification Checklist
+## Verification checklist
 
 - [ ] Frontend container running and healthy
 - [ ] Memory usage < 64MB

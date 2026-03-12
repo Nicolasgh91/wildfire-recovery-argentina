@@ -55,4 +55,4 @@ El módulo de recuperación y cambio de uso (UC-F12) analiza la evolución de la
 - Endpoints de monitoreo expuestos para consultar series de recuperación y cambios de uso.
 - Reportes históricos funcionando con integración a VAE y GEE.
 
-Limitaciones y riesgos, así como deuda técnica detallada, se documentan en `docs/archive/ndvi-uf12/vae-flow-audit.md` y `docs/UF-12/technical_debt.md`.
+Limitaciones y riesgos, así como deuda técnica detallada, se documentan en `docs/archive/ndvi-uf12/vae-flow-audit.md` y `docs/archive/ndvi-uf12/technical_debt_ucf12.md`.

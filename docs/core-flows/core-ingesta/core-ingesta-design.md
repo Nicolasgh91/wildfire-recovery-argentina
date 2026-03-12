@@ -64,8 +64,8 @@ Gaps relevantes ya reflejados aquí:
 - `docs/Carrusel fix/data_ingestion_process.md`
 - `docs/Carrusel fix/flujo_ingesta_procesamiento.md`
 - `docs/Carrusel fix/auditoria_ingesta_vs_codigo.md`
-- `docs/UF-12/2_UC_F12_implementation_spec.md`
-- `docs/UF-12/uc-f12-data-flow-diagram-776569.md`
+- `docs/archive/ndvi-uf12/uc-f12-implementation-spec.md`
+- `docs/archive/ndvi-uf12/diagrams/uc-f12-data-flow-diagram-776569.md`
 
 En caso de cambios futuros en esquema o lógica de clustering/ingesta, actualizar primero este documento y luego reflejar los cambios en `core-ingesta-manual-dev.md`.
 

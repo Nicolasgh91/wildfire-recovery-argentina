@@ -28,6 +28,24 @@ export default function LoginPage() {
     }
   }, [location.state, t])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const mediaQuery = window.matchMedia('(min-width: 1024px)')
+    if (!mediaQuery.matches) return
+
+    const link = document.createElement('link')
+    link.rel = 'preload'
+    link.as = 'image'
+    link.href = bosqueLanding
+    link.media = '(min-width: 1024px)'
+    document.head.appendChild(link)
+
+    return () => {
+      document.head.removeChild(link)
+    }
+  }, [])
+
   return (
     <div className="relative min-h-screen bg-auth-page p-6 md:p-8">
       <Link to={LOGIN_PATH} className="absolute left-6 top-6 md:left-8 md:top-8">

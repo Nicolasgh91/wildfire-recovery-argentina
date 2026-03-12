@@ -19,6 +19,12 @@ interface RecoveryPanelProps {
   fireDate?: string
 }
 
+function isCanceledError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const maybeAny = error as { code?: unknown }
+  return maybeAny.code === 'ERR_CANCELED'
+}
+
 export function RecoveryPanel({
   fireEventId,
   episodeId,
@@ -65,7 +71,9 @@ export function RecoveryPanel({
     )
   }
 
-  if (recoveryError) {
+  const canceled = isCanceledError(recoveryError)
+
+  if (recoveryError && !canceled) {
     return (
       <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
         <AlertTriangle className="h-4 w-4" />

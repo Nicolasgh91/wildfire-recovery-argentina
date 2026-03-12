@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
@@ -12,7 +12,7 @@ import {
   ShieldCheck,
   Table2,
 } from 'lucide-react'
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer } from 'recharts'
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -381,6 +381,7 @@ export default function FireHistoryPage() {
   const queryClient = useQueryClient()
   const tableContainerRef = useRef<HTMLDivElement | null>(null)
   const [scrollTop, setScrollTop] = useState(0)
+  const deferredScrollTop = useDeferredValue(scrollTop)
   const [containerHeight, setContainerHeight] = useState(600)
 
   const effectivePageSize = useMemo(() => {
@@ -533,7 +534,7 @@ export default function FireHistoryPage() {
   const totalRows = tableRows.length
   const { startIndex, endIndex, paddingTop, paddingBottom } = useMemo(() => {
     const visibleCount = Math.ceil(containerHeight / ROW_HEIGHT_PX) + ROW_OVERSCAN * 2
-    const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT_PX) - ROW_OVERSCAN)
+    const start = Math.max(0, Math.floor(deferredScrollTop / ROW_HEIGHT_PX) - ROW_OVERSCAN)
     const end = Math.min(totalRows, start + visibleCount)
     return {
       startIndex: start,
@@ -541,7 +542,7 @@ export default function FireHistoryPage() {
       paddingTop: start * ROW_HEIGHT_PX,
       paddingBottom: Math.max(0, (totalRows - end) * ROW_HEIGHT_PX),
     }
-  }, [containerHeight, scrollTop, totalRows])
+  }, [containerHeight, deferredScrollTop, totalRows])
 
   const visibleRows = useMemo(() => tableRows.slice(startIndex, endIndex), [tableRows, startIndex, endIndex])
 
@@ -568,8 +569,8 @@ export default function FireHistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background/15">
-      <div className="container mx-auto px-4 py-6">
+    <div className="min-h-screen bg-history-page-bg/15">
+      <div className="container mx-auto px-4 py-6 bg-surface-override">
         <div className="mb-6" />
 
         <div className="mb-8 space-y-6">
@@ -735,32 +736,30 @@ export default function FireHistoryPage() {
                     <CardTitle className="text-base">Top provincias</CardTitle>
                     <p className="text-sm text-muted-foreground">Mayor cantidad de incendios</p>
                   </CardHeader>
-                  <CardContent className="w-full overflow-hidden">
+                  <CardContent className="min-h-[300px] w-full overflow-hidden">
                     <ChartContainer config={chartConfig} className="h-56 w-full overflow-hidden">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={provincesChartData}
-                          margin={{ top: 8, right: 8, left: 8, bottom: 12 }}
-                          barSize={26}
-                        >
-                          <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                          <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-                          <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-                          <ChartTooltip
-                            content={<ChartTooltipContent />}
-                            formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
-                            labelFormatter={(label: any, payload: any) =>
-                              (payload?.[0]?.payload?.name as string) || (label as string)
-                            }
-                          />
-                          <Bar
-                            dataKey="fires"
-                            fill="var(--color-provinces)"
-                            radius={[4, 4, 0, 0]}
-                            label={{ position: 'top', formatter: (v: any) => Number(v).toFixed(0), fontSize: 10 }}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <BarChart
+                        data={provincesChartData}
+                        margin={{ top: 8, right: 8, left: 8, bottom: 12 }}
+                        barSize={26}
+                      >
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                        <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                        <ChartTooltip
+                          content={<ChartTooltipContent />}
+                          formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
+                          labelFormatter={(label: any, payload: any) =>
+                            (payload?.[0]?.payload?.name as string) || (label as string)
+                          }
+                        />
+                        <Bar
+                          dataKey="fires"
+                          fill="var(--color-provinces)"
+                          radius={[4, 4, 0, 0]}
+                          label={{ position: 'top', formatter: (v: any) => Number(v).toFixed(0), fontSize: 10 }}
+                        />
+                      </BarChart>
                     </ChartContainer>
                   </CardContent>
                 </Card>
@@ -771,38 +770,36 @@ export default function FireHistoryPage() {
                     <CardTitle className="text-base">Top 10 por FRP</CardTitle>
                     <p className="text-sm text-muted-foreground">Poder radiativo maximo</p>
                   </CardHeader>
-                  <CardContent className="w-full overflow-hidden">
+                  <CardContent className="min-h-[300px] w-full overflow-hidden">
                     <ChartContainer config={chartConfig} className="h-56 w-full overflow-hidden">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart
-                          data={topFrpData}
-                          margin={{ top: 8, right: 8, left: 8, bottom: 12 }}
-                          barSize={24}
-                        >
-                          <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                          <XAxis
-                            dataKey="name"
-                            tickLine={false}
-                            axisLine={false}
-                            tick={{ fontSize: 10 }}
-                            tickFormatter={(v: string) => (v && v.length > 10 ? `${v.slice(0, 9)}…` : v)}
-                          />
-                          <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
-                          <ChartTooltip
-                            content={<ChartTooltipContent />}
-                            formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
-                            labelFormatter={(label: any, payload: any) =>
-                              (payload?.[0]?.payload?.fullName as string) || (label as string)
-                            }
-                          />
-                          <Bar
-                            dataKey="frp"
-                            fill="var(--color-frp)"
-                            radius={[4, 4, 0, 0]}
-                            label={{ position: 'top', formatter: (v: any) => Number(v).toFixed(0), fontSize: 10 }}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
+                      <BarChart
+                        data={topFrpData}
+                        margin={{ top: 8, right: 8, left: 8, bottom: 12 }}
+                        barSize={24}
+                      >
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="name"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fontSize: 10 }}
+                          tickFormatter={(v: string) => (v && v.length > 10 ? `${v.slice(0, 9)}…` : v)}
+                        />
+                        <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
+                        <ChartTooltip
+                          content={<ChartTooltipContent />}
+                          formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
+                          labelFormatter={(label: any, payload: any) =>
+                            (payload?.[0]?.payload?.fullName as string) || (label as string)
+                          }
+                        />
+                        <Bar
+                          dataKey="frp"
+                          fill="var(--color-frp)"
+                          radius={[4, 4, 0, 0]}
+                          label={{ position: 'top', formatter: (v: any) => Number(v).toFixed(0), fontSize: 10 }}
+                        />
+                      </BarChart>
                     </ChartContainer>
                   </CardContent>
                 </Card>
@@ -876,34 +873,32 @@ export default function FireHistoryPage() {
                   <p className="text-sm text-muted-foreground">Poder radiativo maximo</p>
                 </div>
               </CardHeader>
-              <CardContent className="w-full overflow-hidden">
+              <CardContent className="min-h-[300px] w-full overflow-hidden">
                 <ChartContainer config={chartConfig} className="h-72 w-full overflow-hidden">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topFrpData} margin={{ top: 8, right: 8, left: 8, bottom: 12 }} barSize={28}>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="name"
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fontSize: 11 }}
-                        tickFormatter={(v: string) => (v && v.length > 12 ? `${v.slice(0, 11)}…` : v)}
-                      />
-                      <YAxis tickLine={false} axisLine={false} />
-                      <ChartTooltip
-                        content={<ChartTooltipContent />}
-                        formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
-                        labelFormatter={(label: any, payload: any) =>
-                          (payload?.[0]?.payload?.fullName as string) || (label as string)
-                        }
-                      />
-                      <Bar
-                        dataKey="frp"
-                        fill="var(--color-frp)"
-                        radius={[4, 4, 0, 0]}
-                        label={{ position: 'top', formatter: (v: any) => Number(v).toFixed(0), fontSize: 11 }}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  <BarChart data={topFrpData} margin={{ top: 8, right: 8, left: 8, bottom: 12 }} barSize={28}>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="name"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(v: string) => (v && v.length > 12 ? `${v.slice(0, 11)}…` : v)}
+                    />
+                    <YAxis tickLine={false} axisLine={false} />
+                    <ChartTooltip
+                      content={<ChartTooltipContent />}
+                      formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
+                      labelFormatter={(label: any, payload: any) =>
+                        (payload?.[0]?.payload?.fullName as string) || (label as string)
+                      }
+                    />
+                    <Bar
+                      dataKey="frp"
+                      fill="var(--color-frp)"
+                      radius={[4, 4, 0, 0]}
+                      label={{ position: 'top', formatter: (v: any) => Number(v).toFixed(0), fontSize: 11 }}
+                    />
+                  </BarChart>
                 </ChartContainer>
               </CardContent>
             </Card>
@@ -948,7 +943,7 @@ export default function FireHistoryPage() {
               variant="outline"
               onClick={handleExportCSV}
               disabled={exportMutation.isPending}
-              className="gap-2"
+              className="gap-2 bg-gray-50 dark:bg-input/30"
             >
               {exportMutation.isPending ? 'Exportando...' : 'Exportar CSV'}
             </Button>
@@ -1080,14 +1075,14 @@ export default function FireHistoryPage() {
             )}
           </div>
 
-          <div className="hidden rounded-xl border border-border bg-background md:block">
+          <div className="hidden rounded-xl border border-border bg-[hsl(var(--history-grid-cell))] md:block">
             <div
               ref={tableContainerRef}
               className="overflow-auto max-h-[70vh]"
               onScroll={handleTableScroll}
             >
               <Table>
-                <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur">
+                <TableHeader className="sticky top-0 z-10 [&_th]:bg-background/95 [&_th]:backdrop-blur">
                   <TableRow>
                     <TableHead>ID</TableHead>
                     <TableHead>Inicio</TableHead>
@@ -1116,7 +1111,7 @@ export default function FireHistoryPage() {
                         <TableRow key={`skeleton-${rowIdx}`} className="animate-pulse">
                           {Array.from({ length: tableColumnCount }).map((__, cellIdx) => (
                             <TableCell key={`skeleton-cell-${rowIdx}-${cellIdx}`}>
-                              <div className="h-3 w-full rounded bg-slate-200" />
+                              <div className="h-3 w-full rounded bg-muted" />
                             </TableCell>
                           ))}
                         </TableRow>

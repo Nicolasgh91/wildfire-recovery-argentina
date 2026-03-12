@@ -7,5 +7,11 @@ export function useRecovery(fireEventId: string, enabled = true) {
     queryKey: queryKeys.monitoring.recovery(fireEventId),
     queryFn: ({ signal }) => getRecoveryTimeline(fireEventId, signal),
     enabled: !!fireEventId && enabled,
+    retry: (failureCount, error: any) => {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ERR_CANCELED') {
+        return false
+      }
+      return failureCount < 3
+    },
   })
 }
