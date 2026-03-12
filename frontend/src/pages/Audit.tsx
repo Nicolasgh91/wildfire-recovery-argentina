@@ -325,7 +325,7 @@ export default function AuditPage() {
   }
 
   return (
-    <div className="bg-background">
+    <div className="bg-background/15">
       <div className="container mx-auto px-4 py-6">
         <div className="mb-6 flex flex-col gap-3">
           <div className="flex items-center gap-3">

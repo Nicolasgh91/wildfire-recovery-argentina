@@ -19,10 +19,10 @@ Este flujo CORE cubre el análisis de vegetación y recuperación post‑incendi
 
 ### Documentos fuente relevantes
 
-- `docs/UF-12/2_UC_F12_implementation_spec.md`
-- `docs/UF-12/UC_F12_GEE_optimization_analysis.md`
-- `docs/UF-12/UC_F12_testing_and_manual_workers.md`
-- `docs/UF-12/uc-f12-data-flow-diagram-776569.md`
+- `docs/archive/ndvi-uf12/uc-f12-implementation-spec.md`
+- `docs/archive/ndvi-uf12/uc-f12-gee-optimization-analysis.md`
+- `docs/archive/ndvi-uf12/uc-f12-testing-and-manual-workers.md`
+- `docs/archive/ndvi-uf12/diagrams/uc-f12-data-flow-diagram-776569.md`
 - `docs/ndvi/analisis_ndvi.md`
 - `docs/ndvi/hoja_de_ruta_ndvi_gee_v2.md`
 - `docs/ndvi/gee_quota_mitigation_spec_on_ndvi.md`

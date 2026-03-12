@@ -2,7 +2,7 @@
 
 ### 1. Vista general
 
-El pipeline diario canónico sigue esta secuencia (ver también `docs/INDEX.md` y `uc-f12-data-flow-diagram-776569.md`):
+El pipeline diario canónico sigue esta secuencia (ver también `docs/INDEX.md` y `docs/archive/ndvi-uf12/diagrams/uc-f12-data-flow-diagram-776569.md`):
 
 1. Ingesta FIRMS → `fire_detections`.
 2. Clustering detecciones → `fire_events`.

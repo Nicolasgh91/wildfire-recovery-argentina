@@ -22,7 +22,7 @@ Este flujo CORE resume el recorrido de los datos desde las **detecciones FIRMS c
 
 - `docs/INDEX.md` (diagrama mermaid del pipeline core).
 - `docs/Carrusel fix/flujo_ingesta_procesamiento.md`
-- `docs/UF-12/uc-f12-data-flow-diagram-776569.md`
+- `docs/archive/ndvi-uf12/diagrams/uc-f12-data-flow-diagram-776569.md`
 - `docs/archive/assets/assets-pipeline-technical-tasks.md`
 - `docs/project/episodes/plan_episode_flow.md`
 - `docs/flujo-deploy.md`

@@ -27,7 +27,7 @@ Este manual describe cómo ejecutar y supervisar los análisis de vegetación (U
 
 ### 3. Ejecución manual para un solo evento (testing)
 
-Basado en `docs/UF-12/UC_F12_testing_and_manual_workers.md`:
+Basado en `docs/archive/ndvi-uf12/uc-f12-testing-and-manual-workers.md`:
 
 1. Obtener un `fire_event_id` válido:
 

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import type { FireFiltersState } from '@/types/fire'
+import { cn } from '@/lib/utils'
 
 const PROVINCES = [
   'Buenos Aires',
@@ -100,7 +101,7 @@ export function FireFilters({
             placeholder="Buscar por ubicacion..."
             value={filters.search}
             onChange={(e) => onFiltersChange({ search: e.target.value, page: 1 })}
-            className="pl-10"
+            className="h-9 py-2 pl-10"
           />
         </div>
 
@@ -110,7 +111,7 @@ export function FireFilters({
             onFiltersChange({ province: value === 'all' ? '' : value, page: 1 })
           }
         >
-          <SelectTrigger className="w-[180px]" data-testid="province-filter">
+          <SelectTrigger className="w-[180px] bg-gray-50 dark:bg-input/30" data-testid="province-filter">
             <SelectValue placeholder="Provincia" />
           </SelectTrigger>
           <SelectContent>
@@ -132,7 +133,7 @@ export function FireFilters({
             })
           }
         >
-          <SelectTrigger className="w-[160px]" data-testid="status-filter">
+          <SelectTrigger className="w-[160px] bg-gray-50 dark:bg-input/30" data-testid="status-filter">
             <SelectValue placeholder="Estado" />
           </SelectTrigger>
           <SelectContent>
@@ -150,7 +151,7 @@ export function FireFilters({
             onFiltersChange({ sort_by: value as FireFiltersState['sort_by'] })
           }
         >
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-[200px] bg-gray-50 dark:bg-input/30">
             <SelectValue placeholder="Ordenar por" />
           </SelectTrigger>
           <SelectContent>
@@ -166,7 +167,10 @@ export function FireFilters({
           variant="outline"
           size="icon"
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className={showAdvanced ? 'bg-emerald-100 text-emerald-700' : ''}
+          className={cn(
+            'bg-gray-50 dark:bg-input/30',
+            showAdvanced ? 'bg-emerald-100 text-emerald-700' : ''
+          )}
         >
           <Filter className="h-4 w-4" />
         </Button>
@@ -176,7 +180,7 @@ export function FireFilters({
             variant="outline"
             onClick={onExportCSV}
             disabled={isExporting}
-            className="gap-2 bg-transparent"
+            className="gap-2 bg-gray-50 dark:bg-input/30"
           >
             <Download className="h-4 w-4" />
             {isExporting ? 'Exportando...' : 'Exportar CSV'}

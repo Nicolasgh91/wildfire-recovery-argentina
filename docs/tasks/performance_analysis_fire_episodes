@@ -1,0 +1,237 @@
+# Análisis de Performance — Causa Raíz del Doble Montado
+
+## Diagnóstico
+
+El error `ERR_CANCELED` en `/fire-episodes` es un **síntoma**, no el problema real. Tiene **dos causas raíz independientes** que se combinan:
+
+---
+
+## Causa Raíz 1 — React `<StrictMode>` (primaria, solo en dev)
+
+**Archivo:** [main.tsx](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/main.tsx#L23)
+
+```tsx
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>   // ← Aquí
+    <QueryClientProvider client={queryClient}>
+      ...
+    </QueryClientProvider>
+  </StrictMode>
+)
+```
+
+En React 18+, `StrictMode` deliberadamente **monta → desmonta → remonta** cada componente en desarrollo para detectar efectos secundarios no idempotentes. Esto es por diseño y correcto. **No se debe eliminar.**
+
+**Impacto en el árbol de montado:**
+
+```
+StrictMode
+└── QueryClientProvider
+    └── ErrorBoundary
+        └── App
+            └── ThemeProvider
+                └── I18nProvider       (useEffect: persiste idioma en localStorage) ×2
+                    └── AuthProvider   (useEffect: getSession() + onAuthStateChange) ×2
+                        └── BrowserRouter
+                            └── AppShell
+                                └── useIdleTimer (5 event listeners) ×2
+                                    └── HomePage
+                                        └── useEpisodesByMode → GET /fire-episodes ×2
+```
+
+Cada nodo con `useEffect` se ejecuta dos veces. El request HTTP se emite, se cancela, y se re-emite en la segunda montura. El segundo request es el que efectivamente se usa.
+
+---
+
+## Causa Raíz 2 — Cascada de re-renders por [AuthProvider](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/AuthContext.tsx#73-176) (primaria, afecta producción)
+
+**Archivo:** [AuthContext.tsx](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/AuthContext.tsx)
+
+[AuthProvider](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/AuthContext.tsx#73-176) tiene **dos transiciones de estado** al iniciar:
+
+1. Estado inicial: `status: 'loading'`
+2. `getSession()` resuelve → `status: 'unauthenticated'` (o `'authenticated'`)
+
+Esto provoca que **todo el árbol bajo [AuthProvider](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/AuthContext.tsx#73-176) se re-renderice dos veces** al cargar la home, incluyendo [AppShell](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/App.tsx#57-96), [RootRouteGate](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/App.tsx#46-56) (que hace `<Navigate>`), y finalmente [HomePage](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/pages/Home.tsx#17-194).
+
+**Flujo real en producción:**
+```
+t=0: AuthProvider monta → status='loading'
+     ↓ RootRouteGate devuelve <AppLoading /> (spinner)
+t=~200ms: getSession() resuelve → status='unauthenticated'
+     ↓ Todo el árbol re-renderiza
+     ↓ RootRouteGate redirige a /login
+```
+
+Y si ya está en `/home`:
+```
+t=0: status='loading' → HomePage monta → useEpisodesByMode se habilita
+t=~200ms: status='unauthenticated' → re-render → pero query ya está cacheada ✓
+```
+
+El problema está en que incluso [I18nProvider](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/LanguageContext.tsx#24-48) y `ThemeProvider` (que no dependen del auth) están **adentro** de [AuthProvider](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/AuthContext.tsx#73-176), lo que los hace re-renderizar innecesariamente.
+
+---
+
+## Causa Raíz 3 — `useMemo` faltante en `AuthContext.value` (secundaria)
+
+**Archivo:** [AuthContext.tsx](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/AuthContext.tsx#L161-L172)
+
+```tsx
+const value = useMemo<AuthContextValue>(
+  () => ({ ...state, signIn, ... }),
+  [isAuthenticated, signIn, ..., state]  // ← incluye `state` Y `isAuthenticated`
+)
+```
+
+`state` es un objeto nuevo en cada render (por `setState`). `isAuthenticated` se deriva de `state.status`. El dep array incluye **ambos**, por lo que el memo se invalida con cada cambio de `state`, lo cual incluye el spread `...state` que produce un objeto nuevo igualmente. Funciona correctamente, pero la dependencia doble (`state` + `isAuthenticated`) es redundante.
+
+---
+
+## Causa Raíz 4 — `queryClient` global con `retry: 3` en defaults (secundaria)
+
+**Archivo:** [queryClient.ts](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/lib/queryClient.ts#L50)
+
+```ts
+retry: 3,  // ← default global
+```
+
+Y en [useEpisodesByMode](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/hooks/queries/useEpisodesByMode.ts#12-34):
+```ts
+retry: 1,  // ← override correcto
+```
+
+El override en el hook es correcto, pero el default global `retry: 3` afecta a **todos los demás hooks** que no hacen override. Una cancelación por StrictMode activa el mecanismo de retry innecesariamente.
+
+---
+
+## Causa Raíz 5 — [useIdleTimer](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/hooks/useIdleTimer.ts#13-121) registra 6 event listeners dos veces en dev
+
+**Archivo:** [useIdleTimer.ts](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/hooks/useIdleTimer.ts#L91-L110)
+
+El hook registra `mousemove`, `keydown`, `scroll`, `touchstart`, `click` + [storage](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/hooks/useIdleTimer.ts#97-109) en cada mount. Con StrictMode, esto ocurre dos veces. El cleanup sí existe (línea 112-118), por lo que en producción hay solo un set de listeners. Pero el `useEffect` tiene **6 dependencias que cambian en cada render** (`clearTimer`, `enabled`, `recordActivity`, `scheduleTimer`, `timeoutMs`, `triggerIdle`), lo que puede causar re-mount del efecto en ciclos innecesarios.
+
+---
+
+## Causa Raíz 6 — `refetchOnWindowFocus: true` en el queryClient global
+
+**Archivo:** [queryClient.ts](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/lib/queryClient.ts#L51)
+
+```ts
+refetchOnWindowFocus: true,
+```
+
+Cada vez que el usuario hace alt-tab o click fuera/dentro de la ventana, **todos los queries activos se refetchan**. Para datos como episodios con `staleTime: 5min`, esto es correcto. Pero para queries con datos estáticos o de UI, puede ser innecesario.
+
+---
+
+## Plan de Mejoras (sin eliminar funcionalidades)
+
+### Prioridad ALTA — Impacta producción
+
+#### 1. Silenciar cancelaciones esperadas en el interceptor de Axios
+**Archivo:** [api.ts](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/services/api.ts#L182)
+
+Agregar guarda al inicio de [responseErrorInterceptor](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/services/api.ts#182-245) para no procesar ni reintentar requests cancelados:
+
+```diff
+export async function responseErrorInterceptor(error: AxiosError) {
++  // Cancelaciones son esperadas: StrictMode, navegación, AbortSignal.timeout
++  if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
++    return Promise.reject(error)
++  }
+   if (import.meta.env.DEV) { ...
+```
+
+Esto previene que el retry se active ante requests cancelados (actualmente `!error.response` sobre un request cancelado califica para retry).
+
+#### 2. Reorganizar el árbol de providers para reducir re-renders por auth
+
+**Archivo:** [App.tsx](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/App.tsx#L102-L107)
+
+`ThemeProvider` e [I18nProvider](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/LanguageContext.tsx#24-48) no dependen del auth state. Sacarlos del scope de [AuthProvider](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/AuthContext.tsx#73-176) evita que re-rendericen cuando el auth status cambia:
+
+```diff
+- <ThemeProvider>
+-   <I18nProvider>
+-     <AuthProvider>
+-       <BrowserRouter>
++  <ThemeProvider>
++    <I18nProvider>
++      <BrowserRouter>
++        <AuthProvider>
+          ...
++        </AuthProvider>
++      </BrowserRouter>
++    </I18nProvider>
++  </ThemeProvider>
+```
+
+> [!IMPORTANT]
+> Requiere verificar que ningún componente dentro de [AuthProvider](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/AuthContext.tsx#73-176) use [useI18n()](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/LanguageContext.tsx#49-56) en lógica de negocio crítica que deba ejecutarse *antes* de que el router esté montado. [AppShell](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/App.tsx#57-96) sí usa ambos contextos, lo cual es correcto con este orden.
+
+#### 3. Limpiar dependencias redundantes en `AuthContext.value`
+
+```diff
+const value = useMemo<AuthContextValue>(
+  () => ({ ...state, signIn, signInWithGoogle, signInWithOtp, signUpWithEmail, signOut, isAuthenticated }),
+- [isAuthenticated, signIn, signInWithGoogle, signInWithOtp, signOut, signUpWithEmail, state]
++ [state, signIn, signInWithGoogle, signInWithOtp, signOut, signUpWithEmail]
+  // isAuthenticated se deriva de state, incluir ambos es redundante
+)
+```
+
+---
+
+### Prioridad MEDIA — Mejoras defensivas
+
+#### 4. Cambiar `retry` global a 0 y let each hook decidir
+
+**Archivo:** [queryClient.ts](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/lib/queryClient.ts)
+
+```diff
+- retry: 3,
++ retry: 0,  // Cada hook declara su retry explícitamente
+```
+
+Esto previene retries silenciosos ante cancelaciones y errores 404.
+
+#### 5. Reducir las dependencias del `useEffect` en [useIdleTimer](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/hooks/useIdleTimer.ts#13-121)
+
+El efecto tiene 6 dependencias, todas estabilizadas con `useCallback`, pero `timeoutMs` (un número) garantiza estabilidad. El riesgo real es `triggerIdle` y `scheduleTimer` que dependen de [onIdle](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/App.tsx#72-76) (una función inline en [AppShell](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/App.tsx#57-96)). Si [onIdle](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/App.tsx#72-76) no está memoizada externamente, re-monta el efecto en cada render de [AppShell](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/App.tsx#57-96).
+
+```diff
+// En AppShell — App.tsx
++const onIdle = useCallback(async () => {
++  await signOut()
++  navigate('/login', { state: { reason: 'idle' } })
++}, [signOut, navigate])
+
+useIdleTimer({
+  enabled: isAuthenticated,
+- onIdle: async () => {
+-   await signOut()
+-   navigate('/login', { state: { reason: 'idle' } })
+- },
++ onIdle,
+})
+```
+
+---
+
+### Prioridad BAJA — Mejoras de DX (solo afectan dev)
+
+#### 6. No hay nada que fix-ear en StrictMode
+
+`<StrictMode>` **debe permanecer**. Es la red de seguridad que detectó exactamente este problema de efectos secundarios. El objetivo no es removerlo sino asegurarse de que todos los efectos sean idempotentes (cleanup correcto), lo cual ya está implementado en [AuthContext](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/AuthContext.tsx#17-25) y [useIdleTimer](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/hooks/useIdleTimer.ts#13-121).
+
+---
+
+## Resumen de archivos a modificar
+
+| Archivo | Cambio | Prioridad |
+|---|---|---|
+| [api.ts](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/services/api.ts) | Guard de cancelación en interceptor | ALTA |
+| [App.tsx](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/App.tsx) | Reorganizar providers + memoizar [onIdle](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/App.tsx#72-76) | ALTA / MEDIA |
+| [AuthContext.tsx](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/context/AuthContext.tsx) | Limpiar deps redundantes de `useMemo` | MEDIA |
+| [queryClient.ts](file:///c:/Users/nicog/wildfire-recovery-argentina/frontend/src/lib/queryClient.ts) | `retry: 0` como global default | MEDIA |

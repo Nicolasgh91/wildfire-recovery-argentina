@@ -557,7 +557,7 @@ Según `2026_02_23_uc_f12_vae_monitoring.sql`:
   - Tests para `workers.tasks.recovery` o `workers.tasks.destruction`.
 - La validación actual de VAE se apoya principalmente en:
   - Runbooks y specs (`core-vae-*`, `UC_F12_*`, `analisis_ndvi.md`).
-  - Scripts y verificaciones manuales (`docs/UF-12/UC_F12_testing_and_manual_workers.md`).
+  - Scripts y verificaciones manuales (`docs/archive/ndvi-uf12/uc-f12-testing-and-manual-workers.md`).
 
 ### 6.2. Suite mínima recomendada
 

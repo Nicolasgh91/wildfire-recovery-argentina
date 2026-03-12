@@ -29,6 +29,7 @@
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
@@ -37,6 +38,7 @@
   :root {
     --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
     --background: 164 86% 16%;
+    --history-page-bg: 164 86% 16%;
     --auth-page-background: 0 0% 100%;
     --auth-form-container-bg: 122.88 25.49% 79.89%;
     --foreground: 40 10% 20%;
@@ -50,6 +52,7 @@
     --secondary-foreground: 0 0% 100%;
     --muted: 100 10% 95%;
     --muted-foreground: 40 10% 40%;
+    --table-interaction: 45 33% 97%;
     --accent: 40 60% 70%;
     --accent-foreground: 40 10% 25%;
     --destructive: 0 84% 60%;
@@ -69,6 +72,8 @@
     --chart-4: 40 70% 70%;
     --chart-5: 20 70% 55%;
     --radius: 0.625rem;
+    --history-grid-cell: 48 30% 97%;
+    --table-border: 48 10% 90%;
     --sidebar: 100 10% 98%;
     --sidebar-foreground: 40 10% 20%;
     --sidebar-primary: 155 55% 45%;
@@ -94,6 +99,7 @@
 
   .dark {
     --background: 40 10% 18%;
+    --history-page-bg: 40 10% 18%;
     --auth-page-background: 0 0% 100%;
     --auth-form-container-bg: 122.88 25.49% 79.89%;
     --foreground: 100 10% 95%;
@@ -107,6 +113,7 @@
     --secondary-foreground: 100 10% 95%;
     --muted: 40 10% 28%;
     --muted-foreground: 100 10% 65%;
+    --table-interaction: 40 10% 28%;
     --accent: 40 40% 45%;
     --accent-foreground: 100 10% 95%;
     --destructive: 0 65% 50%;
@@ -120,6 +127,8 @@
     --chart-4: 40 55% 70%;
     --chart-5: 20 70% 65%;
     --sidebar: 40 10% 20%;
+    --history-grid-cell: 40 10% 18%;
+    --table-border: 40 10% 32%;
     --sidebar-foreground: 100 10% 95%;
     --sidebar-primary: 155 55% 45%;
     --sidebar-primary-foreground: 40 10% 15%;
@@ -146,6 +155,14 @@
     --critical-dialog-bg: 40 10% 22%;
     --critical-dialog-foreground: 100 10% 95%;
     --critical-dialog-muted: 100 10% 65%;
+  }
+
+  .bg-surface-override {
+    --background: 0 0% 100%;
+  }
+
+  .dark .bg-surface-override {
+    --background: 40 10% 22%;
   }
 
   * {

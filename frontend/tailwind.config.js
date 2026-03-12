@@ -24,6 +24,8 @@ export default {
         background: "hsl(var(--background))",
         "auth-page": "hsl(var(--auth-page-background))",
         "auth-form-container": "hsl(var(--auth-form-container-bg))",
+        "history-page-bg": "hsl(var(--history-page-bg))",
+        "table-border": "hsl(var(--table-border))",
         foreground: "hsl(var(--foreground))",
         primary: {
           DEFAULT: "hsl(var(--primary))",

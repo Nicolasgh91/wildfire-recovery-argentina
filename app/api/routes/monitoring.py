@@ -42,6 +42,7 @@ except ImportError:
     from app.api.deps import get_db
 
 from app.api.auth_deps import get_current_user
+from app.core.config import settings
 from app.core.rate_limiter import (
     make_generation_rate_limiter,
     make_recovery_trigger_rate_limiter,
@@ -197,6 +198,16 @@ def _enqueue_recovery_if_not_pending(fire_event_id: str) -> None:
     Encola análisis GEE si no hay datos. La tarea es idempotente (UPSERT),
     por lo que múltiples encoles no generan duplicados en BD.
     """
+    if not settings.ENABLE_RECOVERY_ENQUEUE:
+        logger.info(
+            "enqueue_recovery_disabled",
+            extra={
+                "fire_event_id": fire_event_id,
+                "reason": "ENABLE_RECOVERY_ENQUEUE is False",
+            },
+        )
+        return
+
     try:
         from workers.tasks.recovery import analyze_recovery
 
