@@ -41,10 +41,10 @@ def detect_destruction(self, fire_event_id, months_window=12):
                     id,
                     start_date,
                     estimated_area_hectares,
-                    CASE WHEN perimeter IS NOT NULL THEN ST_XMin(perimeter) ELSE ST_X(centroid) - 0.01 END AS bbox_west,
-                    CASE WHEN perimeter IS NOT NULL THEN ST_YMin(perimeter) ELSE ST_Y(centroid) - 0.01 END AS bbox_south,
-                    CASE WHEN perimeter IS NOT NULL THEN ST_XMax(perimeter) ELSE ST_X(centroid) + 0.01 END AS bbox_east,
-                    CASE WHEN perimeter IS NOT NULL THEN ST_YMax(perimeter) ELSE ST_Y(centroid) + 0.01 END AS bbox_north
+                    CASE WHEN perimeter IS NOT NULL THEN ST_XMin(perimeter::geometry) ELSE ST_X(centroid::geometry) - 0.01 END AS bbox_west,
+                    CASE WHEN perimeter IS NOT NULL THEN ST_YMin(perimeter::geometry) ELSE ST_Y(centroid::geometry) - 0.01 END AS bbox_south,
+                    CASE WHEN perimeter IS NOT NULL THEN ST_XMax(perimeter::geometry) ELSE ST_X(centroid::geometry) + 0.01 END AS bbox_east,
+                    CASE WHEN perimeter IS NOT NULL THEN ST_YMax(perimeter::geometry) ELSE ST_Y(centroid::geometry) + 0.01 END AS bbox_north
                 FROM fire_events
                 WHERE id = :fire_id
             """),
