@@ -105,7 +105,8 @@ def _fetch_events(
         text(
             f"""
             SELECT DISTINCT fe.id, fe.start_date,
-                   COALESCE(ST_Area(fe.perimeter::geography) / 10000, 0) as area_ha
+                   COALESCE(ST_Area(fe.perimeter::geography) / 10000, 0) as area_ha,
+                   CASE WHEN fpa.protected_area_id IS NOT NULL THEN 0 ELSE 1 END as priority_rank
             FROM fire_events fe
             LEFT JOIN vegetation_monitoring vm
               ON vm.fire_event_id = fe.id
