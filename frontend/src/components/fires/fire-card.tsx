@@ -207,8 +207,12 @@ export function FireCard({ fire, slideStage = 3 }: FireCardProps) {
               {t('recentLabel')}
             </Badge>
           )}
-          {fire.recovery_status && (
-            <RecoveryStatusBadge status={fire.recovery_status} className="text-xs" />
+          {(fire.latest_recovery_status ?? fire.recovery_status) && (
+            <RecoveryStatusBadge
+              status={fire.latest_recovery_status ?? fire.recovery_status}
+              size="sm"
+              className="text-xs"
+            />
           )}
           {isImagePending && (
             <Tooltip>

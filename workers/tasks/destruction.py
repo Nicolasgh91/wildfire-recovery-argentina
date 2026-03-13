@@ -34,15 +34,17 @@ def detect_destruction(self, fire_event_id, months_window=12):
     try:
         logger.info(f"Detecting land use change for fire {fire_event_id}...")
 
-        # 1. Get fire event geometry
+        # 1. Get fire event geometry (bbox from perimeter, fallback centroid — F5-04)
         fire_row = db.execute(
             text("""
                 SELECT
                     id,
                     start_date,
-                    ST_Y(centroid::geometry) as lat,
-                    ST_X(centroid::geometry) as lon,
-                    estimated_area_hectares
+                    estimated_area_hectares,
+                    CASE WHEN perimeter IS NOT NULL THEN ST_XMin(perimeter) ELSE ST_X(centroid) - 0.01 END AS bbox_west,
+                    CASE WHEN perimeter IS NOT NULL THEN ST_YMin(perimeter) ELSE ST_Y(centroid) - 0.01 END AS bbox_south,
+                    CASE WHEN perimeter IS NOT NULL THEN ST_XMax(perimeter) ELSE ST_X(centroid) + 0.01 END AS bbox_east,
+                    CASE WHEN perimeter IS NOT NULL THEN ST_YMax(perimeter) ELSE ST_Y(centroid) + 0.01 END AS bbox_north
                 FROM fire_events
                 WHERE id = :fire_id
             """),
@@ -50,25 +52,22 @@ def detect_destruction(self, fire_event_id, months_window=12):
         ).fetchone()
 
         if not fire_row:
-            logger.warning(f"Fire event {fire_event_id} not found, skipping")
+            logger.warning("Fire event %s not found, skipping", fire_event_id)
             return {"fire_event_id": str(fire_event_id), "status": "skipped", "reason": "not_found"}
 
         fire_date = fire_row.start_date
-        fire_lat = fire_row.lat
-        fire_lon = fire_row.lon
         area_ha = fire_row.estimated_area_hectares or 0
+        bbox = {
+            "west": float(fire_row.bbox_west),
+            "south": float(fire_row.bbox_south),
+            "east": float(fire_row.bbox_east),
+            "north": float(fire_row.bbox_north),
+        }
 
         # 2. Run VAE land use change detection
         from app.services.vae_service import VAEService
 
         vae = VAEService()
-        buffer = 0.01
-        bbox = {
-            "west": fire_lon - buffer,
-            "south": fire_lat - buffer,
-            "east": fire_lon + buffer,
-            "north": fire_lat + buffer,
-        }
 
         fire_date_obj = fire_date.date() if hasattr(fire_date, 'date') else fire_date
 
@@ -87,8 +86,9 @@ def detect_destruction(self, fire_event_id, months_window=12):
                 "error": str(exc),
             }
 
-        # 3. Persist to land_use_changes with upsert
+        # 3. Persist to land_use_changes with upsert (F5-04: confidence_score)
         change_date = analysis.analysis_date
+        notes = "Alerta de detección remota — requiere verificación presencial"
         upsert_query = text("""
             INSERT INTO land_use_changes (
                 fire_event_id,
@@ -99,6 +99,7 @@ def detect_destruction(self, fire_event_id, months_window=12):
                 affected_area_hectares,
                 is_potential_violation,
                 violation_confidence,
+                confidence_score,
                 status,
                 notes,
                 created_at,
@@ -112,6 +113,7 @@ def detect_destruction(self, fire_event_id, months_window=12):
                 :affected_area_hectares,
                 :is_potential_violation,
                 :violation_confidence,
+                :confidence_score,
                 :status,
                 :notes,
                 NOW(),
@@ -123,6 +125,7 @@ def detect_destruction(self, fire_event_id, months_window=12):
                 affected_area_hectares = EXCLUDED.affected_area_hectares,
                 is_potential_violation = EXCLUDED.is_potential_violation,
                 violation_confidence = EXCLUDED.violation_confidence,
+                confidence_score = EXCLUDED.confidence_score,
                 status = EXCLUDED.status,
                 notes = EXCLUDED.notes,
                 updated_at = NOW()
@@ -137,8 +140,9 @@ def detect_destruction(self, fire_event_id, months_window=12):
             "affected_area_hectares": analysis.affected_area_hectares,
             "is_potential_violation": analysis.is_potential_violation,
             "violation_confidence": str(analysis.change_confidence),
+            "confidence_score": float(analysis.change_confidence),
             "status": "pending_review" if analysis.is_potential_violation else "reviewed",
-            "notes": analysis.recommended_action,
+            "notes": notes,
         })
         db.commit()
 

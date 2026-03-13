@@ -41,8 +41,10 @@ try:
 except ImportError:
     from app.api.deps import get_db
 
-from app.api.auth_deps import get_current_user
+from app.api.auth_deps import get_current_user, get_optional_user
 from app.core.config import settings
+from app.core.legal import get_legal_disclaimer
+from app.core.recovery_thresholds import classify_recovery_status
 from app.core.rate_limiter import (
     make_generation_rate_limiter,
     make_recovery_trigger_rate_limiter,
@@ -67,7 +69,7 @@ _trigger_ip_limit = make_recovery_trigger_rate_limiter()
 
 
 class MonthlyNDVI(BaseModel):
-    """Monthly NDVI measurement."""
+    """Monthly NDVI measurement. F6-03: human_activity_* solo para autenticados."""
 
     month: int = Field(
         ..., ge=0, le=36, description="Month number after fire (0-36)"
@@ -79,6 +81,12 @@ class MonthlyNDVI(BaseModel):
     )
     cloud_cover_pct: Optional[float] = Field(
         None, description="Cloud cover percentage"
+    )
+    human_activity_detected: Optional[bool] = Field(
+        None, description="Present only when authenticated (F6-03)"
+    )
+    activity_type: Optional[str] = Field(
+        None, description="Present only when authenticated (F6-03)"
     )
 
 
@@ -116,6 +124,19 @@ class RecoveryResponse(BaseModel):
         description="Mensaje opcional, p. ej. cuando recovery_status es pending",
     )
 
+    recovery_metric: Optional[str] = Field(
+        "baseline_ratio",
+        description="Métrica usada (D-01): baseline ratio",
+    )
+    recovery_metric_description: Optional[str] = Field(
+        "Porcentaje del NDVI pre-incendio alcanzado",
+        description="Descripción de la métrica para la UI",
+    )
+    legal_disclaimer: Optional[str] = Field(
+        None,
+        description="Disclaimer legal (D-05); default desde get_legal_disclaimer()",
+    )
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -147,17 +168,19 @@ class RecoverySummaryItem(BaseModel):
 
 
 class RecoverySummaryResponse(BaseModel):
-    """Response for recovery summary endpoint."""
+    """Response for recovery summary endpoint (público F6-02)."""
 
     total_fires: int
     fires_analyzed: int
     status_breakdown: dict
     suspicious_count: int
     fires: List[RecoverySummaryItem]
+    average_recovery_percentage: Optional[float] = None
+    legal_disclaimer: Optional[str] = None
 
 
 class LandUseChangeItem(BaseModel):
-    """Single land use change record."""
+    """Single land use change record (F6-04: confidence_score)."""
 
     id: str
     change_detected_at: str
@@ -167,17 +190,19 @@ class LandUseChangeItem(BaseModel):
     affected_area_hectares: Optional[float] = None
     is_potential_violation: bool
     violation_confidence: Optional[str] = None
+    confidence_score: Optional[float] = None
     status: str
     notes: Optional[str] = None
 
 
 class LandUseChangesResponse(BaseModel):
-    """Response for land use changes endpoint."""
+    """Response for land use changes endpoint (JWT required F6-04)."""
 
     fire_event_id: str
     total_changes: int
     violation_count: int
     changes: List[LandUseChangeItem]
+    legal_disclaimer: Optional[str] = None
 
 
 class TriggerResponse(BaseModel):
@@ -193,10 +218,13 @@ class TriggerResponse(BaseModel):
 # =============================================================================
 
 
-def _enqueue_recovery_if_not_pending(fire_event_id: str) -> None:
+def _enqueue_recovery_if_not_pending(
+    fire_event_id: str,
+    db: Optional[Session] = None,
+) -> None:
     """
-    Encola análisis GEE si no hay datos. La tarea es idempotente (UPSERT),
-    por lo que múltiples encoles no generan duplicados en BD.
+    Encola analyze_recovery solo si no hay job pendiente reciente (F6-06).
+    Usa pending_reason como semáforo cuando db está disponible.
     """
     if not settings.ENABLE_RECOVERY_ENQUEUE:
         logger.info(
@@ -208,14 +236,33 @@ def _enqueue_recovery_if_not_pending(fire_event_id: str) -> None:
         )
         return
 
+    if db is not None:
+        recent = db.execute(
+            text("""
+                SELECT 1 FROM vegetation_monitoring
+                WHERE fire_event_id = :fid
+                  AND pending_reason IS NOT NULL
+                  AND updated_at > NOW() - INTERVAL '1 hour'
+                LIMIT 1
+            """),
+            {"fid": fire_event_id},
+        ).fetchone()
+        if recent:
+            logger.info(
+                "enqueue_recovery_skipped_recent_pending",
+                extra={"fire_event_id": fire_event_id},
+            )
+            return
+
     try:
         from workers.tasks.recovery import analyze_recovery
 
         analyze_recovery.apply_async(
             args=[fire_event_id],
-            queue="gee",
+            queue="vae",
             countdown=5,
         )
+        logger.info("Enqueued recovery analysis for %s", fire_event_id)
     except Exception as exc:
         logger.warning(
             "enqueue_recovery_failed",
@@ -225,28 +272,6 @@ def _enqueue_recovery_if_not_pending(fire_event_id: str) -> None:
                 "fire_event_id": fire_event_id,
             },
         )
-
-
-def _classify_status(recovery_pct: Optional[float], has_activity: bool) -> str:
-    """
-    Clasifica el estado de recuperación según datos del último registro.
-    Retorna valores alineados con RecoveryStatusBadge del frontend.
-    """
-    if has_activity:
-        return "anomaly_detected"
-    if recovery_pct is None:
-        return "pending"
-    if recovery_pct >= 90:
-        return "full_recovery"
-    if recovery_pct >= 70:
-        return "advanced_recovery"
-    if recovery_pct >= 40:
-        return "moderate_recovery"
-    if recovery_pct >= 10:
-        return "early_recovery"
-    if recovery_pct >= 0:
-        return "stalled"
-    return "not_started"
 
 
 # =============================================================================
@@ -358,7 +383,7 @@ async def get_recovery_summary(
         ]:
             has_activity = True
 
-        recovery_status = _classify_status(recovery_pct, has_activity)
+        recovery_status = classify_recovery_status(recovery_pct, has_anomaly=has_activity)
         is_suspicious = recovery_status == "anomaly_detected"
         if is_suspicious:
             suspicious_count += 1
@@ -378,6 +403,10 @@ async def get_recovery_summary(
             )
         )
 
+    # F6-02: promedio y disclaimer para resumen público
+    pcts = [f.recovery_percentage for f in fires if f.recovery_percentage is not None]
+    avg_pct = sum(pcts) / len(pcts) if pcts else None
+
     return RecoverySummaryResponse(
         total_fires=len(fires),
         fires_analyzed=len(
@@ -386,6 +415,8 @@ async def get_recovery_summary(
         status_breakdown=status_counts,
         suspicious_count=suspicious_count,
         fires=fires,
+        average_recovery_percentage=round(avg_pct, 1) if avg_pct is not None else None,
+        legal_disclaimer=get_legal_disclaimer(),
     )
 
 
@@ -480,6 +511,9 @@ async def get_recovery_by_episode(
             monitoring_data=[],
             query_duration_ms=query_duration_ms,
             message="No hay datos de monitoreo agregados para este episodio aún.",
+            recovery_metric="baseline_ratio",
+            recovery_metric_description="Porcentaje del NDVI pre-incendio alcanzado",
+            legal_disclaimer=get_legal_disclaimer(),
         )
 
     monitoring_data = []
@@ -511,7 +545,7 @@ async def get_recovery_by_episode(
     latest = agg_rows[-1]
     current_ndvi = float(latest.ndvi_mean) if latest.ndvi_mean is not None else None
     current_recovery = float(latest.recovery_percentage) if latest.recovery_percentage is not None else None
-    recovery_status = _classify_status(current_recovery, False)
+    recovery_status = classify_recovery_status(current_recovery, has_anomaly=False)
     if baseline_ndvi is None and agg_rows:
         baseline_ndvi = next(
             (float(r.baseline_ndvi) for r in agg_rows if r.baseline_ndvi is not None),
@@ -530,6 +564,9 @@ async def get_recovery_by_episode(
         anomaly_detected=None,
         monitoring_data=monitoring_data,
         query_duration_ms=query_duration_ms,
+        recovery_metric="baseline_ratio",
+        recovery_metric_description="Porcentaje del NDVI pre-incendio alcanzado",
+        legal_disclaimer=get_legal_disclaimer(),
     )
 
 
@@ -566,6 +603,7 @@ async def get_recovery_status(
     max_months: int = Query(
         default=36, ge=1, le=36, description="Max months to analyze"
     ),
+    current_user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ) -> RecoveryResponse:
     """
@@ -637,9 +675,9 @@ async def get_recovery_status(
 
     query_duration_ms = int((time.time() - start_time) * 1000)
 
-    # No monitoring data yet — encolar análisis y devolver pending
+    # No monitoring data yet — encolar análisis y devolver pending (F6-06 con db)
     if not rows:
-        _enqueue_recovery_if_not_pending(str(fire_event_id))
+        _enqueue_recovery_if_not_pending(str(fire_event_id), db)
         return RecoveryResponse(
             fire_event_id=str(fire_event_id),
             fire_date=fire_date.isoformat()
@@ -655,6 +693,9 @@ async def get_recovery_status(
             monitoring_data=[],
             query_duration_ms=query_duration_ms,
             message="Análisis en proceso. Los datos estarán disponibles en los próximos minutos.",
+            recovery_metric="baseline_ratio",
+            recovery_metric_description="Porcentaje del NDVI pre-incendio alcanzado",
+            legal_disclaimer=get_legal_disclaimer(),
         )
 
     # Build response from DB data
@@ -666,21 +707,23 @@ async def get_recovery_status(
         if baseline_ndvi is None and row.baseline_ndvi is not None:
             baseline_ndvi = float(row.baseline_ndvi)
 
-        monitoring_data.append(
-            MonthlyNDVI(
-                month=row.months_after_fire or 0,
-                date=row.monitoring_date.isoformat()
-                if hasattr(row.monitoring_date, "isoformat")
-                else str(row.monitoring_date),
-                ndvi_mean=float(row.ndvi_mean) if row.ndvi_mean is not None else 0.0,
-                recovery_percentage=float(row.recovery_percentage)
-                if row.recovery_percentage is not None
-                else None,
-                cloud_cover_pct=float(row.cloud_cover_pct)
-                if getattr(row, "cloud_cover_pct", None) is not None
-                else None,
-            )
-        )
+        entry_kw: dict = {
+            "month": row.months_after_fire or 0,
+            "date": row.monitoring_date.isoformat()
+            if hasattr(row.monitoring_date, "isoformat")
+            else str(row.monitoring_date),
+            "ndvi_mean": float(row.ndvi_mean) if row.ndvi_mean is not None else 0.0,
+            "recovery_percentage": float(row.recovery_percentage)
+            if row.recovery_percentage is not None
+            else None,
+            "cloud_cover_pct": float(row.cloud_cover_pct)
+            if getattr(row, "cloud_cover_pct", None) is not None
+            else None,
+        }
+        if current_user is not None:
+            entry_kw["human_activity_detected"] = getattr(row, "human_activity_detected", None)
+            entry_kw["activity_type"] = getattr(row, "activity_type", None)
+        monitoring_data.append(MonthlyNDVI(**entry_kw))
 
         if row.human_activity_detected:
             latest_activity_type = row.activity_type
@@ -694,7 +737,7 @@ async def get_recovery_status(
         else None
     )
     has_activity = bool(latest.human_activity_detected)
-    recovery_status = _classify_status(current_recovery, has_activity)
+    recovery_status = classify_recovery_status(current_recovery, has_anomaly=has_activity)
 
     return RecoveryResponse(
         fire_event_id=str(fire_event_id),
@@ -710,6 +753,9 @@ async def get_recovery_status(
         anomaly_detected=latest_activity_type,
         monitoring_data=monitoring_data,
         query_duration_ms=query_duration_ms,
+        recovery_metric="baseline_ratio",
+        recovery_metric_description="Porcentaje del NDVI pre-incendio alcanzado",
+        legal_disclaimer=get_legal_disclaimer(),
     )
 
 
@@ -718,21 +764,20 @@ async def get_recovery_status(
     response_model=LandUseChangesResponse,
     summary="Get land use changes for a fire event",
     description="""
-    **UC-F12: Land Use Change Detection**
+    **UC-F12: Land Use Change Detection (F6-04: JWT required)**
 
     Returns detected land use changes in the area of a fire event.
-    Changes are detected by background workers analyzing satellite imagery.
-
-    Changes flagged as `is_potential_violation = true` may indicate
-    illegal activity under Law 26.815 Art. 22 bis.
+    Requires authentication. Contains data on potential violations.
     """,
     responses={
         200: {"description": "Land use changes retrieved"},
+        401: {"description": "Authentication required"},
         404: {"description": "Fire event not found"},
     },
 )
 async def get_land_use_changes(
     fire_event_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> LandUseChangesResponse:
     """Get land use changes for a fire event from the land_use_changes table."""
@@ -755,6 +800,7 @@ async def get_land_use_changes(
             affected_area_hectares,
             is_potential_violation,
             violation_confidence,
+            confidence_score,
             status,
             notes
         FROM land_use_changes
@@ -796,6 +842,7 @@ async def get_land_use_changes(
                 affected_area_hectares=getattr(row, "affected_area_hectares", None),
                 is_potential_violation=is_violation,
                 violation_confidence=getattr(row, "violation_confidence", None),
+                confidence_score=float(row.confidence_score) if getattr(row, "confidence_score", None) is not None else None,
                 status=row.status or "pending_review",
                 notes=getattr(row, "notes", None),
             )
@@ -806,6 +853,7 @@ async def get_land_use_changes(
         total_changes=len(changes),
         violation_count=violation_count,
         changes=changes,
+        legal_disclaimer=get_legal_disclaimer(),
     )
 
 
@@ -858,11 +906,11 @@ async def trigger_recovery_analysis(
 
         analyze_recovery.apply_async(
             args=[str(fire_event_id)],
-            queue="gee",
+            queue="vae",
         )
         detect_destruction.apply_async(
             args=[str(fire_event_id)],
-            queue="gee",
+            queue="vae",
         )
     except Exception as exc:
         logger.error(
@@ -878,5 +926,5 @@ async def trigger_recovery_analysis(
     return TriggerResponse(
         fire_event_id=str(fire_event_id),
         status="queued",
-        message="Recovery and land-use analysis jobs enqueued on gee queue",
+        message="Recovery and land-use analysis jobs enqueued on vae queue",
     )

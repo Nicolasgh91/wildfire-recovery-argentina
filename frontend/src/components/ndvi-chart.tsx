@@ -25,8 +25,11 @@ interface ChartSeriesPoint {
 
 export interface NdviChartProps {
   data: MonthlyNDVI[]
-  baselineNdvi: number
+  /** Baseline NDVI; line is hidden when null. */
+  baselineNdvi: number | null
   fireDate: string
+  /** Show reference line for fire date and baseline. Default true. */
+  showAnnotations?: boolean
 }
 
 /** Zonas NDVI: &lt; 0.2 rojo, 0.2–0.4 naranja, 0.4–0.6 verde claro, &gt; 0.6 verde */
@@ -69,7 +72,9 @@ function NdviTooltipContent({ active, payload, label }: NdviTooltipContentProps)
     >
       <p className="font-medium">{dateLabel}</p>
       <p>NDVI: {point.ndvi.toFixed(3)}</p>
-      {point.recovery != null && <p>Recuperación: {point.recovery.toFixed(1)}%</p>}
+      {point.recovery != null && (
+        <p>Nivel de vegetación: {point.recovery.toFixed(1)}%</p>
+      )}
       {(point.cloudCover != null || showCloud) && (
         <p className="flex items-center gap-1.5">
           {showCloud && <Cloud className="h-4 w-4" aria-hidden />}
@@ -80,7 +85,12 @@ function NdviTooltipContent({ active, payload, label }: NdviTooltipContentProps)
   )
 }
 
-export function NdviChart({ data, baselineNdvi, fireDate }: NdviChartProps) {
+export function NdviChart({
+  data,
+  baselineNdvi,
+  fireDate,
+  showAnnotations = true,
+}: NdviChartProps) {
   const { t } = useI18n()
 
   const chartSeries: ChartSeriesPoint[] = data.map((d) => ({
@@ -149,23 +159,27 @@ export function NdviChart({ data, baselineNdvi, fireDate }: NdviChartProps) {
                   return Number.isNaN(d.getTime()) ? str : d.toLocaleDateString('es-AR')
                 }}
               />
-              <ReferenceLine
-                x={fireDate}
-                stroke="hsl(var(--destructive))"
-                strokeWidth={2}
-                strokeDasharray="4 4"
-                label={{ value: 'Incendio', fill: 'hsl(var(--destructive))', fontSize: 11 }}
-              />
-              <ReferenceLine
-                y={baselineNdvi}
-                stroke="hsl(var(--primary))"
-                strokeDasharray="5 5"
-                label={{
-                  value: `Baseline (${baselineNdvi.toFixed(2)})`,
-                  fill: 'hsl(var(--primary))',
-                  fontSize: 12,
-                }}
-              />
+              {showAnnotations && (
+                <ReferenceLine
+                  x={fireDate}
+                  stroke="hsl(var(--destructive))"
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  label={{ value: 'Incendio', fill: 'hsl(var(--destructive))', fontSize: 11 }}
+                />
+              )}
+              {showAnnotations && baselineNdvi != null && (
+                <ReferenceLine
+                  y={baselineNdvi}
+                  stroke="hsl(var(--primary))"
+                  strokeDasharray="5 5"
+                  label={{
+                    value: `Baseline (${baselineNdvi.toFixed(2)})`,
+                    fill: 'hsl(var(--primary))',
+                    fontSize: 12,
+                  }}
+                />
+              )}
               <Line
                 type="monotone"
                 dataKey="ndvi"

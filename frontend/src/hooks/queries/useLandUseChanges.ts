@@ -2,10 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { getLandUseChanges } from '@/services/endpoints/monitoring'
 import { queryKeys } from '@/lib/queryClient'
 
-export function useLandUseChanges(fireEventId: string, enabled = true) {
+/** F8-02: pass null to disable fetch (e.g. when not authenticated). */
+export function useLandUseChanges(fireEventId: string | null) {
   return useQuery({
-    queryKey: queryKeys.monitoring.landUseChanges(fireEventId),
-    queryFn: ({ signal }) => getLandUseChanges(fireEventId, signal),
-    enabled: !!fireEventId && enabled,
+    queryKey: queryKeys.monitoring.landUseChanges(fireEventId ?? ''),
+    queryFn: ({ signal }) => getLandUseChanges(fireEventId!, signal),
+    enabled: !!fireEventId,
   })
 }

@@ -56,7 +56,7 @@ Este texto se renderiza como default estático en el frontend. La API puede sobr
 | D-04 | Acciones automáticas por violación | Flag visual + notificación interna | No se notifica a autoridades automáticamente |
 | D-05 | Disclaimer legal | Default estático en frontend + override dinámico desde API | Campo `legal_disclaimer` en respuesta API |
 | D-06 | Scheduling | Monthly + weekly-recent + episodios (escenario C) | 0.11% quota GEE diaria |
-| D-07 | Backfill | Serie completa semestral (cada 6 meses, no mensual) | Reduce costo a ~1/6 del mensual |
+| D-07 | Backfill | Dos regímenes: semestral para históricos cerrados (pre dic 2025), mensual para recientes cerrados (dic 2025+). One-shot. Episodios activos cubiertos por scheduling regular. Fecha de corte: 2025-12-01. | ~3 040 req GEE totales |
 | D-08 | Acceso anónimo a datos VAE | Badge de estado + gráfico NDVI básico públicos; violaciones solo con JWT | RLS diferenciada |
 | D-09 | Summary público | Sí, para transparencia | `GET /monitoring/recovery/summary` sin JWT |
 | D-10 | Trigger manual | Sí, solo admin con rate limit (5 req/6h) | `POST /monitoring/recovery/trigger` |
@@ -222,18 +222,40 @@ celery-beat (cron)
 
 ### 5.3 Flujo de backfill histórico
 
+Fecha de corte: **2025-12-01**. Solo episodios **cerrados** (`extinct`, `closed`). Episodios activos cubiertos por scheduling regular.
+
 ```
-task manual o one-shot:
+Régimen A — episodios cerrados con start_date < 2025-12-01 (semestral):
     │
-    ├── 1. Query: eventos sin registros en vegetation_monitoring
+    ├── 1. Query: episodios cerrados sin registros en vegetation_monitoring
+    │      WHERE start_date < '2025-12-01'
+    │      AND status IN ('extinct', 'closed')
     │      ORDER BY: áreas protegidas primero (relevancia legal)
-    ├── 2. Para cada evento:
-    │      ├── Calcular meses desde fire_date hasta hoy
-    │      ├── Generar puntos de análisis cada 6 meses (no mensual)
-    │      │   Ejemplo: incendio 2023-01 → análisis en 2023-07, 2024-01, 2024-07, 2025-01...
+    ├── 2. Para cada episodio:
+    │      ├── Generar puntos de análisis cada 6 meses desde start_date
+    │      │   Ejemplo: incendio 2023-01 → 2023-07, 2024-01, 2024-07, 2025-01, 2025-07
     │      └── Para cada punto: ejecutar analyze_recovery
-    ├── 3. Cap diario: 5 000 req GEE
+    ├── 3. Cap diario: 5 000 req GEE (compartido entre ambos regímenes)
     └── 4. Horario: madrugada UTC-3
+
+Régimen B — episodios cerrados con start_date >= 2025-12-01 (mensual):
+    │
+    ├── 1. Query: episodios cerrados sin registros en vegetation_monitoring
+    │      WHERE start_date >= '2025-12-01'
+    │      AND status IN ('extinct', 'closed')
+    ├── 2. Para cada episodio:
+    │      ├── Generar puntos de análisis mensuales desde start_date
+    │      │   Ejemplo: incendio 2025-12 → 2026-01, 2026-02, 2026-03
+    │      └── Para cada punto: ejecutar analyze_recovery
+    ├── 3. Ejecutar después de régimen A (prioridad a históricos)
+    └── 4. Mismo cap diario compartido
+
+Notas:
+- Episodios activos NO entran en backfill (cubiertos por beat schedule).
+- Episodios nuevos (2026+) que pasen a cerrado ya tendrán datos del
+  scheduling regular; si tienen gaps, el beat schedule mensual los cubre.
+- El backfill es one-shot: una vez completado, no se re-ejecuta.
+- Consumo estimado: ~2 400 req GEE (régimen A) + ~640 (régimen B) = ~3 040 total.
 ```
 
 ### 5.4 Reglas de clasificación de anomalías
@@ -281,6 +303,8 @@ worker-fast consume: ingestion, clustering, reports, notification, default
 | vae-episodes-weekly | 4×/mes | ~30 | ~60 | 240 |
 | vae-destruction-monthly | 1×/mes | ~200 | ~600 | 600 |
 | **Total scheduling** | | | | **~1 640/mes** |
+| **Backfill one-shot (régimen A)** | **1 vez** | **~300 históricos** | **~2 400** | **n/a** |
+| **Backfill one-shot (régimen B)** | **1 vez** | **~80 recientes** | **~640** | **n/a** |
 
 Esto representa 0.11% de la quota diaria. Margen amplio.
 

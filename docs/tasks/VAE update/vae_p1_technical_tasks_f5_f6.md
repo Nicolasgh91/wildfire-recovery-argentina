@@ -8,6 +8,11 @@ Referencia: `vae_module_specification.md` secciones 5, 6, 7
 
 ## F5: workers reales con persistencia
 
+**Estado:** Completada 2026-03-12.  
+F5-01 ya cumplía (no hay return 0.45; BaselineNotAvailableError existía). F5-02: fallback escalonado en _get_current_ndvi_with_cloud (30/50/70% nubes, ventanas 30/60/90 días). F5-03: analyze_recovery con bbox desde perimeter, persist de pending_reason (no_baseline_image, no_current_image), cache latest_recovery_status/latest_recovery_pct en fire_events. F5-04: detect_destruction con bbox desde perimeter, confidence_score en INSERT y notes unificadas. F5-05: colas vae ya aplicadas en F3.
+
+---
+
 ### F5-01: corregir fallback silencioso de baseline en VAEService
 
 **Archivo:** `app/services/vae_service.py` (~línea 704-707)
@@ -537,6 +542,11 @@ grep -rn "set(queue=" workers/tasks/recovery.py workers/tasks/destruction.py
 ---
 
 ## F6: API con autenticación diferenciada
+
+**Estado:** Completada 2026-03-12.  
+Router monitoring sin auth global (main.py). Summary y GET recovery/{id} públicos; summary con legal_disclaimer y average_recovery_percentage. GET recovery/{id} con get_optional_user; anotaciones human_activity_detected/activity_type solo cuando current_user no es None. GET land-use-changes con Depends(get_current_user) y legal_disclaimer + confidence_score en respuesta. Trigger con get_current_user + is_admin y rate limit existente. _enqueue_recovery_if_not_pending(fire_event_id, db) con chequeo pending_reason en ventana 1 h. get_optional_user alias de get_current_user_optional en auth_deps.
+
+---
 
 ### F6-01: reestructurar autenticación del router monitoring
 

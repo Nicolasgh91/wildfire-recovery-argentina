@@ -8,6 +8,11 @@ Formato: tareas ejecutables por Claude Code con archivos, líneas y verificació
 
 ## F1: migración de schema
 
+**Estado:** Completada 2026-03-12.  
+F1-01, F1-02, F1-03 y RLS (auth/service_role) ya estaban aplicados vía `2026_02_23_uc_f12_vae_monitoring.sql`. Se aplicó `2026_03_13_vae_schema_hardening.sql` para F1-04 (columnas nuevas) y F1-05 (política `anon_read_vegetation`). Ver `VAE_tech_debt.md` TD-001, TD-002.
+
+---
+
 ### F1-01: UNIQUE constraints para idempotencia
 
 **Archivo:** nueva migración SQL
@@ -214,6 +219,11 @@ DROP INDEX IF EXISTS idx_luc_event;
 ---
 
 ## F2: umbrales unificados
+
+**Estado:** Completada 2026-03-12.  
+Creado `app/core/recovery_thresholds.py`; VAEService, worker recovery y API monitoring usan `classify_recovery_status`. Enum `RecoveryStatus` ampliado con `STALLED` y `PENDING`; `_map_recovery_status_to_string` devuelve taxonomía unificada.
+
+---
 
 ### F2-01: crear archivo de constantes
 
@@ -436,6 +446,11 @@ grep -n "classify_recovery_status" app/api/routes/monitoring.py
 
 ## F3: unificación de colas Celery
 
+**Estado:** Completada 2026-03-12.  
+task_routes y beat_schedule usan cola `vae` para recovery y destruction; carousel en `analysis`. Worker recovery y API monitoring encolan en `vae`. `celery_app.py` en raíz es proxy a `workers.celery_app` (sin rutas). Docker-compose worker-gee ya consume `analysis,vae`.
+
+---
+
 ### F3-01: actualizar task_routes en celery_app
 
 **Archivo:** `workers/celery_app.py`
@@ -589,6 +604,11 @@ grep -rn "queue.*gee" celery_app.py
 ---
 
 ## F4: unificación de taxonomía de estados
+
+**Estado:** Completada 2026-03-12.  
+F4-02 ya aplicado en F2 (classify_recovery_status). Creado `app/core/legal.py` (F4-05); RecoveryResponse con recovery_metric, recovery_metric_description, legal_disclaimer; todos los retornos de RecoveryResponse incluyen los tres campos (F4-04). Mensajes 503 ya sanitizados (F4-06 sin cambio).
+
+---
 
 ### F4-01: mapeo actual → objetivo
 

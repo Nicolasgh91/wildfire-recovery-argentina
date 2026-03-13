@@ -33,6 +33,9 @@ const ManualPage = lazy(() => import('@/pages/manual'))
 const GlossaryPage = lazy(() => import('@/pages/glossary'))
 const ContactPage = lazy(() => import('@/pages/contact'))
 const NotFoundPage = lazy(() => import('@/pages/NotFound'))
+const MonitoringDashboardPage = lazy(() =>
+  import('@/pages/MonitoringDashboard').then((m) => ({ default: m.default })),
+)
 
 function AppLoading() {
   return (
@@ -166,6 +169,7 @@ export default function App() {
                   <Route path="/manual" element={<ManualPage />} />
                   <Route path="/glossary" element={<GlossaryPage />} />
                   <Route path="/contact" element={<ContactPage />} />
+                  <Route path="/monitoring" element={<MonitoringDashboardPage />} />
                   <Route path="*" element={<NotFoundPage />} />
                 </Routes>
               </Suspense>

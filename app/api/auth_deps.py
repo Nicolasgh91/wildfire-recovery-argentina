@@ -100,4 +100,11 @@ async def get_current_user_optional(
 ) -> Optional[User]:
     if not credentials:
         return None
-    return await get_current_user(credentials=credentials, request=request, db=db)
+    try:
+        return await get_current_user(request=request, credentials=credentials, db=db)
+    except HTTPException:
+        return None
+
+
+# F6-07: alias para endpoints con acceso diferenciado anónimo/autenticado
+get_optional_user = get_current_user_optional
