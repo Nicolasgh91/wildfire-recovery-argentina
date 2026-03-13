@@ -19,6 +19,7 @@ docs/
 │   └── backlog.md        ← Tareas pendientes con prioridad. Se actualiza por tarea.
 └── decisions/
     └── adr.md            ← Architecture Decision Records: por qué se decidió X
+
 Reglas de mantenimiento:
 STATE.md se actualiza en cada PR que modifica comportamiento del sistema
 Los archivos en tasks/ solo contienen tareas pendientes; las completadas se mueven a adr.md como registro de decisión

@@ -69,32 +69,43 @@ def _fetch_events(
     before_date: date | None = None,
     from_date: date | None = None,
     prioritize_protected: bool = True,
+    target_year: int | None = None,
+    magnitude_threshold: float = 0,
 ):
     """
     Obtiene fire_events cerrados sin datos en vegetation_monitoring.
-
-    Se limita a eventos de los últimos 36 meses.
+    
+    Args:
+        target_year: Filtrar por año específico (ej: 2025)
+        magnitude_threshold: Filtrar eventos con área >= threshold hectáreas
     """
     date_filter = ""
-    if before_date:
+    if target_year:
+        date_filter = f"AND EXTRACT(YEAR FROM fe.start_date) = {target_year}"
+    elif before_date:
         date_filter = f"AND fe.start_date < '{before_date.isoformat()}'"
     elif from_date:
         date_filter = f"AND fe.start_date >= '{from_date.isoformat()}'"
+
+    magnitude_filter = ""
+    if magnitude_threshold > 0:
+        magnitude_filter = f"AND COALESCE(ST_Area(fe.perimeter::geography) / 10000, 0) >= {magnitude_threshold}"
 
     order_clause = (
         """
         ORDER BY
             CASE WHEN fpa.protected_area_id IS NOT NULL THEN 0 ELSE 1 END,
-            fe.start_date ASC
+            fe.start_date DESC
         """
         if prioritize_protected
-        else "ORDER BY fe.start_date ASC"
+        else "ORDER BY fe.start_date DESC"
     )
 
     rows = db.execute(
         text(
             f"""
-            SELECT DISTINCT fe.id, fe.start_date
+            SELECT DISTINCT fe.id, fe.start_date,
+                   COALESCE(ST_Area(fe.perimeter::geography) / 10000, 0) as area_ha
             FROM fire_events fe
             LEFT JOIN vegetation_monitoring vm
               ON vm.fire_event_id = fe.id
@@ -102,8 +113,9 @@ def _fetch_events(
               ON fpa.fire_event_id = fe.id
             WHERE vm.id IS NULL
               AND fe.status IN ('extinct', 'closed')
-              AND fe.start_date > NOW() - INTERVAL '36 months'
+              AND fe.start_date >= '2015-01-01'
               {date_filter}
+              {magnitude_filter}
             {order_clause}
             LIMIT :batch
             """
@@ -147,12 +159,17 @@ def backfill_historical_recovery(
     batch_size: int = 50,
     regime: str = "both",  # "A", "B" o "both"
     prioritize_protected: bool = True,
+    target_year: int | None = None,
+    magnitude_threshold: float = 0,
+    optimize_frequency: bool = False,
 ) -> dict:
     """
     Backfill de recuperación histórica para eventos cerrados sin VAE.
 
-    - Régimen A: históricos (start_date < CUTOFF_DATE), puntos semestrales.
-    - Régimen B: recientes (start_date >= CUTOFF_DATE), puntos mensuales.
+    Args:
+        target_year: Procesar solo eventos de un año específico
+        magnitude_threshold: Filtrar eventos >= threshold hectáreas
+        optimize_frequency: Usar frecuencia anual para 2015-2018, semestral para 2019+
     """
     db = SessionLocal()
     try:
@@ -161,28 +178,38 @@ def backfill_historical_recovery(
         events_processed = 0
         results = {"regime_a": 0, "regime_b": 0}
 
-        # Régimen A — históricos cerrados pre-dic 2025 (semestral)
-        if regime in ("A", "both"):
-            events_a = _fetch_events(
+        # Procesamiento por año específico o régimen tradicional
+        if target_year:
+            # Procesar solo eventos del año específico
+            events = _fetch_events(
                 db,
                 batch_size=batch_size,
-                before_date=CUTOFF_DATE,
+                target_year=target_year,
                 prioritize_protected=prioritize_protected,
+                magnitude_threshold=magnitude_threshold,
             )
-            for event in events_a:
+            for event in events:
                 fire_id = str(event.id)
                 fire_start = event.start_date
                 if hasattr(fire_start, "date"):
                     fire_start = fire_start.date()
+                
+                # Determinar frecuencia según optimización
+                if optimize_frequency and fire_start.year <= 2018:
+                    interval_months = 12  # Anual para 2015-2018
+                else:
+                    interval_months = 6  # Semestral para 2019+
+                
                 points = _generate_analysis_points(
                     fire_start,
                     today,
-                    interval_months=6,
+                    interval_months=interval_months,
                 )
                 cost = len(points) * REQUESTS_PER_POINT
                 if total_enqueued + cost > DAILY_GEE_CAP:
                     logger.info(
-                        "backfill_cap_reached regime=A enqueued=%d cap=%d",
+                        "backfill_cap_reached year=%d enqueued=%d cap=%d",
+                        target_year,
                         total_enqueued,
                         DAILY_GEE_CAP,
                     )
@@ -191,32 +218,33 @@ def backfill_historical_recovery(
                     _enqueue_points(fire_id, points)
                     total_enqueued += cost
                     events_processed += 1
-                    results["regime_a"] += 1
-
-        # Régimen B — recientes cerrados dic 2025+ (mensual)
-        if regime in ("B", "both") and total_enqueued < DAILY_GEE_CAP:
-            remaining_batch = max(batch_size - events_processed, 0)
-            if remaining_batch > 0:
-                events_b = _fetch_events(
+                    results[f"year_{target_year}"] = results.get(f"year_{target_year}", 0) + 1
+        else:
+            # Régimen A — históricos cerrados pre-dic 2025 (semestral)
+            if regime in ("A", "both"):
+                events_a = _fetch_events(
                     db,
-                    batch_size=remaining_batch,
-                    from_date=CUTOFF_DATE,
+                    batch_size=batch_size,
+                    before_date=CUTOFF_DATE,
                     prioritize_protected=prioritize_protected,
+                    magnitude_threshold=magnitude_threshold,
                 )
-                for event in events_b:
+                for event in events_a:
                     fire_id = str(event.id)
                     fire_start = event.start_date
                     if hasattr(fire_start, "date"):
                         fire_start = fire_start.date()
+                    
+                    interval_months = 12 if (optimize_frequency and fire_start.year <= 2018) else 6
                     points = _generate_analysis_points(
                         fire_start,
                         today,
-                        interval_months=1,
+                        interval_months=interval_months,
                     )
                     cost = len(points) * REQUESTS_PER_POINT
                     if total_enqueued + cost > DAILY_GEE_CAP:
                         logger.info(
-                            "backfill_cap_reached regime=B enqueued=%d cap=%d",
+                            "backfill_cap_reached regime=A enqueued=%d cap=%d",
                             total_enqueued,
                             DAILY_GEE_CAP,
                         )
@@ -225,7 +253,42 @@ def backfill_historical_recovery(
                         _enqueue_points(fire_id, points)
                         total_enqueued += cost
                         events_processed += 1
-                        results["regime_b"] += 1
+                        results["regime_a"] += 1
+
+            # Régimen B — recientes cerrados dic 2025+ (mensual)
+            if regime in ("B", "both") and total_enqueued < DAILY_GEE_CAP:
+                remaining_batch = max(batch_size - events_processed, 0)
+                if remaining_batch > 0:
+                    events_b = _fetch_events(
+                        db,
+                        batch_size=remaining_batch,
+                        from_date=CUTOFF_DATE,
+                        prioritize_protected=prioritize_protected,
+                        magnitude_threshold=magnitude_threshold,
+                    )
+                    for event in events_b:
+                        fire_id = str(event.id)
+                        fire_start = event.start_date
+                        if hasattr(fire_start, "date"):
+                            fire_start = fire_start.date()
+                        points = _generate_analysis_points(
+                            fire_start,
+                            today,
+                            interval_months=1,
+                        )
+                        cost = len(points) * REQUESTS_PER_POINT
+                        if total_enqueued + cost > DAILY_GEE_CAP:
+                            logger.info(
+                                "backfill_cap_reached regime=B enqueued=%d cap=%d",
+                                total_enqueued,
+                                DAILY_GEE_CAP,
+                            )
+                            break
+                        if points:
+                            _enqueue_points(fire_id, points)
+                            total_enqueued += cost
+                            events_processed += 1
+                            results["regime_b"] += 1
 
         logger.info(
             "backfill_completed events_processed=%d total_requests=%d regime_a=%d regime_b=%d",
