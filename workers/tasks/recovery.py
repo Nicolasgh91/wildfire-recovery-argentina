@@ -44,16 +44,16 @@ def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = Non
             text("""
                 SELECT
                     fe.start_date,
-                    ST_X(fe.centroid) AS lon,
-                    ST_Y(fe.centroid) AS lat,
-                    CASE WHEN fe.perimeter IS NOT NULL THEN ST_XMin(fe.perimeter)
-                         ELSE ST_X(fe.centroid) - 0.01 END AS bbox_west,
-                    CASE WHEN fe.perimeter IS NOT NULL THEN ST_YMin(fe.perimeter)
-                         ELSE ST_Y(fe.centroid) - 0.01 END AS bbox_south,
-                    CASE WHEN fe.perimeter IS NOT NULL THEN ST_XMax(fe.perimeter)
-                         ELSE ST_X(fe.centroid) + 0.01 END AS bbox_east,
-                    CASE WHEN fe.perimeter IS NOT NULL THEN ST_YMax(fe.perimeter)
-                         ELSE ST_Y(fe.centroid) + 0.01 END AS bbox_north
+                    ST_X(fe.centroid::geometry) AS lon,
+                    ST_Y(fe.centroid::geometry) AS lat,
+                    CASE WHEN fe.perimeter IS NOT NULL THEN ST_XMin(fe.perimeter::geometry)
+                         ELSE ST_X(fe.centroid::geometry) - 0.01 END AS bbox_west,
+                    CASE WHEN fe.perimeter IS NOT NULL THEN ST_YMin(fe.perimeter::geometry)
+                         ELSE ST_Y(fe.centroid::geometry) - 0.01 END AS bbox_south,
+                    CASE WHEN fe.perimeter IS NOT NULL THEN ST_XMax(fe.perimeter::geometry)
+                         ELSE ST_X(fe.centroid::geometry) + 0.01 END AS bbox_east,
+                    CASE WHEN fe.perimeter IS NOT NULL THEN ST_YMax(fe.perimeter::geometry)
+                         ELSE ST_Y(fe.centroid::geometry) + 0.01 END AS bbox_north
                 FROM fire_events fe
                 WHERE fe.id = :fid
             """),
