@@ -80,6 +80,7 @@ celery_app = Celery(
         'workers.tasks.pdf_generation_task',
         'workers.tasks.cleanup_assets_task',
         'workers.tasks.seo',
+        'workers.tasks.backfill',
     ]
 )
 

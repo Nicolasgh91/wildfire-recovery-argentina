@@ -4,6 +4,16 @@ Fecha: 2026-03-12
 Referencia: `vae_module_specification.md` secciones 4, 5.1, 7.3
 Formato: tareas ejecutables por Claude Code con archivos, líneas y verificación
 
+Pre-requisito: la migración 2026_02_23_uc_f12_vae_monitoring.sql debe estar
+aplicada. Esta migración creó: uq_vm_event_date, uq_luc_event_date,
+idx_vm_event_date, idx_vm_event_months, idx_luc_event_date, FK en
+monitoring_record_id, NOT NULL en is_potential_violation, RLS con políticas
+auth_read + system_write en ambas tablas.
+
+La migración 2026_03_13 aplica solo los deltas: columnas nuevas
+(confidence_score, pending_reason, latest_recovery_status, latest_recovery_pct)
+y política anon_read_vegetation.
+
 ---
 
 ## F1: migración de schema
