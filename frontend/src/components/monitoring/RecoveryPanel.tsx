@@ -22,13 +22,7 @@ interface RecoveryPanelProps {
   isAuthenticated?: boolean
 }
 
-function isCanceledError(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false
-  const maybeAny = error as { code?: unknown }
-  return maybeAny.code === 'ERR_CANCELED'
-}
-
-function isCanceledError(error: unknown): boolean {
+function isErrCanceled(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false
   const maybeAny = error as { code?: unknown }
   return maybeAny.code === 'ERR_CANCELED'
@@ -80,7 +74,7 @@ export function RecoveryPanel({
     )
   }
 
-  const canceled = isCanceledError(recoveryError)
+  const canceled = isErrCanceled(recoveryError)
 
   if (recoveryError && !canceled) {
     return (
