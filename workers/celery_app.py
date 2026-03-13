@@ -94,14 +94,14 @@ celery_app.conf.update(
     timezone='America/Argentina/Buenos_Aires',  # UTC-3 (ART)
     enable_utc=False,
     
-    # Routing (GEE tasks → cola gee, gee_spec §3.3)
+    # Routing (VAE tasks → cola vae; carousel/analysis → analysis)
     task_routes={
         'workers.tasks.ingestion.*': {'queue': 'ingestion'},
         'workers.tasks.clustering.*': {'queue': 'clustering'},
         'workers.tasks.clustering_task.*': {'queue': 'clustering'},
-        'workers.tasks.recovery.*': {'queue': 'gee'},
-        'workers.tasks.destruction.*': {'queue': 'gee'},
-        'workers.tasks.carousel_task.generate_carousel': {'queue': 'gee'},
+        'workers.tasks.recovery.*': {'queue': 'vae'},
+        'workers.tasks.destruction.*': {'queue': 'vae'},
+        'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
         'workers.tasks.carousel_task.*': {'queue': 'analysis'},
         'workers.tasks.closure_report_task.*': {'queue': 'reports'},
         'workers.tasks.notification.*': {'queue': 'notification'},
@@ -155,7 +155,7 @@ celery_app.conf.update(
             'task': 'workers.tasks.carousel_task.generate_carousel',
             'schedule': crontab(hour=0, minute=0),  # 00:00 ART (medianoche)
             'kwargs': {'max_fires': None, 'force_refresh': False},
-            'options': {'queue': 'gee'}
+            'options': {'queue': 'analysis'}
         },
         'closure-reports-daily': {
             'task': 'workers.tasks.closure_report_task.generate_closure_reports',
@@ -173,38 +173,38 @@ celery_app.conf.update(
             'schedule': crontab(hour=5, minute=0),  # 05:00 ART
             'options': {'queue': 'analysis'},
         },
-        # GEE: recovery mensual — día 2 de cada mes 02:00 UTC (gee_spec §3.3)
+        # VAE: recovery mensual — día 2 de cada mes 02:00 UTC
         'recovery-monthly': {
             'task': 'workers.tasks.recovery.batch_recovery_monthly',
             'schedule': crontab(hour=23, minute=0, day_of_month=1),  # 23:00 ART día 1 = 02:00 UTC día 2
-            'options': {'queue': 'gee'},
+            'options': {'queue': 'vae'},
         },
-        # GEE: recovery recientes — lunes 03:00 UTC
+        # VAE: recovery recientes — lunes 03:00 UTC
         'recovery-weekly-recent': {
             'task': 'workers.tasks.recovery.batch_recovery_recent',
             'schedule': crontab(hour=0, minute=0, day_of_week=1),  # Lunes 00:00 ART = 03:00 UTC
-            'options': {'queue': 'gee'},
+            'options': {'queue': 'vae'},
         },
         # UC-F12: Monthly VAE recovery (legacy name, now uses batch_recovery_monthly above)
         'vae-recovery-monthly': {
             'task': 'workers.tasks.recovery.batch_recovery_analysis',
             'schedule': crontab(hour=5, minute=0, day_of_month=1),
             'kwargs': {'max_events': 50},
-            'options': {'queue': 'gee'},
+            'options': {'queue': 'vae'},
         },
         # UC-F12: Monthly VAE destruction detection
         'vae-destruction-monthly': {
             'task': 'workers.tasks.destruction.batch_destruction_detection',
             'schedule': crontab(hour=6, minute=0, day_of_month=1),
             'kwargs': {'max_events': 50},
-            'options': {'queue': 'gee'},
+            'options': {'queue': 'vae'},
         },
         # UC-F12: Weekly VAE episode recovery analysis for carousel
         'vae-episodes-weekly': {
             'task': 'workers.tasks.recovery.batch_episode_recovery_analysis',
             'schedule': crontab(hour=2, minute=0, day_of_week=1),
             'kwargs': {'max_episodes': 20, 'carousel_only': True},
-            'options': {'queue': 'gee'},
+            'options': {'queue': 'vae'},
         },
     },
     

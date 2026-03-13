@@ -27,6 +27,9 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+# Umbrales unificados (D-02)
+from app.core.recovery_thresholds import classify_recovery_status
+
 # Importar servicios base
 if __package__:
     from .gee_service import (
@@ -59,14 +62,16 @@ class BaselineNotAvailableError(Exception):
 
 
 class RecoveryStatus(Enum):
-    """Estados de recuperación de vegetación."""
+    """Estados de recuperación de vegetación (alineados con recovery_thresholds.py)."""
 
-    NOT_STARTED = "not_started"  # < 10% recuperación
-    EARLY_RECOVERY = "early_recovery"  # 10-30%
-    MODERATE_RECOVERY = "moderate_recovery"  # 30-60%
-    ADVANCED_RECOVERY = "advanced_recovery"  # 60-90%
-    FULL_RECOVERY = "full_recovery"  # > 90%
-    ANOMALY_DETECTED = "anomaly_detected"  # Recuperación anormal
+    NOT_STARTED = "not_started"  # sin datos
+    PENDING = "pending"  # análisis en curso
+    STALLED = "stalled"  # 0-9% del baseline
+    EARLY_RECOVERY = "early_recovery"  # 10-39%
+    MODERATE_RECOVERY = "moderate_recovery"  # 40-69%
+    ADVANCED_RECOVERY = "advanced_recovery"  # 70-89%
+    FULL_RECOVERY = "full_recovery"  # ≥ 90%
+    ANOMALY_DETECTED = "anomaly_detected"  # anomalía activa
 
 
 class LandUseChangeType(Enum):
@@ -312,16 +317,10 @@ class VAEService:
         # Calcular métricas
         ndvi_change = current_ndvi - baseline_ndvi
 
-        # Recovery percentage (0-100)
+        # Métrica: porcentaje del NDVI pre-incendio alcanzado (baseline ratio).
+        # NO es "recuperación desde el nadir post-incendio".
         # Fórmula: (current_ndvi / baseline_ndvi) * 100
-        #
-        # IMPORTANTE (gee_spec §1.3): Esta fórmula mide el "porcentaje del baseline
-        # alcanzado", NO el "porcentaje recuperado desde el nadir post-incendio".
-        # En la UI debe mostrarse como tal para evitar malinterpretaciones.
-        # Ejemplo: baseline=0.6, nadir=0.1, actual=0.35 → 58% (baseline alcanzado);
-        # recuperación real desde nadir sería (0.35-0.1)/(0.6-0.1)*100 = 50%.
-        # Corrección de fórmula queda como deuda documentada para siguiente ciclo.
-        # Si se cambia a recuperación desde nadir: (current - nadir) / (baseline - nadir) * 100
+        # Decisión D-01: se mantiene esta fórmula. nadir_ndvi no se persiste.
         if baseline_ndvi > 0:
             recovery_pct = min(100, max(0, (current_ndvi / baseline_ndvi) * 100))
         else:
@@ -329,23 +328,22 @@ class VAEService:
                 100 if current_ndvi > NDVI_THRESHOLDS["moderate_vegetation"] else 0
             )
 
-        # Clasificar estado
-        recovery_status = self._classify_recovery_status(recovery_pct)
-
-        # Calcular desviación de lo esperado
-        expected = self._get_expected_recovery(months_after)
-        deviation = recovery_pct - (expected * 100)
-
-        # Detectar anomalías
+        # Detectar anomalías (antes de clasificar para que has_anomaly sea correcto)
         anomaly_type, anomaly_conf = self._detect_recovery_anomaly(
             baseline_ndvi=baseline_ndvi,
             current_ndvi=current_ndvi,
             months_after=months_after,
             recovery_pct=recovery_pct,
         )
+        has_anomaly = anomaly_type != AnomalyType.NONE
 
-        if anomaly_type != AnomalyType.NONE:
-            recovery_status = RecoveryStatus.ANOMALY_DETECTED
+        # Clasificar estado (umbrales unificados: recovery_thresholds.py)
+        status_str = classify_recovery_status(recovery_pct, has_anomaly=has_anomaly)
+        recovery_status = RecoveryStatus(status_str)
+
+        # Calcular desviación de lo esperado
+        expected = self._get_expected_recovery(months_after)
+        deviation = recovery_pct - (expected * 100)
 
         return RecoveryAnalysis(
             fire_event_id=fire_event_id,
@@ -499,16 +497,8 @@ class VAEService:
         }
 
     def _map_recovery_status_to_string(self, status: RecoveryStatus) -> str:
-        """Map RecoveryStatus enum to API-friendly string."""
-        mapping = {
-            RecoveryStatus.NOT_STARTED: "critical",
-            RecoveryStatus.EARLY_RECOVERY: "poor",
-            RecoveryStatus.MODERATE_RECOVERY: "moderate",
-            RecoveryStatus.ADVANCED_RECOVERY: "good",
-            RecoveryStatus.FULL_RECOVERY: "excellent",
-            RecoveryStatus.ANOMALY_DETECTED: "suspicious",
-        }
-        return mapping.get(status, "unknown")
+        """Map RecoveryStatus enum to API string (taxonomía unificada F4)."""
+        return status.value
 
     # =========================================================================
     # UC-08: DETECCIÓN DE CAMBIO DE USO
@@ -852,23 +842,50 @@ class VAEService:
     ) -> Tuple[float, float]:
         """
         Obtiene NDVI actual y porcentaje de nubes para una fecha.
-        Variante que devuelve (ndvi_mean, cloud_cover_pct). GEE envuelto en circuit breaker.
+        Fallback escalonado: prueba cloud 30/50/70% y ventanas 30/60/90 días
+        antes de declarar falta de imagen. F5-02.
+        Returns (ndvi_mean, cloud_cover_pct). GEE envuelto en circuit breaker.
         """
         from app.utils.bbox_utils import validate_and_convert_bbox
 
+        cloud_thresholds = [30, 50, 70]
+        window_days_options = [30, 60, 90]
+
         def _do() -> Tuple[float, float]:
             bbox_val = validate_and_convert_bbox(bbox)
-            start = target_date - timedelta(days=15)
-            end = target_date + timedelta(days=15)
-            collection = self._gee.get_sentinel_collection(
-                bbox=bbox_val, start_date=start, end_date=end, max_cloud_cover=80
+            for max_cloud in cloud_thresholds:
+                for window_days in window_days_options:
+                    try:
+                        start = target_date - timedelta(days=window_days)
+                        end = target_date + timedelta(days=window_days)
+                        collection = self._gee.get_sentinel_collection(
+                            bbox=bbox_val,
+                            start_date=start,
+                            end_date=end,
+                            max_cloud_cover=float(max_cloud),
+                        )
+                        image = self._gee.get_best_image(
+                            collection,
+                            target_date=target_date,
+                            bbox=bbox_val,
+                            max_cloud_cover=float(max_cloud),
+                        )
+                        ndvi_result = self._gee.calculate_ndvi(image, bbox_val)
+                        cloud_cover = self._gee.get_image_cloud_cover(image)
+                        logger.info(
+                            "NDVI obtenido con cloud_max=%s, window=%sd: ndvi=%.3f, cloud=%.1f%%",
+                            max_cloud,
+                            window_days,
+                            ndvi_result.mean,
+                            cloud_cover,
+                        )
+                        return (float(ndvi_result.mean), float(cloud_cover))
+                    except GEEImageNotFoundError:
+                        continue
+            raise GEEImageNotFoundError(
+                f"No se encontró imagen utilizable para bbox={bbox}, "
+                f"target={target_date} después de búsqueda extendida"
             )
-            image = self._gee.get_best_image(
-                collection, target_date=target_date, max_cloud_cover=80
-            )
-            ndvi_result = self._gee.calculate_ndvi(image, bbox_val)
-            cloud_pct = self._gee.get_image_cloud_cover(image)
-            return (float(ndvi_result.mean), float(cloud_pct))
 
         if gee_circuit is None:
             return _do()
@@ -892,19 +909,6 @@ class VAEService:
             return date(new_year, new_month, d.day)
         except ValueError:
             return date(new_year, new_month, 28)
-
-    def _classify_recovery_status(self, recovery_pct: float) -> RecoveryStatus:
-        """Clasifica el estado de recuperación."""
-        if recovery_pct < 10:
-            return RecoveryStatus.NOT_STARTED
-        elif recovery_pct < 30:
-            return RecoveryStatus.EARLY_RECOVERY
-        elif recovery_pct < 60:
-            return RecoveryStatus.MODERATE_RECOVERY
-        elif recovery_pct < 90:
-            return RecoveryStatus.ADVANCED_RECOVERY
-        else:
-            return RecoveryStatus.FULL_RECOVERY
 
     def _get_expected_recovery(self, months_after: int) -> float:
         """Obtiene recuperación esperada para N meses."""

@@ -25,12 +25,12 @@ const markerColors: Record<NonNullable<FireMapItem['severity']>, string> = {
 }
 
 function createFireIcon(severity?: FireMapItem['severity'], isViolation?: boolean) {
-  const color = isViolation ? '#dc2626' : markerColors[severity ?? 'low']
-  const borderColor = isViolation ? '#fca5a5' : 'white'
-  const size = isViolation ? 28 : 24
+  const color = isViolation ? '#d97706' : markerColors[severity ?? 'low'] // amber-600 para violaciones
+  const borderColor = isViolation ? '#fed7aa' : 'white' // borde ámbar claro, no rojo
+  const size = isViolation ? 26 : 24
 
   const icon = isViolation
-    ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2"><path d="M12 9v4m0 4h.01M3.6 20.4h16.8c1.1 0 1.65-1.35.87-2.13L13.07 3.87c-.39-.39-1.02-.39-1.41 0L3.6 18.27c-.78.78-.23 2.13.87 2.13z"/></svg>`
+    ? `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="1.8"><path d="M12 9v4m0 4h.01M3.6 20.4h16.8c1.1 0 1.65-1.35.87-2.13L13.07 3.87c-.39-.39-1.02-.39-1.41 0L3.6 18.27c-.78.78-.23 2.13.87 2.13z"/></svg>`
     : `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`
 
   return L.divIcon({

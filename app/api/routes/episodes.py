@@ -108,6 +108,38 @@ def _load_representative_event_map(
     }
 
 
+def _load_active_violation_map(
+    db: Session, episode_ids: List[UUID]
+) -> dict[UUID, bool]:
+    """
+    Devuelve un mapa episode_id -> True cuando al menos uno de sus eventos
+    tiene una violación activa de uso de suelo (is_potential_violation=true
+    y status='pending_review') en land_use_changes.
+    """
+    if not episode_ids:
+        return {}
+
+    rows = (
+        db.execute(
+            text(
+                """
+                SELECT DISTINCT fee.episode_id
+                  FROM fire_episode_events fee
+                  JOIN land_use_changes luc
+                    ON luc.fire_event_id = fee.event_id
+                 WHERE luc.is_potential_violation = TRUE
+                   AND luc.status = 'pending_review'
+                   AND fee.episode_id IN :episode_ids
+                """
+            ).bindparams(bindparam("episode_ids", expanding=True)),
+            {"episode_ids": [str(eid) for eid in episode_ids]},
+        )
+        .mappings()
+        .all()
+    )
+
+    return {row["episode_id"]: True for row in rows if row.get("episode_id")}
+
 @router.get(
     "",
     response_model=FireEpisodeListResponse,
@@ -207,6 +239,12 @@ def list_fire_episodes(
     )
     t_rep = time.monotonic() - t2
 
+    t2b = time.monotonic()
+    violation_map = _load_active_violation_map(
+        db, [episode.id for episode in episodes]
+    )
+    t_violation = time.monotonic() - t2b
+
     now = datetime.now(timezone.utc)
     recent_cutoff = now - timedelta(days=RECENT_DAYS)
 
@@ -249,6 +287,7 @@ def list_fire_episodes(
                 representative_event_id=representative_map.get(episode.id),
                 is_recent=is_recent_flag,
                 recent_days=recent_days_val,
+                has_active_violation=bool(violation_map.get(episode.id, False)),
             )
         )
 
@@ -257,12 +296,13 @@ def list_fire_episodes(
     total_pages = math.ceil(total / page_size) if page_size else 1
 
     logger.info(
-        "list_fire_episodes mode=%s page=%d count_ms=%.1f fetch_ms=%.1f rep_ms=%.1f serial_ms=%.1f total=%d",
+        "list_fire_episodes mode=%s page=%d count_ms=%.1f fetch_ms=%.1f rep_ms=%.1f viol_ms=%.1f serial_ms=%.1f total=%d",
         mode_value,
         page,
         t_count * 1000,
         t_fetch * 1000,
         t_rep * 1000,
+        t_violation * 1000,
         t_serial * 1000,
         total,
     )

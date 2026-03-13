@@ -188,7 +188,10 @@ grep -rn "MonitoringDashboard\|monitoring" frontend/src/pages/
 
 ---
 
-## F11: backfill histórico semestral (P2)
+## F11: backfill histórico con dos regímenes (P2)
+
+Fecha de corte: **2025-12-01**. Solo episodios **cerrados** (`extinct`, `closed`).
+Episodios activos cubiertos por scheduling regular (beat schedule).
 
 ### F11-01: crear tarea de backfill
 
@@ -196,10 +199,13 @@ grep -rn "MonitoringDashboard\|monitoring" frontend/src/pages/
 
 ```python
 """
-Backfill de datos VAE para eventos históricos sin monitoreo.
-Genera serie temporal semestral (cada 6 meses, no mensual).
-Prioriza eventos en áreas protegidas (relevancia legal ley 26.815).
+Backfill de datos VAE para episodios cerrados sin monitoreo.
+Dos regímenes:
+  A) Históricos (start_date < 2025-12-01): puntos semestrales
+  B) Recientes (start_date >= 2025-12-01): puntos mensuales
+Prioriza episodios en áreas protegidas (relevancia legal ley 26.815).
 Cap diario: 5000 req GEE.
+One-shot: ejecutar una vez para poblar datos históricos.
 """
 import logging
 from datetime import date
@@ -213,93 +219,98 @@ from workers.tasks.recovery import analyze_recovery
 logger = logging.getLogger(__name__)
 
 DAILY_GEE_CAP = 5000
-REQUESTS_PER_EVENT_PER_POINT = 2  # baseline + current
+REQUESTS_PER_POINT = 2  # baseline + current
+CUTOFF_DATE = date(2025, 12, 1)
+
+
+def _generate_analysis_points(
+    fire_date: date, today: date, interval_months: int
+) -> list[date]:
+    """Genera lista de fechas de análisis desde fire_date hasta today."""
+    points = []
+    point = fire_date + relativedelta(months=interval_months)
+    while point <= today:
+        points.append(point.replace(day=1))
+        point += relativedelta(months=interval_months)
+    # Agregar punto actual si no coincide con el último
+    current_month = today.replace(day=1)
+    if not points or points[-1] != current_month:
+        points.append(current_month)
+    return points
 
 
 @celery_app.task(queue="vae", soft_time_limit=3600, time_limit=3900)
 def backfill_historical_recovery(
     batch_size: int = 50,
+    regime: str = "both",  # "A", "B", o "both"
     prioritize_protected: bool = True,
 ) -> dict:
     """
-    Procesa un batch de eventos sin datos VAE.
-    
-    Estrategia:
-    1. Selecciona eventos sin registros en vegetation_monitoring
-    2. Ordena por: áreas protegidas primero, luego por antigüedad
-    3. Para cada evento genera puntos de análisis cada 6 meses
-    4. Encola analyze_recovery para cada punto
-    5. Respeta cap diario de GEE requests
+    Procesa un batch de episodios cerrados sin datos VAE.
+
+    Args:
+        batch_size: máximo de episodios a procesar por ejecución.
+        regime: "A" (históricos semestral), "B" (recientes mensual),
+                "both" (primero A, luego B con el cap restante).
+        prioritize_protected: ordenar por áreas protegidas primero.
     """
     db = SessionLocal()
     try:
-        # Seleccionar eventos sin monitoreo
-        order_clause = """
-            ORDER BY
-                CASE WHEN fpa.protected_area_id IS NOT NULL THEN 0 ELSE 1 END,
-                fe.start_date ASC
-        """ if prioritize_protected else "ORDER BY fe.start_date ASC"
-
-        events = db.execute(text(f"""
-            SELECT DISTINCT fe.id, fe.start_date
-            FROM fire_events fe
-            LEFT JOIN vegetation_monitoring vm ON vm.fire_event_id = fe.id
-            LEFT JOIN fire_protected_area_intersections fpa ON fpa.fire_event_id = fe.id
-            WHERE vm.id IS NULL
-              AND fe.start_date > NOW() - INTERVAL '36 months'
-              AND fe.status IN ('active', 'monitoring', 'contained', 'extinct')
-            {order_clause}
-            LIMIT :batch
-        """), {"batch": batch_size}).fetchall()
-
-        if not events:
-            logger.info("Backfill: no hay eventos pendientes")
-            return {"status": "done", "events_processed": 0}
-
+        today = date.today()
         total_enqueued = 0
-        max_requests = DAILY_GEE_CAP
+        events_processed = 0
+        results = {"regime_a": 0, "regime_b": 0}
 
-        for event in events:
-            fire_date = event.start_date
-            today = date.today()
-            
-            # Generar puntos semestrales desde fire_date hasta hoy
-            analysis_points = []
-            point = fire_date + relativedelta(months=6)
-            while point <= today:
-                analysis_points.append(point)
-                point += relativedelta(months=6)
-            
-            # Agregar punto actual si no coincide con el último semestral
-            if not analysis_points or (today - analysis_points[-1]).days > 30:
-                analysis_points.append(today.replace(day=1))
-
-            requests_needed = len(analysis_points) * REQUESTS_PER_EVENT_PER_POINT
-            if total_enqueued + requests_needed > max_requests:
-                logger.info(
-                    f"Backfill: cap de {max_requests} req alcanzado. "
-                    f"Procesados {total_enqueued} requests."
-                )
-                break
-
-            # Encolar analyze_recovery para cada punto
-            for point_date in analysis_points:
-                analyze_recovery.apply_async(
-                    args=[str(event.id)],
-                    queue="vae",
-                    # Prioridad baja para no competir con scheduling regular
-                    priority=9,
-                )
-
-            total_enqueued += requests_needed
-            logger.info(
-                f"Backfill: {event.id} → {len(analysis_points)} puntos encolados"
+        # ── Régimen A: históricos cerrados pre-dic 2025, semestral ──
+        if regime in ("A", "both"):
+            events_a = _fetch_events(
+                db, batch_size, before_date=CUTOFF_DATE,
+                prioritize_protected=prioritize_protected
             )
+            for event in events_a:
+                points = _generate_analysis_points(
+                    event.start_date, today, interval_months=6
+                )
+                cost = len(points) * REQUESTS_PER_POINT
+                if total_enqueued + cost > DAILY_GEE_CAP:
+                    logger.info(f"Cap alcanzado en régimen A: {total_enqueued} req")
+                    break
+                _enqueue_points(event.id, points)
+                total_enqueued += cost
+                events_processed += 1
+                results["regime_a"] += 1
 
+        # ── Régimen B: recientes cerrados dic 2025+, mensual ──
+        if regime in ("B", "both") and total_enqueued < DAILY_GEE_CAP:
+            remaining_batch = batch_size - events_processed
+            if remaining_batch > 0:
+                events_b = _fetch_events(
+                    db, remaining_batch, from_date=CUTOFF_DATE,
+                    prioritize_protected=prioritize_protected
+                )
+                for event in events_b:
+                    points = _generate_analysis_points(
+                        event.start_date, today, interval_months=1
+                    )
+                    cost = len(points) * REQUESTS_PER_POINT
+                    if total_enqueued + cost > DAILY_GEE_CAP:
+                        logger.info(f"Cap alcanzado en régimen B: {total_enqueued} req")
+                        break
+                    _enqueue_points(event.id, points)
+                    total_enqueued += cost
+                    events_processed += 1
+                    results["regime_b"] += 1
+
+        logger.info(
+            f"Backfill completado: {events_processed} episodios, "
+            f"{total_enqueued} req GEE encolados. "
+            f"Régimen A: {results['regime_a']}, B: {results['regime_b']}"
+        )
         return {
             "status": "ok",
-            "events_found": len(events),
+            "events_processed": events_processed,
             "total_requests_enqueued": total_enqueued,
+            **results,
         }
 
     except Exception as e:
@@ -307,12 +318,60 @@ def backfill_historical_recovery(
         return {"status": "error", "reason": str(e)}
     finally:
         db.close()
+
+
+def _fetch_events(
+    db, batch_size: int,
+    before_date: date | None = None,
+    from_date: date | None = None,
+    prioritize_protected: bool = True,
+):
+    """Obtiene episodios cerrados sin datos de monitoreo."""
+    date_filter = ""
+    if before_date:
+        date_filter = f"AND fe.start_date < '{before_date.isoformat()}'"
+    elif from_date:
+        date_filter = f"AND fe.start_date >= '{from_date.isoformat()}'"
+
+    order = """
+        ORDER BY
+            CASE WHEN fpa.protected_area_id IS NOT NULL THEN 0 ELSE 1 END,
+            fe.start_date ASC
+    """ if prioritize_protected else "ORDER BY fe.start_date ASC"
+
+    return db.execute(text(f"""
+        SELECT DISTINCT fe.id, fe.start_date
+        FROM fire_events fe
+        LEFT JOIN vegetation_monitoring vm ON vm.fire_event_id = fe.id
+        LEFT JOIN fire_protected_area_intersections fpa
+            ON fpa.fire_event_id = fe.id
+        WHERE vm.id IS NULL
+          AND fe.status IN ('extinct', 'closed')
+          AND fe.start_date > NOW() - INTERVAL '36 months'
+          {date_filter}
+        {order}
+        LIMIT :batch
+    """), {"batch": batch_size}).fetchall()
+
+
+def _enqueue_points(event_id: str, points: list[date]):
+    """Encola analyze_recovery para cada punto de análisis."""
+    for point in points:
+        analyze_recovery.apply_async(
+            args=[str(event_id), point.isoformat()],
+            queue="vae",
+            priority=9,  # baja prioridad vs scheduling regular
+        )
+    logger.info(
+        f"Backfill: {event_id} → {len(points)} puntos encolados "
+        f"({points[0]} a {points[-1]})"
+    )
 ```
 
-**Nota sobre la implementación:** `analyze_recovery` en F5-03 usa `date.today().replace(day=1)` como target_date. Para backfill con fechas específicas, el worker necesita aceptar un parámetro opcional `target_date`. Agregar a la firma:
+**Nota sobre la firma de analyze_recovery:** el worker en F5-03 debe aceptar `target_date_str: str | None = None` como segundo argumento. Verificar consistencia:
 
 ```python
-# En workers/tasks/recovery.py, modificar firma:
+# En workers/tasks/recovery.py — firma esperada:
 def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = None):
     if target_date_str:
         target_date = date.fromisoformat(target_date_str)
@@ -320,37 +379,38 @@ def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = Non
         target_date = date.today().replace(day=1)
 ```
 
-Y en el backfill, encolar con la fecha:
-```python
-analyze_recovery.apply_async(
-    args=[str(event.id), point_date.isoformat()],
-    queue="vae",
-    priority=9,
-)
-```
-
 ---
 
-### F11-02: agregar comando de ejecución manual
-
-El backfill se ejecuta como tarea one-shot, no como beat schedule:
+### F11-02: comandos de ejecución
 
 ```bash
-# Desde la VM:
+# Ejecutar solo régimen A (históricos semestrales):
 docker compose exec worker-gee celery -A workers.celery_app call \
   workers.tasks.backfill.backfill_historical_recovery \
-  --kwargs='{"batch_size": 50, "prioritize_protected": true}' -Q vae
-```
+  --kwargs='{"batch_size": 100, "regime": "A", "prioritize_protected": true}' -Q vae
 
-Para monitorear progreso:
-```sql
--- Eventos con datos vs sin datos:
+# Ejecutar solo régimen B (recientes mensuales):
+docker compose exec worker-gee celery -A workers.celery_app call \
+  workers.tasks.backfill.backfill_historical_recovery \
+  --kwargs='{"batch_size": 50, "regime": "B", "prioritize_protected": true}' -Q vae
+
+# Ejecutar ambos (A primero, B con el cap restante):
+docker compose exec worker-gee celery -A workers.celery_app call \
+  workers.tasks.backfill.backfill_historical_recovery \
+  --kwargs='{"batch_size": 100, "regime": "both"}' -Q vae
+
+# Monitorear progreso por régimen:
+psql "$DATABASE_URL" -c "
 SELECT
-  COUNT(*) FILTER (WHERE vm.id IS NOT NULL) AS con_monitoreo,
-  COUNT(*) FILTER (WHERE vm.id IS NULL) AS sin_monitoreo
+  CASE WHEN fe.start_date < '2025-12-01' THEN 'historico' ELSE 'reciente' END AS regimen,
+  COUNT(DISTINCT fe.id) FILTER (WHERE vm.id IS NOT NULL) AS con_monitoreo,
+  COUNT(DISTINCT fe.id) FILTER (WHERE vm.id IS NULL) AS sin_monitoreo
 FROM fire_events fe
 LEFT JOIN vegetation_monitoring vm ON vm.fire_event_id = fe.id
-WHERE fe.start_date > NOW() - INTERVAL '36 months';
+WHERE fe.status IN ('extinct', 'closed')
+  AND fe.start_date > NOW() - INTERVAL '36 months'
+GROUP BY 1;
+"
 ```
 
 ---

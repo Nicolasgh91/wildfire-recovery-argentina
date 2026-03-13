@@ -31,7 +31,12 @@ export type EpisodeListItem = {
   is_recent?: boolean
   recent_days?: number | null
   recovery_status?: string | null
-  is_potential_violation?: boolean
+  /** VAE: último estado de recuperación del evento representativo (API listado) */
+  latest_recovery_status?: string | null
+  /** VAE: último % de recuperación (API listado) */
+  latest_recovery_pct?: number | null
+  /** VAE: el episodio tiene al menos una violación activa (land_use_changes) */
+  has_active_violation?: boolean
 }
 
 export type EpisodeListResponse = {

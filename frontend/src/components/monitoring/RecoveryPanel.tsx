@@ -1,10 +1,11 @@
 import { AlertTriangle, Leaf } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { NdviChart } from '@/components/ndvi-chart'
 import { RecoveryStatusBadge } from './RecoveryStatusBadge'
-import { LandUseChangeCard } from './LandUseChangeCard'
+import { RecoveryMetricCards } from './RecoveryMetricCards'
+import { LegalDisclaimer } from './LegalDisclaimer'
+import { LandUseChangesSection } from './LandUseChangesSection'
 import { useRecovery } from '@/hooks/queries/useRecovery'
 import { useRecoveryByEpisode } from '@/hooks/queries/useRecoveryByEpisode'
 import { useLandUseChanges } from '@/hooks/queries/useLandUseChanges'
@@ -17,6 +18,14 @@ interface RecoveryPanelProps {
   episodeId?: string
   /** Fecha del incendio del detalle del evento (p. ej. fire.start_date). Si no se pasa, se usa recovery.fire_date. */
   fireDate?: string
+  /** Si el usuario está autenticado: se fetchean land-use changes y se muestran anotaciones en el gráfico. */
+  isAuthenticated?: boolean
+}
+
+function isCanceledError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const maybeAny = error as { code?: unknown }
+  return maybeAny.code === 'ERR_CANCELED'
 }
 
 function isCanceledError(error: unknown): boolean {
@@ -29,14 +38,14 @@ export function RecoveryPanel({
   fireEventId,
   episodeId,
   fireDate: fireDateFromDetail,
+  isAuthenticated = false,
 }: RecoveryPanelProps) {
   const byEvent = useRecovery(fireEventId, !episodeId)
   const byEpisode = useRecoveryByEpisode(episodeId ?? '', !!episodeId)
   const recoveryResult = episodeId ? byEpisode : byEvent
   const { data: recovery, isLoading: recoveryLoading, error: recoveryError } = recoveryResult
   const { data: landUse, isLoading: landUseLoading } = useLandUseChanges(
-    fireEventId,
-    !episodeId,
+    isAuthenticated && !episodeId ? fireEventId : null,
   )
 
   if (recoveryLoading) {
@@ -101,7 +110,6 @@ export function RecoveryPanel({
     )
   }
 
-  const baselineNdvi = recovery.baseline_ndvi ?? 0.5
   const fireDate = fireDateFromDetail ?? recovery.fire_date
   const monitoringData: MonthlyNDVI[] = recovery.monitoring_data
 
@@ -113,38 +121,19 @@ export function RecoveryPanel({
         <RecoveryStatusBadge status={recovery.recovery_status} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">NDVI Baseline</p>
-            <p className="text-xl font-semibold text-foreground">
-              {recovery.baseline_ndvi != null ? recovery.baseline_ndvi.toFixed(3) : 'Pendiente'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">NDVI Actual</p>
-            <p className="text-xl font-semibold text-foreground">
-              {recovery.current_ndvi != null ? recovery.current_ndvi.toFixed(3) : 'N/A'}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-sm text-muted-foreground">Recuperacion</p>
-            <p className="text-xl font-semibold text-foreground">
-              {recovery.recovery_percentage != null ? `${recovery.recovery_percentage.toFixed(1)}%` : 'N/A'}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <RecoveryMetricCards
+        baselineNdvi={recovery.baseline_ndvi}
+        currentNdvi={recovery.current_ndvi}
+        recoveryPercentage={recovery.recovery_percentage}
+        monthsMonitored={recovery.months_monitored}
+      />
 
       {monitoringData.length > 0 ? (
         <NdviChart
           data={monitoringData}
-          baselineNdvi={baselineNdvi}
+          baselineNdvi={recovery.baseline_ndvi ?? null}
           fireDate={fireDate}
+          showAnnotations={isAuthenticated}
         />
       ) : (
         <Card>
@@ -154,23 +143,11 @@ export function RecoveryPanel({
         </Card>
       )}
 
-      {!landUseLoading && landUse && landUse.changes.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              Cambios de uso de suelo
-              {landUse.violation_count > 0 && (
-                <Badge variant="destructive">{landUse.violation_count} violacion(es)</Badge>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {landUse.changes.map((change) => (
-              <LandUseChangeCard key={change.id} change={change} />
-            ))}
-          </CardContent>
-        </Card>
+      {isAuthenticated && !landUseLoading && landUse && landUse.changes.length > 0 && (
+        <LandUseChangesSection changes={landUse} />
       )}
+
+      <LegalDisclaimer text={recovery.legal_disclaimer} />
     </div>
   )
 }

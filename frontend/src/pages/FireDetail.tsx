@@ -424,12 +424,13 @@ export default function FireDetailPage() {
           </div>
         </div>
 
-        {isAuthenticated && (
+        {!isEpisodeDetail && (
           <div className="mt-6">
             <RecoveryPanel
               fireEventId={fireId}
               episodeId={isEpisodeDetail ? fireId : undefined}
               fireDate={fire?.start_date}
+              isAuthenticated={isAuthenticated}
             />
           </div>
         )}

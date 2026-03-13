@@ -22,6 +22,10 @@ export interface RecoveryResponse {
   query_duration_ms: number
   /** Mensaje opcional, p. ej. cuando recovery_status es "pending" */
   message?: string | null
+  /** F4: métrica y descripción legible; legal según ley 26.815/27.604 */
+  recovery_metric?: string | null
+  recovery_metric_description?: string | null
+  legal_disclaimer?: string | null
 }
 
 export interface LandUseChangeItem {
@@ -33,6 +37,8 @@ export interface LandUseChangeItem {
   affected_area_hectares: number | null
   is_potential_violation: boolean
   violation_confidence: string | null
+  /** F6-04: 0–1 score from backend; shown as % in UI */
+  confidence_score?: number | null
   status: string
   notes: string | null
 }
@@ -42,6 +48,21 @@ export interface LandUseChangesResponse {
   total_changes: number
   violation_count: number
   changes: LandUseChangeItem[]
+  legal_disclaimer?: string | null
+}
+
+export interface RecoverySummaryResponse {
+  total_monitored_events: number
+  status_breakdown: {
+    full_recovery: number
+    advanced_recovery: number
+    moderate_recovery: number
+    early_recovery: number
+    stalled: number
+    pending: number
+  }
+  average_recovery_percentage: number
+  legal_disclaimer?: string | null
 }
 
 export async function getRecoveryTimeline(
@@ -73,6 +94,16 @@ export async function getLandUseChanges(
 ): Promise<LandUseChangesResponse> {
   const { data } = await apiClient.get<LandUseChangesResponse>(
     `/monitoring/land-use-changes/${fireEventId}`,
+    { signal },
+  )
+  return data
+}
+
+export async function getRecoverySummary(
+  signal?: AbortSignal,
+): Promise<RecoverySummaryResponse> {
+  const { data } = await apiClient.get<RecoverySummaryResponse>(
+    '/monitoring/recovery/summary',
     { signal },
   )
   return data

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useI18n } from '@/context/LanguageContext'
+import { useAuth } from '@/context/AuthContext'
 import { useEpisodesByMode } from '@/hooks/queries/useEpisodesByMode'
 import type { FireMapItem } from '@/types/map'
 import { RETURN_CONTEXT_KEY } from '@/types/navigation'
@@ -26,6 +27,7 @@ const mapFallback = (
 
 export default function MapPage() {
   const { t } = useI18n()
+  const { isAuthenticated } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [selectedFire, setSelectedFire] = useState<FireMapItem | null>(null)
@@ -83,10 +85,12 @@ export default function MapPage() {
           status,
           hectares: episode.estimated_area_hectares ?? null,
           representative_event_id: episode.representative_event_id ?? episode.id,
-          is_potential_violation: episode.is_potential_violation ?? false,
+          is_potential_violation: isAuthenticated
+            ? Boolean(episode.has_active_violation)
+            : false,
         } satisfies FireMapItem
       })
-  }, [activeData?.episodes, recentData?.episodes])
+  }, [activeData?.episodes, recentData?.episodes, isAuthenticated])
 
   // Restore selected fire when returning from fire detail
   useEffect(() => {

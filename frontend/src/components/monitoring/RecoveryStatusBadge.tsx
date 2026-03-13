@@ -13,6 +13,7 @@ type RecoveryStatus =
 
 interface RecoveryStatusBadgeProps {
   status: string | null | undefined
+  size?: 'sm' | 'md'
   className?: string
 }
 
@@ -27,13 +28,19 @@ const statusConfig: Record<RecoveryStatus, { label: string; className: string }>
   anomaly_detected: { label: 'Alerta', className: 'border-red-200 bg-red-100 text-red-700' },
 }
 
-export function RecoveryStatusBadge({ status, className }: RecoveryStatusBadgeProps) {
+export function RecoveryStatusBadge({
+  status,
+  size = 'md',
+  className,
+}: RecoveryStatusBadgeProps) {
   if (!status) return null
 
   const config = statusConfig[status as RecoveryStatus] ?? statusConfig.not_started
+  const sizeClasses =
+    size === 'sm' ? 'text-[10px] px-1.5 py-0.5' : 'text-xs px-2 py-1'
 
   return (
-    <Badge variant="outline" className={cn(config.className, className)}>
+    <Badge variant="outline" className={cn(sizeClasses, config.className, className)}>
       {config.label}
     </Badge>
   )

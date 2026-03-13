@@ -42,6 +42,7 @@ class FireEpisodeListItem(BaseModel):
     representative_event_id: Optional[UUID] = None
     is_recent: bool = False
     recent_days: Optional[int] = None
+    has_active_violation: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
