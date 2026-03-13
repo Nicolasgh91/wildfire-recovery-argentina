@@ -28,6 +28,12 @@ function isCanceledError(error: unknown): boolean {
   return maybeAny.code === 'ERR_CANCELED'
 }
 
+function isCanceledError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const maybeAny = error as { code?: unknown }
+  return maybeAny.code === 'ERR_CANCELED'
+}
+
 export function RecoveryPanel({
   fireEventId,
   episodeId,
