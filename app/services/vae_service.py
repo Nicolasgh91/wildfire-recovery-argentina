@@ -706,14 +706,17 @@ class VAEService:
         max_cloud_cover: float = 30.0,
     ) -> float:
         """
-        Calcula NDVI baseline como el máximo NDVI del año previo al incendio.
+        Calcula NDVI baseline como el máximo NDVI disponible.
 
-        Usa un composite de máximo NDVI (quality mosaic) sobre los 12 meses
-        anteriores al incendio. Esto captura el pico de vegetación anual,
-        que es la referencia más representativa de la capacidad ecológica.
+        Estrategia de búsqueda (3 pasos):
+        1. qualityMosaic sobre 365 días pre-incendio (pico de vegetación anual)
+        2. qualityMosaic sobre 730 días pre-incendio (si paso 1 falla)
+        3. qualityMosaic sobre 180-540 días post-incendio como fallback
+           (para eventos sin cobertura Sentinel-2 pre-incendio, típicamente pre-2016)
 
-        Si no hay imágenes en 365 días, extiende a 730 días.
-        Si aún no hay, lanza BaselineNotAvailableError.
+        El paso 3 usa la vegetación post-incendio como aproximación del potencial
+        del sitio. Es menos preciso que el baseline pre-incendio pero permite
+        generar series temporales para eventos históricos.
 
         Args:
             bbox: bounding box del evento
@@ -725,7 +728,7 @@ class VAEService:
             float: NDVI mean del composite de máximo NDVI
 
         Raises:
-            BaselineNotAvailableError: si no hay imágenes disponibles
+            BaselineNotAvailableError: si los 3 pasos fallan
         """
 
         def _do() -> float:
@@ -812,9 +815,77 @@ class VAEService:
                     )
                     continue
 
+            # Paso 3: fallback post-incendio (6-18 meses después)
+            # Para eventos sin cobertura Sentinel-2 pre-incendio (pre-2016)
+            try:
+                post_start = fire_date + timedelta(days=180)  # 6 meses después
+                post_end = fire_date + timedelta(days=540)  # 18 meses después
+
+                today = date.today()
+                if post_end > today:
+                    post_end = today
+                if post_start > today:
+                    raise GEEImageNotFoundError("Post-fire window is in the future")
+
+                collection = self._gee.get_sentinel_collection(
+                    bbox=bbox_val,
+                    start_date=post_start,
+                    end_date=post_end,
+                    max_cloud_cover=max_cloud_cover,
+                )
+
+                def add_ndvi(image):
+                    ndvi = image.normalizedDifference(["B8", "B4"]).rename("NDVI")
+                    return image.addBands(ndvi)
+
+                ndvi_collection = collection.map(add_ndvi)
+                max_ndvi_composite = ndvi_collection.qualityMosaic("NDVI")
+
+                geometry = ee.Geometry.Rectangle(
+                    [
+                        bbox_val["west"],
+                        bbox_val["south"],
+                        bbox_val["east"],
+                        bbox_val["north"],
+                    ]
+                )
+                stats = (
+                    max_ndvi_composite.select("NDVI")
+                    .reduceRegion(
+                        reducer=ee.Reducer.mean(),
+                        geometry=geometry,
+                        scale=60,
+                        maxPixels=1e9,
+                    )
+                    .getInfo()
+                )
+
+                ndvi_mean = stats.get("NDVI") or stats.get("NDVI_mean") if stats else None
+                if ndvi_mean is not None and ndvi_mean >= 0.1:
+                    logger.info(
+                        "Baseline NDVI from POST-FIRE fallback: %.4f "
+                        "(window=180-540d post, fire_date=%s)",
+                        ndvi_mean,
+                        fire_date,
+                    )
+                    return float(ndvi_mean)
+
+                logger.warning(
+                    "Post-fire baseline NDVI too low (%.4f) for fire_date=%s",
+                    ndvi_mean if ndvi_mean is not None else 0,
+                    fire_date,
+                )
+
+            except (GEEImageNotFoundError, Exception) as e:
+                logger.warning(
+                    "Post-fire baseline fallback failed for fire_date=%s: %s",
+                    fire_date,
+                    str(e)[:200],
+                )
+
             raise BaselineNotAvailableError(
                 f"No hay imágenes disponibles para calcular baseline NDVI "
-                f"(fire_date={fire_date}, ventana máxima={lookback_days * 2} días)"
+                f"(fire_date={fire_date}, intentados: pre-365d, pre-730d, post-180-540d)"
             )
 
         if gee_circuit is None:

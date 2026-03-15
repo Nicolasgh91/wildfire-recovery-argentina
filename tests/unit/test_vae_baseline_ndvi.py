@@ -4,7 +4,8 @@ Unit tests for VAEService._get_baseline_ndvi (quality mosaic baseline).
 Covers:
 - First window (365d) succeeds and returns NDVI mean.
 - Fallback to second window (730d) when first returns None or low NDVI.
-- BaselineNotAvailableError when both windows fail.
+- Fallback to post-fire window (180-540d) when both pre-fire windows fail.
+- BaselineNotAvailableError when all three steps fail.
 - Defensive: getInfo() returns None or dict with 'NDVI': None → continue to next window.
 """
 
@@ -144,8 +145,8 @@ def test_baseline_ndvi_defensive_getinfo_returns_ndvi_none(mock_ee):
 
 @patch("app.services.vae_service.ee")
 @patch("app.services.vae_service.gee_circuit", None)
-def test_baseline_ndvi_raises_when_both_windows_fail(mock_ee):
-    """When both 365d and 730d windows fail (None or low NDVI), BaselineNotAvailableError is raised."""
+def test_baseline_ndvi_raises_when_all_three_steps_fail(mock_ee):
+    """When 365d, 730d and post-fire (180-540d) all fail, BaselineNotAvailableError is raised."""
     mock_ee.Geometry.Rectangle.return_value = MagicMock()
     mock_ee.Reducer.mean.return_value = MagicMock()
 
@@ -153,8 +154,9 @@ def test_baseline_ndvi_raises_when_both_windows_fail(mock_ee):
     fire_date = date(2024, 6, 15)
 
     mock_gee = MagicMock()
+    # Pre 365d: None; pre 730d: None; post 180-540d: low NDVI (below 0.1 threshold)
     mock_gee.get_sentinel_collection.return_value = _make_gee_chain(
-        [None, {"NDVI": None}]
+        [None, {"NDVI": None}, {"NDVI": 0.05}]
     )
 
     vae = VAEService()
@@ -164,8 +166,40 @@ def test_baseline_ndvi_raises_when_both_windows_fail(mock_ee):
         vae._get_baseline_ndvi(bbox, fire_date)
 
     assert str(fire_date) in str(exc_info.value)
-    assert "730" in str(exc_info.value) or "ventana máxima" in str(exc_info.value)
-    assert mock_gee.get_sentinel_collection.call_count == 2
+    assert "post-180-540d" in str(exc_info.value)
+    assert mock_gee.get_sentinel_collection.call_count == 3
+    # Third call is post-fire window
+    third_call_kw = mock_gee.get_sentinel_collection.call_args_list[2][1]
+    assert third_call_kw["start_date"] == fire_date + timedelta(days=180)
+    assert third_call_kw["end_date"] == fire_date + timedelta(days=540)
+
+
+@patch("app.services.vae_service.ee")
+@patch("app.services.vae_service.gee_circuit", None)
+def test_baseline_ndvi_post_fire_fallback_succeeds(mock_ee):
+    """When both pre-fire windows fail, post-fire (180-540d) fallback succeeds with NDVI >= 0.1."""
+    mock_ee.Geometry.Rectangle.return_value = MagicMock()
+    mock_ee.Reducer.mean.return_value = MagicMock()
+
+    bbox = {"west": -58.5, "south": -27.5, "east": -58.4, "north": -27.4}
+    fire_date = date(2015, 3, 1)  # Pre-Sentinel-2 era
+
+    mock_gee = MagicMock()
+    # Pre 365d and 730d fail; post-fire returns valid NDVI
+    mock_gee.get_sentinel_collection.return_value = _make_gee_chain(
+        [None, {"NDVI": None}, {"NDVI": 0.48}]
+    )
+
+    vae = VAEService()
+    vae._gee = mock_gee
+
+    result = vae._get_baseline_ndvi(bbox, fire_date)
+
+    assert result == 0.48
+    assert mock_gee.get_sentinel_collection.call_count == 3
+    third_call_kw = mock_gee.get_sentinel_collection.call_args_list[2][1]
+    assert third_call_kw["start_date"] == fire_date + timedelta(days=180)
+    assert third_call_kw["end_date"] == fire_date + timedelta(days=540)
 
 
 @patch("app.services.vae_service.ee")

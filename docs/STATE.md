@@ -18,7 +18,7 @@ Los flujos core describen el recorrido de los datos desde la fuente externa hast
 - **Episodios**: fusión de eventos en `fire_episodes` con perímetros y bounding boxes.
 - **Selección de imágenes**: búsqueda de imágenes Sentinel-2, filtrado por nubosidad y cobertura espacial.
 - **Thumbnails y carrusel**: renderizado de miniaturas (RGB, SWIR, NBR) y actualización de `slides_data`.
-- **Recuperación y NDVI**: análisis VAE y NDVI sobre episodios seleccionados. El baseline NDVI se calcula como composite de máximo NDVI (quality mosaic) sobre 12 meses pre-incendio, con fallback a 24 meses si no hay datos suficientes. La tarea Celery `recompute_baselines` (workers.tasks.backfill) permite re-procesar baselines mejorados para eventos que ya tienen monitoreo, sin recalcular NDVI actual.
+- **Recuperación y NDVI**: análisis VAE y NDVI sobre episodios seleccionados. El baseline NDVI se calcula en tres pasos: (1) quality mosaic 365 días pre-incendio, (2) 730 días pre-incendio si falla, (3) fallback post-incendio 180–540 días (6–18 meses) para eventos sin Sentinel-2 pre-incendio (p. ej. pre-2016). El origen del baseline se registra en `vegetation_monitoring.notes` (`baseline_v2_max_ndvi_annual`, `baseline_v2_post_fire_fallback`). La tarea Celery `recompute_baselines` (workers.tasks.backfill) permite re-procesar baselines mejorados para eventos que ya tienen monitoreo, sin recalcular NDVI actual.
 
 Para un detalle extendido de los flujos, ver `docs/architecture/flows.md`.
 
