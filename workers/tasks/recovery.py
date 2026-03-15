@@ -103,9 +103,15 @@ def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = Non
         vae = VAEService()
         if existing_baseline and existing_baseline.baseline_ndvi is not None:
             baseline_ndvi = float(existing_baseline.baseline_ndvi)
+            baseline_notes = None
         else:
             try:
                 baseline_ndvi = vae._get_baseline_ndvi(bbox, fire_date)
+                baseline_notes = (
+                    "baseline_v2_post_fire_fallback"
+                    if fire_date < date(2016, 1, 1)
+                    else "baseline_v2_max_ndvi_annual"
+                )
             except BaselineNotAvailableError:
                 logger.warning("No baseline available for %s", fire_event_id)
                 db.execute(
@@ -167,13 +173,13 @@ def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = Non
                     ndvi_mean, ndvi_min, ndvi_max, ndvi_std_dev,
                     baseline_ndvi, recovery_percentage,
                     cloud_cover_pct, recovery_status, pending_reason,
-                    human_activity_detected, activity_type, updated_at
+                    human_activity_detected, activity_type, notes, updated_at
                 ) VALUES (
                     :fid, :dt, :months,
                     :ndvi, :ndvi_min, :ndvi_max, :ndvi_std_dev,
                     :baseline, :recovery_pct,
                     :cloud, :status, NULL,
-                    false, NULL, NOW()
+                    false, NULL, :notes, NOW()
                 )
                 ON CONFLICT (fire_event_id, monitoring_date) DO UPDATE SET
                     ndvi_mean = EXCLUDED.ndvi_mean,
@@ -187,6 +193,7 @@ def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = Non
                     pending_reason = NULL,
                     human_activity_detected = EXCLUDED.human_activity_detected,
                     activity_type = EXCLUDED.activity_type,
+                    notes = COALESCE(EXCLUDED.notes, vegetation_monitoring.notes),
                     updated_at = NOW()
             """),
             {
@@ -201,6 +208,7 @@ def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = Non
                 "recovery_pct": recovery_pct,
                 "cloud": cloud_cover,
                 "status": recovery_status,
+                "notes": baseline_notes,
             },
         )
 

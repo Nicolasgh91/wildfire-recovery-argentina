@@ -10,13 +10,29 @@ El módulo de recuperación y cambio de uso (UC-F12) analiza la evolución de la
 - Detectar cambios de uso (por ejemplo, construcción, agricultura o suelo desnudo) posteriores a un incendio.
 - Generar reportes históricos con análisis de NDVI y evidencias satelitales.
 
+## Baseline NDVI y fallback post-incendio
+
+El baseline NDVI se obtiene en tres pasos (en `VAEService._get_baseline_ndvi`):
+
+1. **Pre-incendio 365 días**: qualityMosaic NDVI sobre los 12 meses anteriores al incendio (pico de vegetación anual).
+2. **Pre-incendio 730 días**: si el paso 1 no tiene imágenes suficientes o NDVI bajo, se extiende a 24 meses pre-incendio.
+3. **Fallback post-incendio (180–540 días)**: para eventos sin cobertura Sentinel-2 pre-incendio (típicamente antes de 2016), se usa la ventana 6–18 meses después del incendio; la vegetación circundante no afectada aporta un NDVI representativo del potencial del sitio. Es una aproximación menos precisa pero permite generar series temporales para eventos históricos.
+
+El origen del baseline se persiste en `vegetation_monitoring.notes` para que el frontend y los análisis puedan distinguir la calidad:
+
+| Origen del baseline        | Valor de `notes`                      |
+|----------------------------|----------------------------------------|
+| Pre-incendio 365 días      | `baseline_v2_max_ndvi_annual`         |
+| Pre-incendio 730 días      | `baseline_v2_max_ndvi_annual` (Opción A no distingue 365 vs 730) |
+| Post-incendio fallback     | `baseline_v2_post_fire_fallback`      |
+
 ## Flujo técnico de recuperación
 
 1. Disparo del análisis:
    - Tareas programadas por Celery Beat para procesar eventos recientes y episodios relevantes.
    - Disparos manuales desde endpoints de monitoreo cuando no hay datos previos.
 2. Motor de análisis:
-   - `VAEService` calcula baseline NDVI preincendio y NDVI actual por mes.
+   - `VAEService` calcula baseline NDVI (pre-incendio o fallback post-incendio) y NDVI actual por mes.
    - Se obtiene un porcentaje de recuperación respecto al baseline y una clasificación de estado de recuperación.
 3. Persistencia:
    - Los resultados se guardan en la tabla `vegetation_monitoring` con un registro por evento y fecha de monitoreo.
