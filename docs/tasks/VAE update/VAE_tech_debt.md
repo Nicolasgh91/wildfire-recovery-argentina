@@ -37,3 +37,38 @@ Registro de desvíos respecto a la especificación y deuda técnica detectada du
 **Decisión:** Usar únicamente `no_current_image` en el worker (retorno del task y valor persistido en `vegetation_monitoring.pending_reason`). No mantener compatibilidad con `no_image_this_month`.
 
 **Impacto:** Bajo. Cualquier cliente que consulte `pending_reason` o el `reason` del resultado del task debe esperar `no_current_image` (o `no_baseline_image`). No se encontraron referencias a `no_image_this_month` en el codebase.
+
+---
+
+## Fallos del test suite completo (2026-03-15)
+
+**Fecha:** 2026-03-15  
+**Contexto:** Ejecución de `pytest tests/ -v --tb=short -q`. Resultado: 43 failed, 200 passed, 6 skipped, 10 errors. Estos fallos son preexistentes y no están causados por los cambios recientes en VAE (p. ej. `_get_baseline_ndvi`).
+
+### Errores de fixture (10)
+
+- **Archivo:** `tests/workers/test_export_ssg_artifacts.py`
+- **Causa:** `fixture 'db_session' not found` en el setup de todos los tests del módulo.
+- **Tests afectados:** `test_chunking_usa_fetchmany_no_fetchall`, `test_memoria_plana_3000_episodios`, `test_columnas_inexistentes_no_se_consultan`, `test_filtro_slides_status_excluye_no_ready`, `test_provinces_vacio_no_genera_index_error`, `test_thumbnail_nulo_no_aparece_en_og_image`, `test_genera_ambos_artefactos_en_oci`, `test_site_base_url_en_canonical`, `test_zone_counts_sin_peticion_http`, `test_generated_at_es_utc_con_sufijo_z`.
+- **Acción sugerida:** Definir o registrar la fixture `db_session` (p. ej. en `conftest.py` de workers o raíz) o marcar los tests como skip si dependen de un conftest no cargado.
+
+### Fallos de integración — carrusel (1)
+
+- **Test:** `tests/integration/test_carousel_endpoint.py::test_list_active_episodes_carousel_filters`
+- **Error:** `AssertionError: assert 'extinct' in ['active', 'monitoring']`
+- **Causa:** El endpoint devuelve episodios con `status='extinct'` (válidos por la regla de 30 días recientes), pero el test asume que todos los episodios devueltos tienen `status in ['active', 'monitoring']`.
+- **Acción sugerida:** Ajustar el test para aceptar `extinct` cuando `extinct_at` está dentro de la ventana de 30 días, o aislar datos de test para que solo existan episodios active/monitoring.
+
+### Fallos — healthchecks Docker (6)
+
+- **Archivo:** `tests/unit/test_compose_healthchecks.py`
+- **Tests:** `test_nginx_uses_wget_not_curl`, `test_workers_use_process_checks` (ingestion, clustering, analysis, reports), `test_critical_services_have_healthcheck`.
+- **Causa:** Contratos del test no coinciden con la configuración actual de `docker-compose` o con los comandos de healthcheck (p. ej. uso de curl vs wget, tipo de check en workers).
+- **Acción sugerida:** Revisar `docker-compose*.yml` y alinear tests con la definición vigente de healthchecks o actualizar los contratos documentados.
+
+### Fallos — GEE contract mock y GEE stress (26)
+
+- **Archivos:** `tests/unit/test_gee_contract_mock.py`, `tests/unit/test_gee_stress.py`
+- **Causa común:** `AttributeError: 'GEEMultiBandImageWithClip' object has no attribute 'visualize'`. El código de producción llama `image.visualize(...)` sobre un objeto que en tests es un mock `GEEMultiBandImageWithClip`, el cual no implementa `.visualize()`.
+- **Tests afectados (entre otros):** invariantes I-1, I-2, I-3, I-5, I-6, I-8, I-9, `test_full_flow_produces_url_for_all_vis_types`, `test_i10_clip_before_reproject_for_all_vis_types`, `test_i11_clip_uses_same_geometry_as_get_thumb_url`, `test_i13_single_retry_on_transient_500`, `test_i14_code_propagates_http500_from_gee`, `test_correct_bands_selected_per_vis_type`, `test_operation_order_select_clip_reproject_thumb`, `test_dimensions_type_in_params`.
+- **Acción sugerida:** Extender el mock `GEEMultiBandImageWithClip` (o el objeto que se inyecta como imagen tras clip/reproject) para exponer un método `visualize` que devuelva un mock compatible con la cadena hasta `getThumbURL`, de modo que los contract mocks sigan validando el flujo sin llamar a GEE real.

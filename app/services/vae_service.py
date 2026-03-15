@@ -27,6 +27,8 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
+import ee
+
 # Umbrales unificados (D-02)
 from app.core.recovery_thresholds import classify_recovery_status
 
@@ -696,48 +698,124 @@ class VAEService:
     # MÉTODOS AUXILIARES PRIVADOS
     # =========================================================================
 
-    def _get_baseline_ndvi(self, bbox: Dict[str, float], fire_date: date) -> float:
-        """Obtiene NDVI pre-incendio (baseline) con logging mejorado. GEE envuelto en circuit breaker."""
+    def _get_baseline_ndvi(
+        self,
+        bbox: Dict[str, float],
+        fire_date: date,
+        lookback_days: int = 365,
+        max_cloud_cover: float = 30.0,
+    ) -> float:
+        """
+        Calcula NDVI baseline como el máximo NDVI del año previo al incendio.
+
+        Usa un composite de máximo NDVI (quality mosaic) sobre los 12 meses
+        anteriores al incendio. Esto captura el pico de vegetación anual,
+        que es la referencia más representativa de la capacidad ecológica.
+
+        Si no hay imágenes en 365 días, extiende a 730 días.
+        Si aún no hay, lanza BaselineNotAvailableError.
+
+        Args:
+            bbox: bounding box del evento
+            fire_date: fecha del incendio
+            lookback_days: días hacia atrás para buscar (default 365)
+            max_cloud_cover: máximo de nubosidad aceptable
+
+        Returns:
+            float: NDVI mean del composite de máximo NDVI
+
+        Raises:
+            BaselineNotAvailableError: si no hay imágenes disponibles
+        """
 
         def _do() -> float:
-            import time
             from app.utils.bbox_utils import validate_and_convert_bbox
 
             bbox_val = validate_and_convert_bbox(bbox)
-            logger.info("🔍 [BASELINE] Starting baseline NDVI calculation (fire_date=%s)", fire_date)
-            start_time = time.time()
-            try:
-                pre_start = fire_date - timedelta(days=45)
-                pre_end = fire_date - timedelta(days=15)
-                collection = self._gee.get_sentinel_collection(
-                    bbox=bbox_val, start_date=pre_start, end_date=pre_end, max_cloud_cover=25
-                )
-                image = self._gee.get_best_image(
-                    collection, target_date=fire_date - timedelta(days=15)
-                )
-                ndvi_result = self._gee.calculate_ndvi(image, bbox_val)
-                logger.info(
-                    "🔍 [BASELINE] ✅ Baseline NDVI completed in %.2fs: %s",
-                    time.time() - start_time,
-                    ndvi_result.mean,
-                )
-                return ndvi_result.mean
-            except GEEImageNotFoundError as e:
-                logger.warning(
-                    "baseline_not_available: no pre-fire image",
-                    extra={"fire_date": str(fire_date)},
-                )
-                raise BaselineNotAvailableError(
-                    f"No hay imagen pre-incendio disponible para {fire_date}"
-                ) from e
-            except Exception as e:
-                logger.error(
-                    "❌ [BASELINE] Error in baseline NDVI: %s (bbox=%s)",
-                    e,
-                    bbox_val,
-                    exc_info=True,
-                )
-                raise
+            for window in [lookback_days, lookback_days * 2]:
+                try:
+                    start = fire_date - timedelta(days=window)
+                    end = fire_date - timedelta(days=1)
+
+                    collection = self._gee.get_sentinel_collection(
+                        bbox=bbox_val,
+                        start_date=start,
+                        end_date=end,
+                        max_cloud_cover=max_cloud_cover,
+                    )
+
+                    def add_ndvi(image):
+                        ndvi = image.normalizedDifference(["B8", "B4"]).rename("NDVI")
+                        return image.addBands(ndvi)
+
+                    ndvi_collection = collection.map(add_ndvi)
+                    max_ndvi_composite = ndvi_collection.qualityMosaic("NDVI")
+
+                    geometry = ee.Geometry.Rectangle(
+                        [
+                            bbox_val["west"],
+                            bbox_val["south"],
+                            bbox_val["east"],
+                            bbox_val["north"],
+                        ]
+                    )
+                    stats = (
+                        max_ndvi_composite.select("NDVI")
+                        .reduceRegion(
+                            reducer=ee.Reducer.mean(),
+                            geometry=geometry,
+                            scale=30,
+                            maxPixels=1e9,
+                        )
+                        .getInfo()
+                    )
+
+                    if stats is None:
+                        logger.warning(
+                            "Baseline reduceRegion returned None for window=%sd, fire_date=%s",
+                            window,
+                            fire_date,
+                        )
+                        continue
+
+                    ndvi_mean = stats.get("NDVI") or stats.get("NDVI_mean")
+                    if ndvi_mean is None or ndvi_mean < 0.05:
+                        logger.warning(
+                            "Baseline NDVI too low (%s) for window=%sd, fire_date=%s",
+                            ndvi_mean,
+                            window,
+                            fire_date,
+                        )
+                        continue
+
+                    logger.info(
+                        "Baseline NDVI computed: %.4f (window=%sd, fire_date=%s)",
+                        float(ndvi_mean),
+                        window,
+                        fire_date,
+                    )
+                    return float(ndvi_mean)
+
+                except GEEImageNotFoundError:
+                    logger.warning(
+                        "No images found for baseline window=%sd, fire_date=%s",
+                        window,
+                        fire_date,
+                    )
+                    continue
+                except Exception as e:
+                    logger.warning(
+                        "Baseline NDVI failed for window=%sd, fire_date=%s: %s",
+                        window,
+                        fire_date,
+                        e,
+                    )
+                    continue
+
+            raise BaselineNotAvailableError(
+                f"No hay imágenes disponibles para calcular baseline NDVI "
+                f"(fire_date={fire_date}, ventana máxima={lookback_days * 2} días)"
+            )
 
         if gee_circuit is None:
             return _do()

@@ -54,7 +54,7 @@ Proveer un **motor de análisis de vegetación** (VAE) que:
 Basada en `docs/archive/ndvi-uf12/uc-f12-gee-optimization-analysis.md` y `docs/ndvi/gee_quota_mitigation_spec_on_ndvi.md`:
 
 - Un evento típico requiere:
-  - Baseline NDVI (`_get_baseline_ndvi`) → 1 request.
+  - Baseline NDVI (`_get_baseline_ndvi`): composite de máximo NDVI (quality mosaic) sobre 12 meses pre-incendio (fallback 24 meses); 1 request por ventana hasta obtener datos válidos.
   - NDVI actual mensual (`_get_current_ndvi_with_cloud`) → 1 request.
   - Detección de uso de suelo → 1–2 requests adicionales.
 - Con workers y batching:
