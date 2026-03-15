@@ -18,7 +18,7 @@ Los flujos core describen el recorrido de los datos desde la fuente externa hast
 - **Episodios**: fusión de eventos en `fire_episodes` con perímetros y bounding boxes.
 - **Selección de imágenes**: búsqueda de imágenes Sentinel-2, filtrado por nubosidad y cobertura espacial.
 - **Thumbnails y carrusel**: renderizado de miniaturas (RGB, SWIR, NBR) y actualización de `slides_data`.
-- **Recuperación y NDVI**: análisis VAE y NDVI sobre episodios seleccionados.
+- **Recuperación y NDVI**: análisis VAE y NDVI sobre episodios seleccionados. El baseline NDVI se calcula como composite de máximo NDVI (quality mosaic) sobre 12 meses pre-incendio, con fallback a 24 meses si no hay datos suficientes.
 
 Para un detalle extendido de los flujos, ver `docs/architecture/flows.md`.
 
@@ -72,5 +72,6 @@ Cualquier nueva inconsistencia detectada debe registrarse aquí sin modificar el
 
 ## Última actualización
 
-- Fecha: 2026-03-09
+- Fecha: 2026-03-15
 - Commit: pendiente de actualizar al realizar el commit correspondiente
+- Cambio: baseline NDVI por quality mosaic (12/24 meses pre-incendio), ver `docs/decisions/ADR-0002-baseline-ndvi-quality-mosaic.md`
