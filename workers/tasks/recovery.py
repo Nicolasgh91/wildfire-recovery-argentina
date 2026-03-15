@@ -126,7 +126,8 @@ def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = Non
 
         # 3. NDVI actual
         try:
-            current_ndvi, cloud_cover = vae._get_current_ndvi_with_cloud(bbox, target_date)
+            ndvi_result, cloud_cover = vae._get_current_ndvi_with_cloud(bbox, target_date)
+            current_ndvi = ndvi_result.mean
         except GEEImageNotFoundError:
             logger.warning("No current image for %s at %s", fire_event_id, target_date)
             db.execute(
@@ -153,22 +154,32 @@ def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = Non
         # 4. Clasificar y persistir
         recovery_pct = min(100.0, max(0.0, (current_ndvi / baseline_ndvi) * 100))
         recovery_status = classify_recovery_status(recovery_pct)
+        
+        # Extraer valores adicionales de NDVIResult de forma defensiva
+        ndvi_min = getattr(ndvi_result, 'min', None)
+        ndvi_max = getattr(ndvi_result, 'max', None)
+        ndvi_std_dev = getattr(ndvi_result, 'std_dev', None)
 
         db.execute(
             text("""
                 INSERT INTO vegetation_monitoring (
                     fire_event_id, monitoring_date, months_after_fire,
-                    ndvi_mean, baseline_ndvi, recovery_percentage,
+                    ndvi_mean, ndvi_min, ndvi_max, ndvi_std_dev,
+                    baseline_ndvi, recovery_percentage,
                     cloud_cover_pct, recovery_status, pending_reason,
                     human_activity_detected, activity_type, updated_at
                 ) VALUES (
                     :fid, :dt, :months,
-                    :ndvi, :baseline, :recovery_pct,
+                    :ndvi, :ndvi_min, :ndvi_max, :ndvi_std_dev,
+                    :baseline, :recovery_pct,
                     :cloud, :status, NULL,
                     false, NULL, NOW()
                 )
                 ON CONFLICT (fire_event_id, monitoring_date) DO UPDATE SET
                     ndvi_mean = EXCLUDED.ndvi_mean,
+                    ndvi_min = EXCLUDED.ndvi_min,
+                    ndvi_max = EXCLUDED.ndvi_max,
+                    ndvi_std_dev = EXCLUDED.ndvi_std_dev,
                     baseline_ndvi = EXCLUDED.baseline_ndvi,
                     recovery_percentage = EXCLUDED.recovery_percentage,
                     cloud_cover_pct = EXCLUDED.cloud_cover_pct,
@@ -183,6 +194,9 @@ def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = Non
                 "dt": target_date,
                 "months": months_after,
                 "ndvi": current_ndvi,
+                "ndvi_min": ndvi_min,
+                "ndvi_max": ndvi_max,
+                "ndvi_std_dev": ndvi_std_dev,
                 "baseline": baseline_ndvi,
                 "recovery_pct": recovery_pct,
                 "cloud": cloud_cover,

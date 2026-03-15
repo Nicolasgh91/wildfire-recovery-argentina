@@ -839,19 +839,19 @@ class VAEService:
 
     def _get_current_ndvi_with_cloud(
         self, bbox: Dict[str, float], target_date: date
-    ) -> Tuple[float, float]:
+    ) -> Tuple[NDVIResult, float]:
         """
         Obtiene NDVI actual y porcentaje de nubes para una fecha.
         Fallback escalonado: prueba cloud 30/50/70% y ventanas 30/60/90 días
         antes de declarar falta de imagen. F5-02.
-        Returns (ndvi_mean, cloud_cover_pct). GEE envuelto en circuit breaker.
+        Returns (ndvi_result, cloud_cover_pct). GEE envuelto en circuit breaker.
         """
         from app.utils.bbox_utils import validate_and_convert_bbox
 
         cloud_thresholds = [30, 50, 70]
         window_days_options = [30, 60, 90]
 
-        def _do() -> Tuple[float, float]:
+        def _do() -> Tuple[NDVIResult, float]:
             bbox_val = validate_and_convert_bbox(bbox)
             for max_cloud in cloud_thresholds:
                 for window_days in window_days_options:
@@ -879,7 +879,7 @@ class VAEService:
                             ndvi_result.mean,
                             cloud_cover,
                         )
-                        return (float(ndvi_result.mean), float(cloud_cover))
+                        return (ndvi_result, float(cloud_cover))
                     except GEEImageNotFoundError:
                         continue
             raise GEEImageNotFoundError(
