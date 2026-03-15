@@ -310,3 +310,162 @@ def backfill_historical_recovery(
     finally:
         db.close()
 
+
+@celery_app.task(
+    name="workers.tasks.backfill.recompute_baselines",
+    queue="vae",
+    soft_time_limit=3600,
+    time_limit=3900,
+)
+def recompute_baselines(batch_size: int = 50) -> dict:
+    """
+    Re-calcula baseline NDVI con el método mejorado (max NDVI anual)
+    para eventos que ya tienen registros en vegetation_monitoring.
+
+    No re-calcula NDVI actual — solo actualiza baseline, recovery_percentage
+    y recovery_status usando los ndvi_mean existentes.
+    """
+    db = SessionLocal()
+    try:
+        # Obtener eventos únicos con monitoreo completo
+        events = db.execute(
+            text("""
+                SELECT DISTINCT
+                    vm.fire_event_id,
+                    fe.start_date,
+                    CASE WHEN fe.perimeter IS NOT NULL
+                         THEN ST_XMin(fe.perimeter::geometry)
+                         ELSE ST_X(fe.centroid::geometry) - 0.01
+                    END AS bbox_west,
+                    CASE WHEN fe.perimeter IS NOT NULL
+                         THEN ST_YMin(fe.perimeter::geometry)
+                         ELSE ST_Y(fe.centroid::geometry) - 0.01
+                    END AS bbox_south,
+                    CASE WHEN fe.perimeter IS NOT NULL
+                         THEN ST_XMax(fe.perimeter::geometry)
+                         ELSE ST_X(fe.centroid::geometry) + 0.01
+                    END AS bbox_east,
+                    CASE WHEN fe.perimeter IS NOT NULL
+                         THEN ST_YMax(fe.perimeter::geometry)
+                         ELSE ST_Y(fe.centroid::geometry) + 0.01
+                    END AS bbox_north
+                FROM vegetation_monitoring vm
+                JOIN fire_events fe ON fe.id = vm.fire_event_id
+                WHERE vm.ndvi_mean IS NOT NULL
+                  AND (vm.notes IS NULL OR vm.notes NOT LIKE '%baseline_v2%')
+                LIMIT :batch
+            """),
+            {"batch": batch_size},
+        ).fetchall()
+
+        if not events:
+            logger.info("recompute_baselines: no hay eventos pendientes")
+            return {"status": "done", "events_updated": 0}
+
+        from app.services.vae_service import VAEService, BaselineNotAvailableError
+
+        vae = VAEService()
+        updated = 0
+        failed = 0
+
+        for event in events:
+            fire_date = event.start_date
+            if hasattr(fire_date, "date"):
+                fire_date = fire_date.date()
+
+            bbox = {
+                "west": float(event.bbox_west),
+                "south": float(event.bbox_south),
+                "east": float(event.bbox_east),
+                "north": float(event.bbox_north),
+            }
+
+            try:
+                new_baseline = vae._get_baseline_ndvi(bbox, fire_date)
+            except BaselineNotAvailableError:
+                logger.warning(
+                    "recompute_baselines: no baseline for %s (fire_date=%s)",
+                    event.fire_event_id,
+                    fire_date,
+                )
+                failed += 1
+                continue
+            except Exception as e:
+                logger.error(
+                    "recompute_baselines: error for %s: %s",
+                    event.fire_event_id,
+                    str(e)[:200],
+                )
+                failed += 1
+                continue
+
+            # Recalcular recovery para todos los registros del evento
+            db.execute(
+                text("""
+                    UPDATE vegetation_monitoring SET
+                        baseline_ndvi = :baseline,
+                        recovery_percentage = LEAST(100, GREATEST(0,
+                            (ndvi_mean / :baseline) * 100
+                        )),
+                        recovery_status = CASE
+                            WHEN (ndvi_mean / :baseline) * 100 >= 90 THEN 'full_recovery'
+                            WHEN (ndvi_mean / :baseline) * 100 >= 70 THEN 'advanced_recovery'
+                            WHEN (ndvi_mean / :baseline) * 100 >= 40 THEN 'moderate_recovery'
+                            WHEN (ndvi_mean / :baseline) * 100 >= 10 THEN 'early_recovery'
+                            ELSE 'stalled'
+                        END,
+                        updated_at = NOW(),
+                        notes = 'baseline_v2_max_ndvi_annual'
+                    WHERE fire_event_id = :fid
+                      AND ndvi_mean IS NOT NULL
+                """),
+                {"baseline": new_baseline, "fid": str(event.fire_event_id)},
+            )
+            updated += 1
+
+            logger.info(
+                "recompute_baselines: %s baseline=%.4f",
+                event.fire_event_id,
+                new_baseline,
+            )
+
+        db.commit()
+
+        # Actualizar cache en fire_events
+        db.execute(
+            text("""
+                UPDATE fire_events fe SET
+                    latest_recovery_status = sub.recovery_status,
+                    latest_recovery_pct = sub.recovery_percentage
+                FROM (
+                    SELECT DISTINCT ON (fire_event_id)
+                        fire_event_id, recovery_status, recovery_percentage
+                    FROM vegetation_monitoring
+                    WHERE recovery_status IS NOT NULL
+                    ORDER BY fire_event_id, monitoring_date DESC
+                ) sub
+                WHERE fe.id = sub.fire_event_id
+            """)
+        )
+        db.commit()
+
+        logger.info(
+            "recompute_baselines: updated=%d failed=%d total=%d",
+            updated,
+            failed,
+            len(events),
+        )
+        return {
+            "status": "ok",
+            "events_updated": updated,
+            "events_failed": failed,
+            "events_total": len(events),
+        }
+
+    except Exception as exc:
+        logger.error("recompute_baselines failed: %s", str(exc)[:500], exc_info=True)
+        db.rollback()
+        return {"status": "error", "reason": str(exc)[:500]}
+    finally:
+        db.close()
+

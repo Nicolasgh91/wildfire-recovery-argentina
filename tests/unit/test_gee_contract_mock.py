@@ -77,6 +77,58 @@ S2_BAND_RESOLUTION: dict[str, int] = {
 }
 
 # ---------------------------------------------------------------------------
+# GEERenderedImage — mock del resultado de image.visualize() (updateMask → clip → getThumbURL)
+# ---------------------------------------------------------------------------
+
+
+class GEERenderedImage:
+    """
+    Mock del resultado de ee.Image.visualize(). La cadena producción es:
+    visualize() → updateMask() → clip() → getThumbURL().
+    Implementa las mismas validaciones de getThumbURL (I-1, I-6, I-9) que GEEMultiBandImage.
+    """
+
+    def __init__(self, _call_log: list | None = None):
+        self._call_log = _call_log if _call_log is not None else []
+
+    def updateMask(self, mask) -> "GEERenderedImage":
+        self._call_log.append(("updateMask",))
+        return self
+
+    def clip(self, geometry) -> "GEERenderedImage":
+        self._call_log.append(("clip", id(geometry)))
+        return self
+
+    def getThumbURL(self, params: dict[str, Any]) -> str:  # noqa: N802
+        self._call_log.append(("getThumbURL", dict(params)))
+        invalid_keys = set(params.keys()) - GEE_VALID_THUMB_PARAMS
+        if invalid_keys:
+            raise ValueError(
+                f"[I-1] getThumbURL recibió parámetros inválidos según GEE API: "
+                f"{invalid_keys}. Parámetros válidos: {sorted(GEE_VALID_THUMB_PARAMS)}."
+            )
+        dims = params.get("dimensions")
+        if dims is not None and isinstance(dims, str) and "x" in dims.lower():
+            w_str, h_str = dims.lower().split("x", 1)
+            try:
+                int(w_str.strip()), int(h_str.strip())
+            except ValueError as exc:
+                raise ValueError(
+                    f"[I-6] dimensions='{dims}' no es parseable como WxH enteros."
+                ) from exc
+        elif dims is not None and not isinstance(dims, (int, str)):
+            raise TypeError(
+                f"[I-6] dimensions debe ser int o string, got {type(dims).__name__}"
+            )
+        fmt = params.get("format", "png")
+        if fmt not in {"png", "jpg", "jpeg", "auto"}:
+            raise ValueError(
+                f"[I-9] format='{fmt}' no es válido. GEE acepta: png, jpg, jpeg, auto."
+            )
+        return "https://earthengine.googleapis.com/v1/thumb/mock_ok"
+
+
+# ---------------------------------------------------------------------------
 # GEEMultiBandImage — contract mock de ee.Image con historial de llamadas
 # ---------------------------------------------------------------------------
 
@@ -109,8 +161,10 @@ class GEEMultiBandImage:
 
     # ── operaciones de transformación ───────────────────────────────────────
 
-    def select(self, band_names: list[str] | str) -> "GEEMultiBandImage":
-        if isinstance(band_names, str):
+    def select(self, band_names: list[str] | str | int) -> "GEEMultiBandImage":
+        if isinstance(band_names, int):
+            band_names = [list(S2_BAND_RESOLUTION.keys())[band_names] if band_names < len(S2_BAND_RESOLUTION) else "B2"]
+        elif isinstance(band_names, str):
             band_names = [band_names]
         selected = {b: S2_BAND_RESOLUTION.get(b, 10) for b in band_names}
         self._call_log.append(("select", band_names))
@@ -192,6 +246,15 @@ class GEEMultiBandImage:
             _call_log=self._call_log,
             _reprojected=self._reprojected and other._reprojected,
         )
+
+    def visualize(self, **kwargs) -> GEERenderedImage:
+        """Flujo actual: visualize → updateMask → clip → getThumbURL (sin reproject)."""
+        self._call_log.append(("visualize", kwargs))
+        return GEERenderedImage(_call_log=self._call_log)
+
+    def mask(self) -> "GEEMultiBandImage":
+        """Para updateMask(index_img.mask()) en producción."""
+        return self
 
     # ── getThumbURL — el método con más restricciones ───────────────────────
 
@@ -366,11 +429,11 @@ class TestGEEContractMock:
 
     # ── I-2: scale en EPSG:4326 debe ser en grados, no metros ───────────────
 
+    @pytest.mark.skip(reason="Thumbnail path uses visualize()→clip→getThumbURL; reproject() no se usa en este camino.")
     def test_i2_reproject_scale_is_degrees_not_meters(self):
         """
         [I-2] scale en EPSG:4326 en grados. El contract mock lanza si scale >= 0.1.
-        El código actual usa scale=0.0002 → debe pasar.
-        Regresión detectada: scale=20 (metros) → scale=20 grados → 1x1.
+        (Desactivado: flujo actual no usa reproject para thumbnails.)
         """
         call_log = []
         img = _make_s2_image(call_log=call_log)
@@ -407,9 +470,10 @@ class TestGEEContractMock:
 
     # ── I-3: reproject ANTES de getThumbURL ─────────────────────────────────
 
-    def test_i3_reproject_called_before_get_thumb_url(self):
+    def test_i3_visualize_and_clip_before_get_thumb_url(self):
         """
-        [I-3] reproject() debe aparecer ANTES de getThumbURL en el call_log.
+        [I-3] Flujo actual: visualize() y clip() deben aparecer ANTES de getThumbURL.
+        (Antes se validaba reproject antes de getThumbURL; ahora se usa visualize → clip.)
         """
         call_log = []
         img = _make_s2_image(call_log=call_log)
@@ -427,12 +491,14 @@ class TestGEEContractMock:
             )
 
         ops = [e[0] for e in call_log]
-        assert "reproject" in ops, "reproject() no fue llamado"
+        assert "visualize" in ops, "visualize() debe ser llamado"
+        assert "clip" in ops, "clip() debe ser llamado"
         assert "getThumbURL" in ops, "getThumbURL no fue llamado"
-        assert ops.index("reproject") < ops.index("getThumbURL"), (
-            f"[I-3 REGRESION] reproject (idx {ops.index('reproject')}) "
-            f"debe ir ANTES de getThumbURL (idx {ops.index('getThumbURL')}). "
-            f"Call log: {ops}"
+        assert ops.index("visualize") < ops.index("getThumbURL"), (
+            f"[I-3] visualize debe ir antes de getThumbURL. Call log: {ops}"
+        )
+        assert ops.index("clip") < ops.index("getThumbURL"), (
+            f"[I-3] clip debe ir antes de getThumbURL. Call log: {ops}"
         )
 
     # ── I-4: thumbnail simulado tiene ratio correcto ─────────────────────────
@@ -472,7 +538,9 @@ class TestGEEContractMock:
         )
 
     # ── I-5: bandas de resolución mixta sin reproject → EEException ──────────
+    # (Desactivado: flujo actual usa visualize() y no llama getThumbURL sobre imagen multibanda.)
 
+    @pytest.mark.skip(reason="Thumbnail path uses visualize(); getThumbURL se llama sobre rendered image.")
     @pytest.mark.parametrize(
         "vis_type,description",
         [
@@ -524,9 +592,10 @@ class TestGEEContractMock:
 
     # ── I-6: dimensions int se pasa como int, WxH como string ───────────────
 
-    def test_i6_int_dimensions_passed_as_int(self):
+    def test_i6_int_dimensions_converted_to_wxh_string(self):
         """
-        [I-6] dimensions=512 (int) → params["dimensions"] == 512 (int).
+        [I-6] dimensions=512 (int) → get_thumbnail_url convierte a string WxH vía _bbox_to_dimensions.
+        getThumbURL recibe un string (ej. "512x384") en el flujo visualize→clip→getThumbURL.
         """
         call_log = []
         img = _make_s2_image(call_log=call_log)
@@ -546,10 +615,10 @@ class TestGEEContractMock:
         thumb_calls = [e for e in call_log if e[0] == "getThumbURL"]
         params = thumb_calls[-1][1]
         dims = params.get("dimensions")
-        assert isinstance(dims, int), (
-            f"[I-6] dimensions=512 (int) debe llegar como int, got {type(dims).__name__}={dims!r}"
+        assert isinstance(dims, str), (
+            f"[I-6] En flujo actual dimensions llega como string WxH, got {type(dims).__name__}={dims!r}"
         )
-        assert dims == 512
+        assert "x" in dims.lower(), f"[I-6] dimensions string debe ser WxH, got {dims!r}"
 
     def test_i6_wxh_string_passed_as_string(self):
         """
@@ -641,11 +710,11 @@ class TestGEEContractMock:
                 format="png",
             )
 
-        reproject_calls = [e for e in call_log if e[0] == "reproject"]
-        assert reproject_calls, f"[I-8] reproject() no fue llamado para vis_type={vis_type!r}"
-        crs = reproject_calls[-1][1].get("crs")
+        thumb_calls = [e for e in call_log if e[0] == "getThumbURL"]
+        assert thumb_calls, f"[I-8] getThumbURL no fue llamado para vis_type={vis_type!r}"
+        crs = thumb_calls[-1][1].get("crs")
         assert crs == "EPSG:4326", (
-            f"[I-8 REGRESION] reproject usa crs={crs!r}, esperado 'EPSG:4326'. "
+            f"[I-8 REGRESION] getThumbURL debe recibir crs='EPSG:4326', got {crs!r}. "
             f"Cambiar a UTM o cualquier CRS en metros rompe el invariante I-4."
         )
 
@@ -711,8 +780,8 @@ class TestGEEContractMock:
         assert url.startswith("https://"), f"URL inválida para vis_type={vis_type!r}: {url}"
 
         ops = [e[0] for e in call_log]
-        assert "reproject" in ops, f"reproject() no fue llamado para vis_type={vis_type!r}"
+        assert "visualize" in ops, f"visualize() no fue llamado para vis_type={vis_type!r}"
         assert "getThumbURL" in ops, f"getThumbURL no fue llamado para vis_type={vis_type!r}"
-        assert ops.index("reproject") < ops.index("getThumbURL"), (
-            f"[I-3] reproject debe ir antes de getThumbURL para vis_type={vis_type!r}"
+        assert ops.index("visualize") < ops.index("getThumbURL"), (
+            f"[I-3] visualize debe ir antes de getThumbURL para vis_type={vis_type!r}"
         )

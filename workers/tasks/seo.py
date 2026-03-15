@@ -421,7 +421,7 @@ def export_ssg_artifacts(self):
             if not chunk:
                 break
             for raw in chunk:
-                ep = _derive_episode_dict(dict(raw))
+                ep = _derive_episode_dict(dict(raw._mapping))
                 quota_snapshot = min(minor_quota_used + minor_n, MINOR_QUOTA_MAX)
                 cls = classify_episode_for_sitemap(
                     {

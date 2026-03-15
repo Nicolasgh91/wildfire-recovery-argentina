@@ -25,5 +25,5 @@ def test_list_active_episodes_carousel_filters():
             assert ep["slides_data"] is not None
             # Debe tener al menos 1 slide si estamos en mode=active
             assert len(ep["slides_data"]) > 0
-            # Solo deben venir activos o en monitorio
-            assert ep["status"] in ["active", "monitoring"]
+            # mode=active incluye active, monitoring y extinct (≤30 días)
+            assert ep["status"] in ["active", "monitoring", "extinct"]
