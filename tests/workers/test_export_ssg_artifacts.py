@@ -1,13 +1,18 @@
 import json
+import uuid
 from datetime import datetime, timezone
 from unittest.mock import patch
 
 from sqlalchemy import text
+from sqlalchemy.engine import CursorResult
 
 from workers.tasks.seo import CHUNK_SIZE, export_ssg_artifacts
 
 
-def _seed_episode(db_session, slug="cordoba-2026-a3f2b1c9", province="Córdoba"):
+def _seed_episode(db_session, slug=None, province="Córdoba"):
+    """Insert one episode. Returns the slug used (unique per call if slug not provided)."""
+    if slug is None:
+        slug = f"cordoba-2026-{uuid.uuid4().hex[:8]}"
     db_session.execute(
         text(
             """
@@ -30,16 +35,14 @@ def _seed_episode(db_session, slug="cordoba-2026-a3f2b1c9", province="Córdoba")
         ),
         {"slug": slug, "province": province},
     )
-    db_session.commit()
+    # Do not commit: tests use a transaction that is rolled back in fixture teardown.
+    return slug
 
 
 def test_chunking_usa_fetchmany_no_fetchall(monkeypatch, db_session, mocker):
     """El query principal nunca debe cargar todos los registros de una vez."""
     fetchmany_calls: list[int] = []
-
-    original_fetchmany = type(
-        db_session.execute(text("SELECT 1")).fetchmany()
-    ).__mro__[0]
+    original_fetchmany = CursorResult.fetchmany
 
     def spy(self, size):
         fetchmany_calls.append(size)
@@ -63,6 +66,7 @@ def test_chunking_usa_fetchmany_no_fetchall(monkeypatch, db_session, mocker):
 
 def test_memoria_plana_3000_episodios(db_session, mocker):
     """Procesar miles de episodios no debe disparar uso de RAM > 50 MB."""
+    prefix = uuid.uuid4().hex[:8]
     for i in range(3000):
         db_session.execute(
             text(
@@ -80,9 +84,9 @@ def test_memoria_plana_3000_episodios(db_session, mocker):
                 )
                 """
             ),
-            {"slug": f"cordoba-2026-{i:08x}"},
+            {"slug": f"cordoba-2026-{prefix}-{i:06x}"},
         )
-    db_session.commit()
+    # No commit: fixture transaction is rolled back in teardown.
 
     mocker.patch(
         "app.services.storage_service.get_storage_service"
@@ -139,7 +143,7 @@ def test_filtro_slides_status_excluye_no_ready(db_session, mock_oci, mocker):
             ),
             {"slug": f"test-{status}-00000000", "ss": status},
         )
-    db_session.commit()
+    # No commit: fixture transaction rolled back in teardown.
 
     storage_mock = mocker.patch(
         "app.services.storage_service.get_storage_service"
@@ -172,9 +176,9 @@ def test_provinces_vacio_no_genera_index_error(db_session, mock_oci, mocker):
                 'Título', 'Descripción'
             )
             """
+            )
         )
-    )
-    db_session.commit()
+    # No commit: fixture transaction rolled back in teardown.
 
     storage_mock = mocker.patch(
         "app.services.storage_service.get_storage_service"
@@ -201,9 +205,9 @@ def test_thumbnail_nulo_no_aparece_en_og_image(db_session, mock_oci, mocker):
                 'Título', 'Descripción'
             )
             """
+            )
         )
-    )
-    db_session.commit()
+    # No commit: fixture transaction rolled back in teardown.
 
     storage_mock = mocker.patch(
         "app.services.storage_service.get_storage_service"
@@ -243,7 +247,7 @@ def test_genera_ambos_artefactos_en_oci(db_session, mock_oci, mocker):
 
 def test_site_base_url_en_canonical(db_session, mock_oci, settings_override, mocker):
     settings_override.SITE_BASE_URL = "https://forestguard.com.ar"
-    _seed_episode(db_session, slug="cordoba-2026-a3f2b1c9")
+    slug = _seed_episode(db_session, province="Córdoba")
 
     storage_mock = mocker.patch(
         "app.services.storage_service.get_storage_service"
@@ -257,7 +261,7 @@ def test_site_base_url_en_canonical(db_session, mock_oci, settings_override, moc
 
     export_ssg_artifacts()
     data = json.loads(mock_oci.get_uploaded("seo/ssg-seo-data.json"))
-    ep = data["episodes"]["cordoba-2026-a3f2b1c9"]
+    ep = data["episodes"][slug]
     assert ep["canonical"].startswith("https://forestguard.com.ar")
     assert not ep["canonical"].startswith("https://forestguard.freedynamicdns")
 
@@ -273,7 +277,7 @@ def test_zone_counts_sin_peticion_http(db_session, mock_oci, monkeypatch, mocker
             AssertionError("zone_counts no debe hacer peticiones HTTP")
         ),
     )
-    _seed_episode(db_session, slug="cordoba-2026-a3f2b1c9", province="Córdoba")
+    _seed_episode(db_session, province="Córdoba")
 
     storage_mock = mocker.patch(
         "app.services.storage_service.get_storage_service"

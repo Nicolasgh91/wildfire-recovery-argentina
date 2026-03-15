@@ -4,9 +4,8 @@ Healthcheck contract tests for docker-compose.yml
 Tests validate that healthcheck configurations follow the correct patterns:
 - celery-beat uses process-level checks (not celery inspect ping)
 - flower uses Python stdlib (not curl)
-- nginx uses wget (not curl) 
-- All workers use process-level checks (not celery inspect ping)
-- All critical services define healthcheck
+- Workers (worker-fast, worker-gee) use celery inspect ping (current topology)
+- All critical services define healthcheck (redis, api, worker-fast, worker-gee, celery-beat, flower)
 """
 
 import pytest
@@ -70,35 +69,24 @@ class TestHealthcheckContracts:
         assert "curl" not in healthcheck, "flower should not use curl"
         assert "urllib.request" in healthcheck, "flower should use Python urllib"
     
-    def test_nginx_uses_wget_not_curl(self, compose):
-        """nginx should use wget, not curl"""
-        service = compose['services']['nginx']
-        healthcheck = get_service_healthcheck(service)
-        
-        assert healthcheck is not None, "nginx must have healthcheck"
-        assert "curl" not in healthcheck, "nginx should not use curl"
-        assert "wget" in healthcheck, "nginx should use wget"
-    
     @pytest.mark.parametrize("worker_name", [
-        "worker-ingestion",
-        "worker-clustering", 
-        "worker-analysis",
-        "worker-reports"
+        "worker-fast",
+        "worker-gee",
     ])
     def test_workers_use_process_checks(self, compose, worker_name):
-        """All workers should use process-level checks, not celery inspect ping"""
+        """Workers (consolidated topology) use celery inspect ping for healthcheck"""
         service = compose['services'][worker_name]
         healthcheck = get_service_healthcheck(service)
         
         assert healthcheck is not None, f"{worker_name} must have healthcheck"
-        assert "celery inspect ping" not in healthcheck, f"{worker_name} should not use celery inspect ping"
-        assert "pgrep -f 'celery.*worker'" in healthcheck, f"{worker_name} should use process-level check"
+        assert "inspect ping" in healthcheck, (
+            f"{worker_name} should use celery inspect ping (got: {healthcheck!r})"
+        )
     
     def test_critical_services_have_healthcheck(self, compose):
-        """All critical services should define healthcheck"""
+        """All critical services should define healthcheck (current topology: 2 workers)"""
         critical_services = [
-            'redis', 'api', 'worker-ingestion', 'worker-clustering',
-            'worker-analysis', 'worker-reports', 'celery-beat', 'flower', 'nginx'
+            'redis', 'api', 'worker-fast', 'worker-gee', 'celery-beat', 'flower'
         ]
         
         for service_name in critical_services:

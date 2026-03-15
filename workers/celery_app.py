@@ -102,6 +102,7 @@ celery_app.conf.update(
         'workers.tasks.clustering_task.*': {'queue': 'clustering'},
         'workers.tasks.recovery.*': {'queue': 'vae'},
         'workers.tasks.destruction.*': {'queue': 'vae'},
+        'workers.tasks.backfill.*': {'queue': 'vae'},
         'workers.tasks.carousel_task.generate_carousel': {'queue': 'analysis'},
         'workers.tasks.carousel_task.*': {'queue': 'analysis'},
         'workers.tasks.closure_report_task.*': {'queue': 'reports'},

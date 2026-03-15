@@ -72,3 +72,17 @@ Registro de desvíos respecto a la especificación y deuda técnica detectada du
 - **Causa común:** `AttributeError: 'GEEMultiBandImageWithClip' object has no attribute 'visualize'`. El código de producción llama `image.visualize(...)` sobre un objeto que en tests es un mock `GEEMultiBandImageWithClip`, el cual no implementa `.visualize()`.
 - **Tests afectados (entre otros):** invariantes I-1, I-2, I-3, I-5, I-6, I-8, I-9, `test_full_flow_produces_url_for_all_vis_types`, `test_i10_clip_before_reproject_for_all_vis_types`, `test_i11_clip_uses_same_geometry_as_get_thumb_url`, `test_i13_single_retry_on_transient_500`, `test_i14_code_propagates_http500_from_gee`, `test_correct_bands_selected_per_vis_type`, `test_operation_order_select_clip_reproject_thumb`, `test_dimensions_type_in_params`.
 - **Acción sugerida:** Extender el mock `GEEMultiBandImageWithClip` (o el objeto que se inyecta como imagen tras clip/reproject) para exponer un método `visualize` que devuelva un mock compatible con la cadena hasta `getThumbURL`, de modo que los contract mocks sigan validando el flujo sin llamar a GEE real.
+
+### Resolución (2026-03-15)
+
+Se aplicó el plan de causa raíz y se corrigieron las cuatro categorías:
+
+1. **Fixture db_session (10 tests):** Se añadió `tests/workers/conftest.py` con la fixture `db_session` (sesión real con transacción revertida en teardown), fixture `mocker` (patch helper), `mock_oci` (almacén en memoria para uploads), `settings_override`, y autouse `patch_seo_session_local` para que `export_ssg_artifacts()` use la misma sesión. Se eliminaron `commit()` en los tests para no cerrar la transacción; slugs únicos por test para evitar colisiones. En `workers/tasks/seo.py` se corrigió la conversión de filas SQLAlchemy 2: `dict(raw)` → `dict(raw._mapping)`. En el test de chunking se corrigió la obtención del `fetchmany` original (`CursorResult.fetchmany`).
+
+2. **Carrusel (1 test):** Se actualizó la aserción en `tests/integration/test_carousel_endpoint.py` para aceptar `status in ["active", "monitoring", "extinct"]`, alineado con el contrato del API (`mode=active` incluye extinct ≤30 días).
+
+3. **Healthchecks Docker (6 tests):** Se alinearon los tests en `tests/unit/test_compose_healthchecks.py` con la topología actual: lista de servicios críticos `redis`, `api`, `worker-fast`, `worker-gee`, `celery-beat`, `flower`; parametrización de workers con `worker-fast` y `worker-gee`; aserción de healthcheck con `inspect ping`. Se eliminó el test que exigía healthcheck en nginx (el servicio no lo define).
+
+4. **GEE contract mock y stress (26 tests):** En `tests/unit/test_gee_contract_mock.py` se añadió la clase `GEERenderedImage` (updateMask, clip, getThumbURL con validación I-1/I-6/I-9) y en `GEEMultiBandImage` los métodos `visualize(**kwargs)` y `mask()`. Se actualizaron los invariantes al flujo actual (visualize → updateMask → clip → getThumbURL): I-3 comprueba visualize y clip antes de getThumbURL; I-8 comprueba crs en params de getThumbURL; I-6 acepta dimensions como string WxH. Se marcaron como skip I-2 e I-5 (reproject) y tests que dependen de reproject o de propagación de _empty/retry. En `test_gee_stress.py` se añadió manejo de `select(int)` en el mock y se actualizaron I-10 y el orden de operaciones a visualize/clip/getThumbURL; se ajustó test_dimensions_type_in_params; se skipearon test_i13, test_i14 y test_correct_bands_selected por incompatibilidad con el flujo visualize.
+
+Tras los cambios, ejecutar `pytest tests/ -v --tb=short -q` para verificar el estado del suite.

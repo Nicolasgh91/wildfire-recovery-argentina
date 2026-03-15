@@ -47,6 +47,7 @@ El módulo de recuperación y cambio de uso (UC-F12) analiza la evolución de la
 
 - Workers de análisis se ejecutan en `worker-gee`, que es el único con credenciales GEE.
 - Se utilizan colas dedicadas para las tareas intensivas de recuperación y cambio de uso.
+- La tarea `recompute_baselines` (workers.tasks.backfill, cola `vae`) re-calcula baseline NDVI con el método mejorado (quality mosaic) para eventos que ya tienen registros en vegetation_monitoring, actualizando recovery_percentage y recovery_status sin volver a solicitar NDVI actual a GEE.
 
 ## Estado de implementación
 
