@@ -272,7 +272,10 @@ export default function AuditPage() {
           radius_km: (values.radius_m ?? analysisPreset) / 1000,
         })
         setSearchResult(response)
-      } catch {
+        console.log('searchResult episodes sample:', 
+          JSON.stringify(response.episodes?.slice(0, 2)))
+      } catch (error) {
+        console.error('searchAuditEpisodes failed', error)
         setLocalError(t('geocodeNotFound'))
       } finally {
         setSearchLoading(false)
@@ -539,14 +542,10 @@ export default function AuditPage() {
                           <Button
                             key={opt.value}
                             type="button"
-                            variant={isSelected ? 'default' : 'outline'}
+                            variant="secondary"
                             size="sm"
                             onClick={() => setAnalysisPreset(opt.value)}
-                            className={
-                              isSelected
-                                ? 'focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
-                                : 'border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
-                            }
+                            className={isSelected ? 'opacity-60' : undefined}
                             aria-pressed={isSelected}
                           >
                             {opt.label}

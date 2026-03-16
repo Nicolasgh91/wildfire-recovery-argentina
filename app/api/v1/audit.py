@@ -119,6 +119,7 @@ def _fetch_episodes_by_province(
             text(
                 """
                 SELECT fe.id,
+                       rep.fire_event_id,
                        fe.start_date,
                        fe.end_date,
                        fe.status,
@@ -178,6 +179,7 @@ def _fetch_episodes_by_protected_area(
                      WHERE id = :area_id
                 )
                 SELECT fe.id,
+                       rep.fire_event_id,
                        fe.start_date,
                        fe.end_date,
                        fe.status,
@@ -317,6 +319,7 @@ def _build_episode_items(rows: list[dict]) -> list[AuditSearchEpisode]:
         items.append(
             AuditSearchEpisode(
                 id=row["id"],
+                fire_event_id=row.get("fire_event_id"),
                 start_date=row["start_date"],
                 end_date=row.get("end_date"),
                 status=row.get("status"),
