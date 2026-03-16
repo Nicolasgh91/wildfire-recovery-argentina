@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback } from 'react'
+import { Suspense, lazy, useCallback, useMemo } from 'react'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   Activity,
@@ -104,21 +104,47 @@ export default function FireDetailPage() {
           ctx = JSON.parse(raw) as ReturnContext
           fromStorage = true
         }
-      } catch { /* ignore */ }
+      } catch {
+        // ignore storage errors
+      }
     }
 
-    if (ctx?.returnTo === 'home') {
+    if (!ctx) {
+      return
+    }
+
+    if (ctx.returnTo === 'home') {
       navigate(HOME_PATH, { state: { restore: { scrollY: ctx.home?.scrollY ?? 0 } } })
-    } else if (ctx?.returnTo === 'map') {
+    } else if (ctx.returnTo === 'history') {
+      const search = ctx.history?.search ?? ''
+      navigate(`/fires/history${search}`)
+    } else if (ctx.returnTo === 'map') {
       navigate('/map', { state: { restore: { selectedFireId: ctx.map?.selectedFireId } } })
-    } else {
-      navigate(HOME_PATH)
     }
 
     if (fromStorage) {
-      sessionStorage.removeItem(RETURN_CONTEXT_KEY)
+      try {
+        sessionStorage.removeItem(RETURN_CONTEXT_KEY)
+      } catch {
+        // ignore storage errors
+      }
     }
   }, [location.state, navigate])
+
+  const hasReturnContext = useMemo(() => {
+    const state = location.state as ReturnContext | null
+    if (state?.returnTo) {
+      return true
+    }
+    try {
+      const raw = sessionStorage.getItem(RETURN_CONTEXT_KEY)
+      if (!raw) return false
+      const parsed = JSON.parse(raw) as ReturnContext | null
+      return !!parsed?.returnTo
+    } catch {
+      return false
+    }
+  }, [location.state])
   const {
     data,
     isLoading,
@@ -326,15 +352,17 @@ export default function FireDetailPage() {
             mapFallback
           )}
         </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          className="absolute left-4 top-4 z-40 gap-2"
-          onClick={handleBack}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {t('goBack')}
-        </Button>
+        {hasReturnContext && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="absolute left-4 top-4 z-40 gap-2"
+            onClick={handleBack}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {t('goBack')}
+          </Button>
+        )}
       </div>
 
       <div className="container mx-auto px-4 py-6">

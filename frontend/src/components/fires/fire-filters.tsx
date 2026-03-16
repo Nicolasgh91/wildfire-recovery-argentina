@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Search, Download, Filter, X } from 'lucide-react'
 import {
   Select,
@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import type { FireFiltersState } from '@/types/fire'
 import { cn } from '@/lib/utils'
+
+const DEBOUNCE_MS = 350
 
 const PROVINCES = [
   'Buenos Aires',
@@ -54,12 +56,35 @@ const STATUS_OPTIONS = [
   { value: 'all', label: 'Todos' },
 ]
 
+const BOOL_OPTIONS = [
+  { value: 'all', label: 'Todos' },
+  { value: 'true', label: 'Si' },
+  { value: 'false', label: 'No' },
+]
+
+function filtersEqualDefault(
+  filters: FireFiltersState,
+  defaultFilters: FireFiltersState
+): boolean {
+  const keys = Object.keys(defaultFilters) as (keyof FireFiltersState)[]
+  return keys.every((k) => {
+    const a = filters[k]
+    const b = defaultFilters[k]
+    if (a === b) return true
+    if (a == null && b == null) return true
+    if (typeof a === 'number' && typeof b === 'number' && Number.isNaN(a) && Number.isNaN(b))
+      return true
+    return false
+  })
+}
+
 interface FireFiltersProps {
   filters: FireFiltersState
   onFiltersChange: (filters: Partial<FireFiltersState>) => void
   onExportCSV: () => void
   isExporting?: boolean
   defaultStatusScope?: FireFiltersState['status_scope']
+  defaultFilters: FireFiltersState
   showExportButton?: boolean
 }
 
@@ -69,28 +94,60 @@ export function FireFilters({
   onExportCSV,
   isExporting = false,
   defaultStatusScope = 'active',
+  defaultFilters,
   showExportButton = true,
 }: FireFiltersProps) {
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [departmentInput, setDepartmentInput] = useState(filters.department)
+  const [minConfidenceInput, setMinConfidenceInput] = useState(
+    filters.min_confidence != null ? String(filters.min_confidence) : ''
+  )
+  const [minDetectionsInput, setMinDetectionsInput] = useState(
+    filters.min_detections != null ? String(filters.min_detections) : ''
+  )
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setDepartmentInput(filters.department)
+    setMinConfidenceInput(
+      filters.min_confidence != null ? String(filters.min_confidence) : ''
+    )
+    setMinDetectionsInput(
+      filters.min_detections != null ? String(filters.min_detections) : ''
+    )
+  }, [filters.department, filters.min_confidence, filters.min_detections])
+
+  const flushDebounced = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return flushDebounced
+  }, [flushDebounced])
+
+  const applyDebounced = useCallback(
+    (updates: Partial<FireFiltersState>) => {
+      flushDebounced()
+      debounceRef.current = setTimeout(() => {
+        debounceRef.current = null
+        onFiltersChange({ ...updates, page: 1 })
+      }, DEBOUNCE_MS)
+    },
+    [onFiltersChange, flushDebounced]
+  )
 
   const handleReset = () => {
+    flushDebounced()
     onFiltersChange({
-      province: '',
-      status_scope: defaultStatusScope,
-      date_from: '',
-      date_to: '',
-      search: '',
-      sort_by: 'start_date_desc',
+      ...defaultFilters,
       page: 1,
     })
   }
 
-  const hasActiveFilters =
-    filters.province ||
-    filters.status_scope !== defaultStatusScope ||
-    filters.date_from ||
-    filters.date_to ||
-    filters.search
+  const hasActiveFilters = !filtersEqualDefault(filters, defaultFilters)
 
   return (
     <div className="space-y-4">
@@ -98,7 +155,7 @@ export function FireFilters({
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por ubicacion..."
+            placeholder="Buscar por ubicación o ID de evento"
             value={filters.search}
             onChange={(e) => onFiltersChange({ search: e.target.value, page: 1 })}
             className="h-9 py-2 pl-10"
@@ -213,6 +270,167 @@ export function FireFilters({
               value={filters.date_to}
               onChange={(e) => onFiltersChange({ date_to: e.target.value, page: 1 })}
               className="w-[160px]"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="filter_department" className="text-sm">
+              Departamento
+            </Label>
+            <Input
+              id="filter_department"
+              type="text"
+              placeholder="Nombre o parte"
+              value={departmentInput}
+              onChange={(e) => {
+                setDepartmentInput(e.target.value)
+                applyDebounced({ department: e.target.value })
+              }}
+              className="w-[180px]"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="filter_in_protected" className="text-sm">
+              En área protegida
+            </Label>
+            <Select
+              value={
+                filters.in_protected_area === true
+                  ? 'true'
+                  : filters.in_protected_area === false
+                    ? 'false'
+                    : 'all'
+              }
+              onValueChange={(v) =>
+                onFiltersChange({
+                  in_protected_area:
+                    v === 'true' ? true : v === 'false' ? false : undefined,
+                  page: 1,
+                })
+              }
+            >
+              <SelectTrigger id="filter_in_protected" className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BOOL_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="filter_significant" className="text-sm">
+              Significativo
+            </Label>
+            <Select
+              value={
+                filters.is_significant === true
+                  ? 'true'
+                  : filters.is_significant === false
+                    ? 'false'
+                    : 'all'
+              }
+              onValueChange={(v) =>
+                onFiltersChange({
+                  is_significant:
+                    v === 'true' ? true : v === 'false' ? false : undefined,
+                  page: 1,
+                })
+              }
+            >
+              <SelectTrigger id="filter_significant" className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BOOL_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="filter_imagery" className="text-sm">
+              Con imágenes satelitales
+            </Label>
+            <Select
+              value={
+                filters.has_imagery === true
+                  ? 'true'
+                  : filters.has_imagery === false
+                    ? 'false'
+                    : 'all'
+              }
+              onValueChange={(v) =>
+                onFiltersChange({
+                  has_imagery:
+                    v === 'true' ? true : v === 'false' ? false : undefined,
+                  page: 1,
+                })
+              }
+            >
+              <SelectTrigger id="filter_imagery" className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {BOOL_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="filter_min_confidence" className="text-sm">
+              Confianza mín. (%)
+            </Label>
+            <Input
+              id="filter_min_confidence"
+              type="number"
+              min={0}
+              max={100}
+              placeholder="Ej. 50"
+              value={minConfidenceInput}
+              onChange={(e) => {
+                setMinConfidenceInput(e.target.value)
+                const n = e.target.value === '' ? undefined : Number(e.target.value)
+                applyDebounced({
+                  min_confidence:
+                    n != null && Number.isFinite(n) && n >= 0 ? n : undefined,
+                })
+              }}
+              className="w-[100px]"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="filter_min_detections" className="text-sm">
+              Detecciones mín.
+            </Label>
+            <Input
+              id="filter_min_detections"
+              type="number"
+              min={0}
+              placeholder="Ej. 5"
+              value={minDetectionsInput}
+              onChange={(e) => {
+                setMinDetectionsInput(e.target.value)
+                const n = e.target.value === '' ? undefined : Number(e.target.value)
+                applyDebounced({
+                  min_detections:
+                    n != null && Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined,
+                })
+              }}
+              className="w-[100px]"
             />
           </div>
 

@@ -1,7 +1,8 @@
-/** State passed to /fires/:id via location.state when navigating from Home or Map */
+/** State passed to /fires/:id via location.state when navigating from Home, History or Map */
 export interface ReturnContext {
-    returnTo: 'home' | 'map'
+    returnTo: 'home' | 'history' | 'map'
     home?: { scrollY: number }
+    history?: { search?: string; scrollY?: number }
     map?: { selectedFireId?: string }
 }
 

@@ -228,7 +228,7 @@ CREATE TABLE public.fire_episodes (
   last_seen_at timestamp with time zone,
   extinct_at timestamp with time zone,
   slides_status text DEFAULT 'pending'::text CHECK (slides_status = ANY (ARRAY['pending'::text, 'processing'::text, 'ready'::text, 'failed'::text])),
-  slug text,
+  slug text UNIQUE,
   seo_title text,
   seo_description text,
   CONSTRAINT fire_episodes_pkey PRIMARY KEY (id),
@@ -265,6 +265,8 @@ CREATE TABLE public.fire_events (
   recovery_status character varying DEFAULT NULL::character varying,
   recovery_percentage numeric DEFAULT NULL::numeric,
   last_monitoring_date date,
+  latest_recovery_status character varying,
+  latest_recovery_pct real,
   CONSTRAINT fire_events_pkey PRIMARY KEY (id),
   CONSTRAINT fire_events_clustering_version_id_fkey FOREIGN KEY (clustering_version_id) REFERENCES public.clustering_versions(id)
 );
@@ -412,6 +414,7 @@ CREATE TABLE public.land_use_changes (
   notes text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  confidence_score real,
   CONSTRAINT land_use_changes_pkey PRIMARY KEY (id),
   CONSTRAINT land_use_changes_fire_event_id_fkey FOREIGN KEY (fire_event_id) REFERENCES public.fire_events(id)
 );
@@ -651,6 +654,7 @@ CREATE TABLE public.vegetation_monitoring (
   updated_at timestamp with time zone DEFAULT now(),
   cloud_cover_pct real,
   recovery_status character varying,
+  pending_reason character varying,
   CONSTRAINT vegetation_monitoring_pkey PRIMARY KEY (id),
   CONSTRAINT vegetation_monitoring_fire_event_id_fkey FOREIGN KEY (fire_event_id) REFERENCES public.fire_events(id),
   CONSTRAINT vegetation_monitoring_satellite_image_id_fkey FOREIGN KEY (satellite_image_id) REFERENCES public.satellite_images(id)

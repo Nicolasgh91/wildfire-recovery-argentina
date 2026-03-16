@@ -5,6 +5,7 @@ from sqlalchemy import (
     Column,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -66,6 +67,9 @@ class FireEvent(Base):
     recovery_status = Column(String(50))
     recovery_percentage = Column(Numeric(5, 2))
     last_monitoring_date = Column(Date)
+    # Cache VAE: último estado/pct de vegetation_monitoring (actualizado por worker; BD: varchar + real)
+    latest_recovery_status = Column(String(50))
+    latest_recovery_pct = Column(Float)
 
     # Auditoría
     created_at = Column(DateTime(timezone=True), server_default=text("now()"))

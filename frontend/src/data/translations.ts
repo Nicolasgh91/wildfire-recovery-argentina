@@ -692,7 +692,7 @@ export const translations = {
     certificates: 'Certificates',
     shelters: 'Shelters',
     report: 'Report',
-    reports: 'Satellite exploration',
+    reports: 'Explore',
     creditsTitle: 'Credits',
     creditsDescription: 'Buy credits for judicial or historical reports.',
     creditsBalance: 'Credits balance',

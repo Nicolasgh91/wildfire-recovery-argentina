@@ -65,7 +65,11 @@ from app.services.supabase_auth import (
     get_or_create_supabase_user,
 )
 from app.services.export_service import ExportService
-from app.services.fire_service import FireFilterParams, FireService
+from app.services.fire_service import (
+    FireFilterParams,
+    FireService,
+    accept_search_param,
+)
 from app.services.imagery_service import resolve_carousel_home_limit
 
 router = APIRouter()
@@ -174,9 +178,7 @@ def list_fires(
     sort_desc: bool = Query(True, description="Descendente"),
     service: FireService = Depends(get_fire_service),
 ) -> FireListResponse:
-    search_value = (
-        search.strip() if search and len(search.strip()) >= 2 else None
-    )
+    search_value = accept_search_param(search)
 
     params = FireFilterParams(
         province=province,
@@ -246,9 +248,7 @@ def get_statistics(
     search: Optional[str] = Query(None, max_length=100),
     service: FireService = Depends(get_fire_service),
 ) -> StatsResponse:
-    search_value = (
-        search.strip() if search and len(search.strip()) >= 2 else None
-    )
+    search_value = accept_search_param(search)
 
     params = FireFilterParams(
         province=province,
@@ -298,9 +298,7 @@ def export_fires(
     service: FireService = Depends(get_fire_service),
     export_service: ExportService = Depends(get_export_service),
 ):
-    search_value = (
-        search.strip() if search and len(search.strip()) >= 2 else None
-    )
+    search_value = accept_search_param(search)
 
     params = FireFilterParams(
         province=province,

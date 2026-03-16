@@ -1,6 +1,6 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   AlertTriangle,
 
@@ -47,12 +47,14 @@ import { useFires } from '@/hooks/queries/useFires'
 import { usePrefetchFire } from '@/hooks/queries/useFire'
 import { useFireStats } from '@/hooks/queries/useFireStats'
 import { FireHistorySkeleton } from '@/components/fires/FireHistorySkeleton'
+import { RecoveryStatusBadge } from '@/components/monitoring/RecoveryStatusBadge'
 import {
   formatDate,
   formatHectares,
   type FireFiltersState,
   type FireSortValue,
 } from '@/types/fire'
+import { RETURN_CONTEXT_KEY, type ReturnContext } from '@/types/navigation'
 
 import { useExportMutation } from '@/hooks/mutations/useExportMutation'
 import { getFires } from '@/services/endpoints/fires'
@@ -73,6 +75,12 @@ const DEFAULT_FILTERS: FireFiltersState = {
   sort_by: 'start_date_desc',
   page: 1,
   page_size: DEFAULT_PAGE_SIZE,
+  department: '',
+  in_protected_area: undefined,
+  is_significant: undefined,
+  has_imagery: undefined,
+  min_confidence: undefined,
+  min_detections: undefined,
 }
 
 const PAGE_SIZE_OPTIONS = [20, 30, 50, 100]
@@ -104,12 +112,40 @@ const normalizeDate = (value: string): string => {
   return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : ''
 }
 
+/** URL → boolean: "true"→true, "false"→false, else undefined (no filter). */
+const parseBooleanParam = (value: string | null): boolean | undefined => {
+  if (value === 'true') return true
+  if (value === 'false') return false
+  return undefined
+}
+
+/** Same criterion as backend: 36-char with hyphens or 32 hex chars. */
+const isValidUuid = (value: string): boolean => {
+  const s = value.trim()
+  if (s.length === 36) return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(s)
+  if (s.length === 32) return /^[0-9a-fA-F]{32}$/.test(s)
+  return false
+}
+
+const parseOptionalInt = (value: string | null): number | undefined => {
+  if (value === null || value === '') return undefined
+  const n = Number(value)
+  return Number.isFinite(n) && n >= 0 ? n : undefined
+}
+
+const parseOptionalFloat = (value: string | null): number | undefined => {
+  if (value === null || value === '') return undefined
+  const n = Number(value)
+  return Number.isFinite(n) && n >= 0 ? n : undefined
+}
+
 const parseFilters = (searchParams: URLSearchParams): FireFiltersState => {
   const sortValue = searchParams.get('sort_by')
   const statusScopeParam = searchParams.get('status_scope')
   const fallbackPageSize = getResponsivePageSize()
 
-  return {
+  const parsed: FireFiltersState = {
+    ...DEFAULT_FILTERS,
     province: searchParams.get('province') || '',
     status_scope:
       statusScopeParam === 'active' ||
@@ -123,8 +159,21 @@ const parseFilters = (searchParams: URLSearchParams): FireFiltersState => {
     sort_by: isSortValue(sortValue) ? sortValue : DEFAULT_FILTERS.sort_by,
     page: parseNumber(searchParams.get('page'), DEFAULT_FILTERS.page),
     page_size: parsePageSize(searchParams.get('page_size'), fallbackPageSize),
+    department: searchParams.get('department') || '',
+    in_protected_area: parseBooleanParam(searchParams.get('in_protected_area')),
+    is_significant: parseBooleanParam(searchParams.get('is_significant')),
+    has_imagery: parseBooleanParam(searchParams.get('has_imagery')),
+    min_confidence: parseOptionalFloat(searchParams.get('min_confidence')),
+    min_detections: parseOptionalInt(searchParams.get('min_detections')),
   }
+  return parsed
 }
+
+/** Merge loaded filter config (e.g. from user_saved_filters) with DEFAULT_FILTERS so missing keys have defaults. */
+export const mergeWithDefaultFilters = (loaded: Partial<FireFiltersState>): FireFiltersState => ({
+  ...DEFAULT_FILTERS,
+  ...loaded,
+})
 
 const buildSearchParams = (filters: FireFiltersState): URLSearchParams => {
   const params = new URLSearchParams()
@@ -137,6 +186,15 @@ const buildSearchParams = (filters: FireFiltersState): URLSearchParams => {
   if (dateTo) params.set('date_to', dateTo)
   if (filters.search) params.set('search', filters.search)
   if (filters.sort_by) params.set('sort_by', filters.sort_by)
+  if (filters.department) params.set('department', filters.department)
+  if (filters.in_protected_area === true) params.set('in_protected_area', 'true')
+  if (filters.in_protected_area === false) params.set('in_protected_area', 'false')
+  if (filters.is_significant === true) params.set('is_significant', 'true')
+  if (filters.is_significant === false) params.set('is_significant', 'false')
+  if (filters.has_imagery === true) params.set('has_imagery', 'true')
+  if (filters.has_imagery === false) params.set('has_imagery', 'false')
+  if (filters.min_confidence != null) params.set('min_confidence', String(filters.min_confidence))
+  if (filters.min_detections != null) params.set('min_detections', String(filters.min_detections))
 
   params.set('page', filters.page.toString())
   params.set('page_size', filters.page_size.toString())
@@ -155,7 +213,16 @@ const buildApiParams = (filters: FireFiltersState): URLSearchParams => {
   if (filters.status_scope === 'historical') params.set('status_scope', 'historical')
   if (dateFrom) params.set('date_from', dateFrom)
   if (dateTo) params.set('date_to', dateTo)
-  if (searchValue.length >= 2) params.set('search', searchValue)
+  if (searchValue.length >= 2 || isValidUuid(searchValue)) params.set('search', searchValue)
+  if (filters.department) params.set('department', filters.department)
+  if (filters.in_protected_area === true) params.set('in_protected_area', 'true')
+  if (filters.in_protected_area === false) params.set('in_protected_area', 'false')
+  if (filters.is_significant === true) params.set('is_significant', 'true')
+  if (filters.is_significant === false) params.set('is_significant', 'false')
+  if (filters.has_imagery === true) params.set('has_imagery', 'true')
+  if (filters.has_imagery === false) params.set('has_imagery', 'false')
+  if (filters.min_confidence != null) params.set('min_confidence', String(filters.min_confidence))
+  if (filters.min_detections != null) params.set('min_detections', String(filters.min_detections))
 
   const sort = SORT_CONFIG[filters.sort_by] || SORT_CONFIG.start_date_desc
   params.set('sort_by', sort.sortBy)
@@ -168,11 +235,24 @@ const buildApiParams = (filters: FireFiltersState): URLSearchParams => {
 
 const buildStatsParams = (filters: FireFiltersState): URLSearchParams => {
   const params = new URLSearchParams()
+  const searchValue = filters.search.trim()
   const dateFrom = normalizeDate(filters.date_from)
   const dateTo = normalizeDate(filters.date_to)
   if (filters.province) params.set('province', filters.province)
+  if (filters.status_scope === 'active') params.set('status_scope', 'active')
+  if (filters.status_scope === 'historical') params.set('status_scope', 'historical')
   if (dateFrom) params.set('date_from', dateFrom)
   if (dateTo) params.set('date_to', dateTo)
+  if (searchValue.length >= 2 || isValidUuid(searchValue)) params.set('search', searchValue)
+  if (filters.department) params.set('department', filters.department)
+  if (filters.in_protected_area === true) params.set('in_protected_area', 'true')
+  if (filters.in_protected_area === false) params.set('in_protected_area', 'false')
+  if (filters.is_significant === true) params.set('is_significant', 'true')
+  if (filters.is_significant === false) params.set('is_significant', 'false')
+  if (filters.has_imagery === true) params.set('has_imagery', 'true')
+  if (filters.has_imagery === false) params.set('has_imagery', 'false')
+  if (filters.min_confidence != null) params.set('min_confidence', String(filters.min_confidence))
+  if (filters.min_detections != null) params.set('min_detections', String(filters.min_detections))
   return params
 }
 
@@ -187,7 +267,16 @@ const buildExportParams = (filters: FireFiltersState): URLSearchParams => {
   if (filters.status_scope === 'historical') params.set('status_scope', 'historical')
   if (dateFrom) params.set('date_from', dateFrom)
   if (dateTo) params.set('date_to', dateTo)
-  if (searchValue.length >= 2) params.set('search', searchValue)
+  if (searchValue.length >= 2 || isValidUuid(searchValue)) params.set('search', searchValue)
+  if (filters.department) params.set('department', filters.department)
+  if (filters.in_protected_area === true) params.set('in_protected_area', 'true')
+  if (filters.in_protected_area === false) params.set('in_protected_area', 'false')
+  if (filters.is_significant === true) params.set('is_significant', 'true')
+  if (filters.is_significant === false) params.set('is_significant', 'false')
+  if (filters.has_imagery === true) params.set('has_imagery', 'true')
+  if (filters.has_imagery === false) params.set('has_imagery', 'false')
+  if (filters.min_confidence != null) params.set('min_confidence', String(filters.min_confidence))
+  if (filters.min_detections != null) params.set('min_detections', String(filters.min_detections))
 
   params.set('format', 'csv')
 
@@ -255,6 +344,7 @@ type FireRowDto = {
   count_protected_areas?: number | null
   has_satellite_imagery: boolean
   centroid?: { latitude: number; longitude: number } | null
+  latest_recovery_status?: string | null
 }
 
 type FireRowProps = {
@@ -265,19 +355,51 @@ type FireRowProps = {
 }
 
 const FireRow = memo(({ row, showAdvancedColumns, showCoordinates, onHover }: FireRowProps) => {
+  const navigate = useNavigate()
+  const location = useLocation()
   const statusKey = row.status || 'extinguished'
   const statusText = statusLabel[statusKey] || statusKey
   const statusClass = statusBadgeClasses[statusKey] || statusBadgeClasses.extinguished
   const countAreas = row.count_protected_areas ?? 0
   const areaCountBadge = countAreas > 1 ? 'border-amber-200 bg-amber-100 text-amber-700' : undefined
 
+  const handleRowClick = () => {
+    const search = location.search || ''
+    const scrollY = window.scrollY || 0
+    const ctx: ReturnContext = { returnTo: 'history', history: { search, scrollY } }
+    try {
+      sessionStorage.setItem(RETURN_CONTEXT_KEY, JSON.stringify(ctx))
+    } catch {
+      // ignore storage errors
+    }
+    navigate(`/fires/${row.id}`, { state: ctx })
+  }
+
+  const handleRowKeyDown = (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleRowClick()
+    }
+  }
+
   return (
-    <TableRow onMouseEnter={() => onHover(row.id)}>
+    <TableRow
+      role="button"
+      tabIndex={0}
+      onMouseEnter={() => onHover(row.id)}
+      onClick={handleRowClick}
+      onKeyDown={handleRowKeyDown}
+      className="cursor-pointer hover:bg-muted/50"
+    >
       <TableCell className="font-mono text-xs">
         <TooltipProvider>
           <Tooltip>
-            <TooltipTrigger className="cursor-pointer">{row.id.slice(0, 8)}</TooltipTrigger>
-            <TooltipContent>{row.id}</TooltipContent>
+            <TooltipTrigger className="cursor-pointer">
+              {row.id.slice(0, 8)}
+            </TooltipTrigger>
+            <TooltipContent className="pointer-events-none">
+              {row.id}
+            </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       </TableCell>
@@ -305,6 +427,15 @@ const FireRow = memo(({ row, showAdvancedColumns, showCoordinates, onHover }: Fi
         <Badge variant="outline" className={cn('border', statusClass)}>
           {statusText}
         </Badge>
+      </TableCell>
+      <TableCell className="hidden sm:table-cell">
+        {row.latest_recovery_status ? (
+          <RecoveryStatusBadge status={row.latest_recovery_status} size="sm" />
+        ) : (
+          <Badge variant="outline" className="bg-muted text-muted-foreground border-muted text-[10px] px-1.5 py-0.5">
+            Sin datos
+          </Badge>
+        )}
       </TableCell>
       <TableCell>{formatHectares(row.estimated_area_hectares)}</TableCell>
       {showAdvancedColumns && (
@@ -457,8 +588,10 @@ export default function FireHistoryPage() {
     count += 1 // en area protegida
     count += showAdvancedColumns ? 1 : 0 // area protegida nombre
     count += showCoordinates ? 1 : 0 // coords
+    // Vegetación: visible sm and up; skeleton must match visible columns per breakpoint
+    count += isMobile ? 0 : 1
     return count
-  }, [showAdvancedColumns, showCoordinates])
+  }, [showAdvancedColumns, showCoordinates, isMobile])
   const skeletonRows = useMemo(
     () => Array.from({ length: Math.min(effectivePageSize, 10) }),
     [effectivePageSize]
@@ -913,6 +1046,7 @@ export default function FireHistoryPage() {
               onExportCSV={handleExportCSV}
               isExporting={exportMutation.isPending}
               defaultStatusScope="historical"
+              defaultFilters={DEFAULT_FILTERS}
             />
           </div>
           <div className="flex flex-wrap items-center gap-2 md:hidden">
@@ -934,6 +1068,7 @@ export default function FireHistoryPage() {
                     onExportCSV={handleExportCSV}
                     isExporting={exportMutation.isPending}
                     defaultStatusScope="historical"
+                    defaultFilters={DEFAULT_FILTERS}
                     showExportButton={false}
                   />
                 </div>
@@ -1091,6 +1226,7 @@ export default function FireHistoryPage() {
                     <TableHead>Provincia</TableHead>
                     {showAdvancedColumns && <TableHead className="hidden lg:table-cell">Departamento</TableHead>}
                     <TableHead>Estado</TableHead>
+                    <TableHead className="hidden sm:table-cell">Vegetación</TableHead>
                     <TableHead>Area (ha)</TableHead>
                     {showAdvancedColumns && <TableHead className="hidden xl:table-cell">Detecciones</TableHead>}
                     {showAdvancedColumns && <TableHead className="hidden xl:table-cell">FRP max</TableHead>}
