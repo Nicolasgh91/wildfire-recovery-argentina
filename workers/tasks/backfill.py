@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 DAILY_GEE_CAP = 5000
 REQUESTS_PER_POINT = 2  # baseline + current
 CUTOFF_DATE = date(2025, 12, 1)
+SENTINEL2_MIN_COVERAGE_DATE = date(2015, 8, 1)  # Sentinel-2A operativo sobre Argentina
 
 
 def _generate_analysis_points(
@@ -59,6 +60,9 @@ def _generate_analysis_points(
         points.append(today_month)
     elif not points and today_month > start_month:
         points.append(today_month)
+
+    # Filtrar puntos anteriores a la cobertura Sentinel-2
+    points = [p for p in points if p >= SENTINEL2_MIN_COVERAGE_DATE]
 
     return points
 
