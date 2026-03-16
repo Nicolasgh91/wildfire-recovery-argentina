@@ -82,6 +82,8 @@ class AuditSearchEpisode(BaseModel):
     estimated_area_hectares: Optional[float] = None
     detection_count: Optional[int] = None
     frp_max: Optional[float] = None
+    # Optional legal fire ID used for navigation; serialized as null when absent
+    fire_event_id: Optional[UUID] = None
 
 
 class AuditSearchDateRange(BaseModel):
