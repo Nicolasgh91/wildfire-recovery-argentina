@@ -65,11 +65,17 @@ El origen del baseline se persiste en `vegetation_monitoring.notes` para que el 
 - Se utilizan colas dedicadas para las tareas intensivas de recuperación y cambio de uso.
 - La tarea `recompute_baselines` (workers.tasks.backfill, cola `vae`) re-calcula baseline NDVI con el método mejorado (quality mosaic) para eventos que ya tienen registros en vegetation_monitoring, actualizando recovery_percentage y recovery_status sin volver a solicitar NDVI actual a GEE.
 
+## Flujo grilla de históricos → detalle con VAE
+
+- En la grilla de incendios históricos (`/fires/history`, UC-F03) se muestra una columna **Vegetación** con el estado de monitoreo por evento (`latest_recovery_status` cacheado en `fire_events`). Los eventos con datos muestran el badge de estado (recuperado, en recuperación, estancado, pendiente, etc.); los sin datos muestran "Sin datos".
+- Cada fila de la grilla es clickeable y navega a `/fires/:id` (detalle del evento). En el detalle, cuando el recurso es un evento (no un episodio), se renderiza el **RecoveryPanel** con gráfico NDVI temporal, métricas y disclaimer legal. No se requiere una ruta adicional; se reutiliza el flujo existente.
+
 ## Estado de implementación
 
 - Motor VAE implementado y operativo con tablas y RLS configurados.
 - Flujos de workers para recuperación y cambio de uso en funcionamiento, con tareas periódicas definidas.
 - Endpoints de monitoreo expuestos para consultar series de recuperación y cambios de uso.
 - Reportes históricos funcionando con integración a VAE y GEE.
+- Grilla de históricos con indicador de vegetación y enlace al detalle con RecoveryPanel (flujo grilla → detalle con VAE).
 
 Limitaciones y riesgos, así como deuda técnica detallada, se documentan en `docs/archive/ndvi-uf12/vae-flow-audit.md` y `docs/archive/ndvi-uf12/technical_debt_ucf12.md`.

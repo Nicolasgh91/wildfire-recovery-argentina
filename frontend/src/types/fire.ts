@@ -27,6 +27,8 @@ export type FireEventListItem = {
   overlap_percentage?: number | null
   count_protected_areas?: number | null
   status?: FireStatus
+  latest_recovery_status?: string | null
+  latest_recovery_pct?: number | null
   slides_data?: FireSlide[] | null
 }
 
@@ -168,8 +170,15 @@ export type FireFilters = {
   page?: number | string
   page_size?: number | string
   format?: string
+  department?: string
+  in_protected_area?: boolean | null
+  is_significant?: boolean | null
+  has_imagery?: boolean | null
+  min_confidence?: number | null
+  min_detections?: number | null
 }
 
+/** Boolean filter: true/false = filter by value; undefined/null = "all" (do not send param). */
 export type FireFiltersState = {
   province: string
   status_scope: FireStatusScope
@@ -179,6 +188,12 @@ export type FireFiltersState = {
   sort_by: FireSortValue
   page: number
   page_size: number
+  department: string
+  in_protected_area?: boolean | null
+  is_significant?: boolean | null
+  has_imagery?: boolean | null
+  min_confidence?: number | null
+  min_detections?: number | null
 }
 
 export type FireDetection = {

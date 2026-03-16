@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import calendar
 import json
+import re
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
@@ -91,6 +92,56 @@ PERIMETER_GEOMETRY = Geometry(geometry_type="POLYGON", srid=4326)
 
 DEFAULT_PAGE_SIZE = 20
 MAX_PAGE_SIZE = 100
+
+# UUID: 36 chars with hyphens or 32 hex chars (same criterion as frontend)
+_UUID_36_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+)
+_UUID_32_RE = re.compile(r"^[0-9a-fA-F]{32}$")
+
+
+def _is_valid_uuid_string(value: str) -> bool:
+    """Return True if value is a valid UUID (36 chars with hyphens or 32 hex)."""
+    if not value or len(value) > 36:
+        return False
+    return bool(_UUID_36_RE.match(value) or _UUID_32_RE.match(value))
+
+
+def _normalize_uuid(value: str) -> Optional[UUID]:
+    """Parse and normalize to UUID. Accepts 36-char or 32-char hex; returns UUID or None."""
+    value = value.strip()
+    if not value:
+        return None
+    if _UUID_36_RE.match(value):
+        try:
+            return UUID(value)
+        except (ValueError, TypeError):
+            return None
+    if _UUID_32_RE.match(value):
+        # Insert hyphens at standard positions
+        normalized = f"{value[:8]}-{value[8:12]}-{value[12:16]}-{value[16:20]}-{value[20:32]}"
+        try:
+            return UUID(normalized)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def accept_search_param(search: Optional[str]) -> Optional[str]:
+    """
+    Return stripped search string if it should be passed to the service (len>=2 or valid UUID).
+    Same criterion as build_filter_conditions; used by API layer.
+    """
+    if not search:
+        return None
+    stripped = search.strip()
+    if not stripped or len(stripped) > 100:
+        return None
+    if len(stripped) >= 2:
+        return stripped
+    if _is_valid_uuid_string(stripped):
+        return stripped
+    return None
 
 
 @dataclass(frozen=True)
@@ -313,26 +364,39 @@ class FireService:
             filters.append(imagery_exists if params.has_imagery else ~imagery_exists)
 
         if params.search:
-            term = f"%{params.search}%"
-            protected_match = (
-                self.db.query(FireProtectedAreaIntersection.id)
-                .join(
-                    ProtectedArea,
-                    ProtectedArea.id == FireProtectedAreaIntersection.protected_area_id,
+            search_uuid = _normalize_uuid(params.search)
+            if search_uuid is not None:
+                filters.append(FireEvent.id == search_uuid)
+            else:
+                term = f"%{params.search}%"
+                protected_match = (
+                    self.db.query(FireProtectedAreaIntersection.id)
+                    .join(
+                        ProtectedArea,
+                        ProtectedArea.id
+                        == FireProtectedAreaIntersection.protected_area_id,
+                    )
+                    .filter(
+                        FireProtectedAreaIntersection.fire_event_id == FireEvent.id,
+                        ProtectedArea.official_name.ilike(term),
+                    )
+                    .exists()
                 )
-                .filter(
-                    FireProtectedAreaIntersection.fire_event_id == FireEvent.id,
-                    ProtectedArea.official_name.ilike(term),
-                )
-                .exists()
-            )
-            filters.append(
-                or_(
-                    FireEvent.province.ilike(term),
-                    FireEvent.department.ilike(term),
-                    protected_match,
-                )
-            )
+                if params.department:
+                    filters.append(
+                        or_(
+                            FireEvent.province.ilike(term),
+                            protected_match,
+                        )
+                    )
+                else:
+                    filters.append(
+                        or_(
+                            FireEvent.province.ilike(term),
+                            FireEvent.department.ilike(term),
+                            protected_match,
+                        )
+                    )
 
         if params.bbox:
             west, south, east, north = params.bbox
@@ -557,6 +621,10 @@ class FireService:
                     if protected_area_count
                     else 0,
                     status=self.resolve_fire_status(fire),
+                    latest_recovery_status=fire.latest_recovery_status,
+                    latest_recovery_pct=float(fire.latest_recovery_pct)
+                    if fire.latest_recovery_pct is not None
+                    else None,
                     slides_data=fire.slides_data,
                 )
             )

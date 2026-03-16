@@ -129,6 +129,8 @@ class FireEventListItem(BaseModel):
     count_protected_areas: Optional[int] = None
 
     status: Optional[FireStatus] = None
+    latest_recovery_status: Optional[str] = None
+    latest_recovery_pct: Optional[float] = None
     slides_data: Optional[List[SlideItem]] = Field(
         None, 
         deprecated=True, 

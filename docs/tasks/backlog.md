@@ -1,5 +1,10 @@
 # Backlog de tareas de documentación y deuda técnica
 
+## Grilla de históricos (UC-F03) — índices para filtros
+
+- **Contexto:** La grilla de históricos expone filtros por `min_confidence`, `min_detections`, `in_protected_area` (EXISTS en `fire_protected_area_intersections`) y `has_imagery` (EXISTS en `satellite_images`). Las columnas filtradas son `fire_events.avg_confidence`, `fire_events.total_detections`; los EXISTS usan `satellite_images.fire_event_id` y `fire_protected_area_intersections.fire_event_id`.
+- **Verificar en prod_schema (o en BD):** Existencia de índices en `fire_events(avg_confidence)`, `fire_events(total_detections)`, `satellite_images(fire_event_id)`, `fire_protected_area_intersections(fire_event_id)`. Si faltan, añadir `CREATE INDEX` para evitar seq scans costosos con mucho volumen. No añadir columnas `has_imagery` ni `in_protected_area` en `fire_events` (los filtros se resuelven por subquery/EXISTS).
+
 ## Frontend
 
 - Revisar y reducir tamaño de bundles principales, mejorando code splitting por ruta.

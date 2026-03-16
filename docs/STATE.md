@@ -31,7 +31,7 @@ El estado de producto se organiza por casos de uso funcionales.
 - **UC-F06 verificar terreno**: listo en producción como módulo avanzado.
 - **UC-F08 carrusel satelital de activos**: listo en producción, thumbnails operativos y refresco de imágenes.
 - **UC-F11 exploración y reportes especializados**: listo en producción, wizard de exploración con assets HD y PDF.
-- **UC-F12 recuperación y cambio de uso (VAE)**: en progreso, base técnica presente pero experiencia de producto en consolidación.
+- **UC-F12 recuperación y cambio de uso (VAE)**: en progreso, base técnica presente pero experiencia de producto en consolidación. La grilla de históricos (/fires/history) muestra estado de vegetación (badge por evento) y cada fila enlaza al detalle (/fires/:id), donde el RecoveryPanel muestra NDVI y métricas para eventos con datos VAE.
 
 La tabla completa de casos de uso y estado se encuentra en `docs/product/casos-de-uso-y-estado.md`. Este archivo mantiene un resumen curado de alto nivel.
 
@@ -55,7 +55,7 @@ Los detalles por contenedor, colas y tareas típicas se documentan en `docs/arch
 ## Estado actual
 
 - Pipeline de ingesta, clustering y carrusel operativo en entorno de producción.
-- Frontend estable para exploración, mapa, historial, login y contenido de soporte.
+- Frontend estable para exploración, mapa, historial, login y contenido de soporte. La navegación entre Home/carrusel, grilla de históricos (`/fires/history`), mapa y detalle de incendio (`/fires/:id`) preserva la pantalla de origen mediante un contexto de retorno: el botón de volver en el mapa del detalle regresa al Home, Historial o Mapa según el flujo desde el que se llegó, y se oculta cuando no hay página previa (acceso directo o refresh).
 - Módulos con caveats: pagos (dependencias de webhook y sesión), citizen report (envío final mock), certificados y refugios (feature flags).
 - Producto de recuperación y cambio de uso (VAE) en fase de consolidación de UX.
 
@@ -74,4 +74,4 @@ Cualquier nueva inconsistencia detectada debe registrarse aquí sin modificar el
 
 - Fecha: 2026-03-15
 - Commit: pendiente de actualizar al realizar el commit correspondiente
-- Cambio: tarea Celery `recompute_baselines` en workers.tasks.backfill para re-procesar baselines mejorados (quality mosaic) en eventos ya monitoreados; documentación en `docs/features/recovery.md`.
+- Cambio: UI VAE en grilla de históricos — columna Vegetación con badge (latest_recovery_status), filas clickeables a detalle, RecoveryPanel en /fires/:id para eventos; backend expone latest_recovery_status/latest_recovery_pct en listado de fires. Navegación de detalle de incendio alineada con pantalla de origen (Home, Historial o Mapa) mediante contexto de retorno y botón de volver contextual en el mapa de detalle.
