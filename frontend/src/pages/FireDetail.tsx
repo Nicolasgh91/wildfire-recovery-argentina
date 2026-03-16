@@ -114,12 +114,23 @@ export default function FireDetailPage() {
     }
 
     if (ctx.returnTo === 'home') {
-      navigate(HOME_PATH, { state: { restore: { scrollY: ctx.home?.scrollY ?? 0 } } })
+      navigate(HOME_PATH, { state: { restore: { scrollY: ctx.home.scrollY } } })
     } else if (ctx.returnTo === 'history') {
-      const search = ctx.history?.search ?? ''
+      const search = ctx.history.search ?? ''
       navigate(`/fires/history${search}`)
     } else if (ctx.returnTo === 'map') {
-      navigate('/map', { state: { restore: { selectedFireId: ctx.map?.selectedFireId } } })
+      navigate('/map', { state: { restore: { selectedFireId: ctx.map.selectedFireId } } })
+    } else if (ctx.returnTo === 'audit') {
+      navigate('/audit', {
+        state: {
+          restore: {
+            lat: ctx.audit.lat,
+            lon: ctx.audit.lon,
+            radius: ctx.audit.radius,
+            page: ctx.audit.page,
+          },
+        },
+      })
     }
 
     if (fromStorage) {

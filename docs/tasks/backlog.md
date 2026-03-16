@@ -29,4 +29,11 @@
 
 - Revisar y alinear configuración de colas Celery (`gee`, `analysis`, `vae`) con los workers definidos en `docker-compose` para evitar tareas sin consumidor.
 
+## UC-F06 — Auditoría / verificar terreno
+
+- [BLOQUEANTE para ID legal en grilla de episodios]  
+  Ampliar respuesta de `/audit/search` para que `AuditSearchEpisode` exponga `fire_event_id` (o `representative_event_id`) por episodio.  
+  Motivo: la grilla de episodios de auditoría no puede mostrar un ID legal ni ofrecer navegación a `/fires/:id` sin este campo.  
+  Prerrequisito para: columna de ID en grilla de episodios + navegación clickeable desde esa grilla.
+
 Las tareas completadas de este backlog deben migrarse a los registros de decisiones en `docs/decisions/` cuando se implementen y verifiquen.

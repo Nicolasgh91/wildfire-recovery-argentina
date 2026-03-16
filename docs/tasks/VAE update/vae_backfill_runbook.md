@@ -322,8 +322,14 @@ from workers.tasks.backfill import backfill_historical_recovery, recompute_basel
 print('OK: ambas tareas importables')
 "
 
+### Docker logs en tiempo real
+docker compose logs -f worker-gee
+
 # Si falla, restart worker
 docker compose restart worker-gee
+
+docker compose exec worker-gee \
+  celery -A workers.celery_app result ID-DE-INCENDIO
 ```
 
 ---

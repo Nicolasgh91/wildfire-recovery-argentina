@@ -11,7 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -46,6 +46,8 @@ import { searchAuditEpisodes } from '@/services/endpoints/audit-search'
 import { reverseGeocode } from '@/services/endpoints/geocode'
 import type { AuditFire, EvidenceThumbnail } from '@/types/audit'
 import type { AuditSearchResponse } from '@/types/audit-search'
+import type { AuditReturnContext } from '@/types/navigation'
+import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 
 const AuditMap = lazy(() => import('@/components/audit-map').then((mod) => ({ default: mod.AuditMap })))
 
@@ -134,6 +136,7 @@ export default function AuditPage() {
   const { t, language } = useI18n()
   const { isAuthenticated, status } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [analysisPreset, setAnalysisPreset] = useState(1000)
   const [localError, setLocalError] = useState<string | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -141,6 +144,10 @@ export default function AuditPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
   const locale = language === 'es' ? 'es-AR' : 'en-US'
+
+  const initialRestore = location.state && typeof location.state === 'object'
+    ? (location.state as { restore?: { lat?: number; lon?: number; radius?: number; page?: number } }).restore
+    : undefined
 
   const schema = useMemo(
     () =>
@@ -156,9 +163,9 @@ export default function AuditPage() {
     defaultValues: {
       search: '',
       search_type: 'address',
-      radius_m: analysisPreset,
-      lat: '',
-      lon: '',
+      radius_m: initialRestore?.radius ?? analysisPreset,
+      lat: initialRestore?.lat != null ? initialRestore.lat.toFixed(6) : '',
+      lon: initialRestore?.lon != null ? initialRestore.lon.toFixed(6) : '',
       cadastral_id: '',
     },
     mode: 'onChange',
@@ -245,6 +252,35 @@ export default function AuditPage() {
 
   const result = auditMutation.data
 
+  const currentLat = form.watch('lat')
+  const currentLon = form.watch('lon')
+
+  const parseNumberOrNull = (value?: string | null) => {
+    const trimmed = value?.trim()
+    if (!trimmed) return null
+    const num = Number(trimmed)
+    if (Number.isNaN(num)) return null
+    return num
+  }
+
+  const buildAuditReturnContext = (page: number): AuditReturnContext | null => {
+    const latNum = parseNumberOrNull(currentLat)
+    const lonNum = parseNumberOrNull(currentLon)
+    const radius = form.getValues('radius_m') || analysisPreset
+
+    if (latNum == null || lonNum == null) return null
+
+    return {
+      returnTo: 'audit',
+      audit: {
+        lat: latNum,
+        lon: lonNum,
+        radius,
+        page,
+      },
+    }
+  }
+
   // Lógica de paginación para episodios
   const paginatedEpisodes = useMemo(() => {
     if (!searchResult?.episodes) return []
@@ -260,6 +296,22 @@ export default function AuditPage() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
+  }
+
+  const handleFireDetailNav = (fireEventId: string) => {
+    const ctx = buildAuditReturnContext(currentPage)
+    if (!ctx) {
+      navigate(`/fires/${encodeURIComponent(fireEventId)}`)
+      return
+    }
+
+    try {
+      sessionStorage.setItem(RETURN_CONTEXT_KEY, JSON.stringify(ctx))
+    } catch {
+      // ignore storage write errors
+    }
+
+    navigate(`/fires/${encodeURIComponent(fireEventId)}`, { state: ctx })
   }
 
   const renderThumbnails = (thumbnails: EvidenceThumbnail[]) => {
@@ -379,17 +431,21 @@ export default function AuditPage() {
                   <div className="space-y-2">
                     <FormLabel>{t('analysisArea')}</FormLabel>
                     <div className="flex flex-wrap gap-2">
-                      {AREA_PRESETS.map((opt) => (
-                        <Button
-                          key={opt.value}
-                          type="button"
-                          variant={analysisPreset === opt.value ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setAnalysisPreset(opt.value)}
-                        >
-                          {opt.label}
-                        </Button>
-                      ))}
+                      {AREA_PRESETS.map((opt) => {
+                        const isSelected = analysisPreset === opt.value
+                        return (
+                          <Button
+                            key={opt.value}
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => setAnalysisPreset(opt.value)}
+                            className={isSelected ? 'bg-secondary/60' : undefined}
+                          >
+                            {opt.label}
+                          </Button>
+                        )
+                      })}
                     </div>
                   </div>
 
@@ -596,7 +652,7 @@ export default function AuditPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               onClick={() => handlePageChange(currentPage - 1)}
                               disabled={currentPage === 1}
@@ -605,11 +661,11 @@ export default function AuditPage() {
                               <ChevronLeft className="h-4 w-4" />
                               Anterior
                             </Button>
-                            <span className="text-sm text-muted-foreground px-2">
+                            <span className="px-2 text-sm text-muted-foreground">
                               Página {currentPage} de {totalPages}
                             </span>
                             <Button
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               onClick={() => handlePageChange(currentPage + 1)}
                               disabled={currentPage === totalPages}
@@ -728,12 +784,43 @@ export default function AuditPage() {
                           return (
                             <div key={fire.fire_event_id} className="rounded-lg border border-border p-3">
                               <div className="flex flex-wrap items-center justify-between gap-2">
-                                <p className="text-sm font-semibold text-foreground">
-                                  {formatDate(fire.fire_date, locale)}
-                                </p>
-                                {protectedBadge ? (
-                                  <Badge variant="secondary">{protectedBadge}</Badge>
-                                ) : null}
+                                <div className="space-y-1">
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {formatDate(fire.fire_date, locale)}
+                                  </p>
+                                  <p className="text-[11px] font-mono text-muted-foreground">
+                                    <span className="mr-1 font-semibold uppercase tracking-wide">
+                                      ID de incendio:
+                                    </span>
+                                    {fire.fire_event_id
+                                      ? (
+                                        <span
+                                          title={fire.fire_event_id}
+                                          className="align-middle"
+                                        >
+                                          {`${fire.fire_event_id.slice(0, 8)}...`}
+                                        </span>
+                                      )
+                                      : (
+                                        <span className="align-middle">N/D</span>
+                                      )}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {protectedBadge ? (
+                                    <Badge variant="secondary">{protectedBadge}</Badge>
+                                  ) : null}
+                                  {fire.fire_event_id ? (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      className="gap-1"
+                                      onClick={() => handleFireDetailNav(fire.fire_event_id)}
+                                    >
+                                      {t('seeDetail') ?? 'Ver detalle'}
+                                    </Button>
+                                  ) : null}
+                                </div>
                               </div>
                               <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
                                 <span>
