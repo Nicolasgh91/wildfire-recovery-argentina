@@ -22,6 +22,7 @@ export type AuditSearchEpisode = {
   estimated_area_hectares?: number | null
   detection_count?: number | null
   frp_max?: number | null
+  fire_event_id?: string | null
 }
 
 export type AuditSearchResponse = {
