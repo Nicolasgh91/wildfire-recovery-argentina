@@ -28,7 +28,7 @@ El estado de producto se organiza por casos de uso funcionales.
 
 - **UC-F01 contacto y soporte**: listo en producción, formulario público con adjuntos.
 - **UC-F03 histórico y dashboard**: listo en producción, filtros, estadísticas y export.
-- **UC-F06 verificar terreno**: listo en producción como módulo avanzado.
+- **UC-F06 verificar terreno**: listo en producción como módulo avanzado. La página de auditoría (`/audit`) utiliza presets de área y paginación con estilo verde consistente, expone el `fire_event_id` de cada incendio en la sección `result.fires` y permite navegar al detalle de incendio (`/fires/:id`) con un `ReturnContext` específico de auditoría que preserva parámetros compactos de búsqueda (lat, lon, radio y página) sin almacenar resultados ni textos sensibles en `sessionStorage`.
 - **UC-F08 carrusel satelital de activos**: listo en producción, thumbnails operativos y refresco de imágenes.
 - **UC-F11 exploración y reportes especializados**: listo en producción, wizard de exploración con assets HD y PDF.
 - **UC-F12 recuperación y cambio de uso (VAE)**: en progreso, base técnica presente pero experiencia de producto en consolidación. La grilla de históricos (/fires/history) muestra estado de vegetación (badge por evento) y cada fila enlaza al detalle (/fires/:id), donde el RecoveryPanel muestra NDVI y métricas para eventos con datos VAE.
@@ -72,6 +72,6 @@ Cualquier nueva inconsistencia detectada debe registrarse aquí sin modificar el
 
 ## Última actualización
 
-- Fecha: 2026-03-15
+- Fecha: 2026-03-16
 - Commit: pendiente de actualizar al realizar el commit correspondiente
-- Cambio: UI VAE en grilla de históricos — columna Vegetación con badge (latest_recovery_status), filas clickeables a detalle, RecoveryPanel en /fires/:id para eventos; backend expone latest_recovery_status/latest_recovery_pct en listado de fires. Navegación de detalle de incendio alineada con pantalla de origen (Home, Historial o Mapa) mediante contexto de retorno y botón de volver contextual en el mapa de detalle.
+- Cambio: Ajustes de UI y navegación en UC-F06 (auditoría). Los presets de área y la paginación de la grilla de episodios usan estilos outline en verde consistente, la sección `result.fires` muestra el `fire_event_id` como ID de incendio visible y clickeable, y el detalle de incendio (`/fires/:id`) incorpora un nuevo origen `audit` en `ReturnContext` para volver a `/audit` restaurando parámetros de búsqueda sin persistir resultados ni datos sensibles en `sessionStorage`.

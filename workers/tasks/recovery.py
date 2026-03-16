@@ -90,6 +90,25 @@ def analyze_recovery(self, fire_event_id: str, target_date_str: str | None = Non
             target_date.month - fire_date.month
         )
 
+        # Optimización: si ya existe un registro pending con no_baseline_image
+        # para este evento, no reintentar (el baseline no va a cambiar)
+        existing_baseline_failure = db.execute(
+            text("""
+                SELECT 1 FROM vegetation_monitoring
+                WHERE fire_event_id = :fid
+                  AND pending_reason = 'no_baseline_image'
+                LIMIT 1
+            """),
+            {"fid": fire_event_id},
+        ).fetchone()
+
+        if existing_baseline_failure:
+            logger.info(
+                "analyze_recovery_skipped fire_event_id=%s reason=baseline_already_failed",
+                fire_event_id,
+            )
+            return {"status": "skipped", "reason": "baseline_already_failed"}
+
         # 2. Baseline: desde BD o GEE
         existing_baseline = db.execute(
             text("""
