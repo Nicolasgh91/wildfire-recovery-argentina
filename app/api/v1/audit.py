@@ -139,7 +139,7 @@ def _fetch_episodes_by_province(
                         LIMIT 1
                        ) ev ON TRUE
                  WHERE :province = ANY(fe.provinces)
-                 ORDER BY fe.end_date DESC NULLS LAST, fe.start_date DESC NULLS LAST
+                 ORDER BY fe.end_date DESC NULLS FIRST, fe.start_date DESC NULLS LAST
                  LIMIT :limit
                 """
             ),
@@ -206,7 +206,7 @@ def _fetch_episodes_by_protected_area(
                               e.start_date ASC
                         LIMIT 1
                        ) ev ON TRUE
-                 ORDER BY fe.end_date DESC NULLS LAST, fe.start_date DESC NULLS LAST
+                 ORDER BY fe.end_date DESC NULLS FIRST, fe.start_date DESC NULLS LAST
                  LIMIT :limit
                 """
             ),
@@ -279,7 +279,7 @@ def _fetch_episodes_by_point(
                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
                        :radius_m
                    )
-                 ORDER BY fe.end_date DESC NULLS LAST, fe.start_date DESC NULLS LAST
+                 ORDER BY fe.end_date DESC NULLS FIRST, fe.start_date DESC NULLS LAST
                  LIMIT :limit
                 """
             ),
