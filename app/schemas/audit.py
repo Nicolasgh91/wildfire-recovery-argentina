@@ -74,6 +74,7 @@ class AuditSearchResolvedPlace(BaseModel):
 
 class AuditSearchEpisode(BaseModel):
     id: UUID
+    fire_event_id: Optional[UUID] = None
     start_date: datetime
     end_date: Optional[datetime] = None
     status: Optional[str] = None

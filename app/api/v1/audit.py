@@ -118,17 +118,26 @@ def _fetch_episodes_by_province(
         db.execute(
             text(
                 """
-                SELECT id,
-                       start_date,
-                       end_date,
-                       status,
-                       provinces,
-                       estimated_area_hectares,
-                       detection_count,
-                       frp_max
-                  FROM fire_episodes
-                 WHERE :province = ANY(provinces)
-                 ORDER BY end_date DESC NULLS LAST, start_date DESC NULLS LAST
+                SELECT fe.id,
+                       rep.fire_event_id,
+                       fe.start_date,
+                       fe.end_date,
+                       fe.status,
+                       fe.provinces,
+                       fe.estimated_area_hectares,
+                       fe.detection_count,
+                       fe.frp_max
+                  FROM fire_episodes fe
+                  LEFT JOIN LATERAL (
+                      SELECT fev.id AS fire_event_id
+                        FROM fire_episode_events fee
+                        JOIN fire_events fev ON fev.id = fee.event_id
+                       WHERE fee.episode_id = fe.id
+                       ORDER BY fev.max_frp DESC NULLS LAST, fev.start_date ASC NULLS LAST
+                       LIMIT 1
+                  ) AS rep ON TRUE
+                 WHERE :province = ANY(fe.provinces)
+                 ORDER BY fe.end_date DESC NULLS LAST, fe.start_date DESC NULLS LAST
                  LIMIT :limit
                 """
             ),
@@ -167,6 +176,7 @@ def _fetch_episodes_by_protected_area(
                      WHERE id = :area_id
                 )
                 SELECT fe.id,
+                       rep.fire_event_id,
                        fe.start_date,
                        fe.end_date,
                        fe.status,
@@ -175,6 +185,14 @@ def _fetch_episodes_by_protected_area(
                        fe.detection_count,
                        fe.frp_max
                   FROM fire_episodes fe, area
+             LEFT JOIN LATERAL (
+                 SELECT fev.id AS fire_event_id
+                   FROM fire_episode_events fee
+                   JOIN fire_events fev ON fev.id = fee.event_id
+                  WHERE fee.episode_id = fe.id
+                  ORDER BY fev.max_frp DESC NULLS LAST, fev.start_date ASC NULLS LAST
+                  LIMIT 1
+             ) AS rep ON TRUE
                  WHERE fe.bbox_minx IS NOT NULL
                    AND fe.bbox_miny IS NOT NULL
                    AND fe.bbox_maxx IS NOT NULL
@@ -229,23 +247,32 @@ def _fetch_episodes_by_point(
         db.execute(
             text(
                 """
-                SELECT id,
-                       start_date,
-                       end_date,
-                       status,
-                       provinces,
-                       estimated_area_hectares,
-                       detection_count,
-                       frp_max
-                  FROM fire_episodes
-                 WHERE centroid_lat IS NOT NULL
-                   AND centroid_lon IS NOT NULL
+                SELECT fe.id,
+                       rep.fire_event_id,
+                       fe.start_date,
+                       fe.end_date,
+                       fe.status,
+                       fe.provinces,
+                       fe.estimated_area_hectares,
+                       fe.detection_count,
+                       fe.frp_max
+                  FROM fire_episodes fe
+             LEFT JOIN LATERAL (
+                 SELECT fev.id AS fire_event_id
+                   FROM fire_episode_events fee
+                   JOIN fire_events fev ON fev.id = fee.event_id
+                  WHERE fee.episode_id = fe.id
+                  ORDER BY fev.max_frp DESC NULLS LAST, fev.start_date ASC NULLS LAST
+                  LIMIT 1
+             ) AS rep ON TRUE
+                 WHERE fe.centroid_lat IS NOT NULL
+                   AND fe.centroid_lon IS NOT NULL
                    AND ST_DWithin(
-                       ST_SetSRID(ST_MakePoint(centroid_lon, centroid_lat), 4326)::geography,
+                       ST_SetSRID(ST_MakePoint(fe.centroid_lon, fe.centroid_lat), 4326)::geography,
                        ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography,
                        :radius_m
                    )
-                 ORDER BY end_date DESC NULLS LAST, start_date DESC NULLS LAST
+                 ORDER BY fe.end_date DESC NULLS LAST, fe.start_date DESC NULLS LAST
                  LIMIT :limit
                 """
             ),
@@ -283,6 +310,7 @@ def _build_episode_items(rows: list[dict]) -> list[AuditSearchEpisode]:
         items.append(
             AuditSearchEpisode(
                 id=row["id"],
+                fire_event_id=row.get("fire_event_id"),
                 start_date=row["start_date"],
                 end_date=row.get("end_date"),
                 status=row.get("status"),

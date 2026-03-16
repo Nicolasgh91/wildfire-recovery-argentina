@@ -188,7 +188,8 @@ export default function AuditPage() {
         .then((response) => {
           setSearchResult(response)
         })
-        .catch(() => {
+        .catch((error) => {
+          console.error('restore searchAuditEpisodes failed', error)
           setLocalError(t('geocodeNotFound'))
         })
         .finally(() => {
@@ -268,7 +269,10 @@ export default function AuditPage() {
           radius_km: (values.radius_m ?? analysisPreset) / 1000,
         })
         setSearchResult(response)
-      } catch {
+        console.log('searchResult episodes sample:', 
+          JSON.stringify(response.episodes?.slice(0, 2)))
+      } catch (error) {
+        console.error('searchAuditEpisodes failed', error)
         setLocalError(t('geocodeNotFound'))
       } finally {
         setSearchLoading(false)
@@ -506,14 +510,10 @@ export default function AuditPage() {
                           <Button
                             key={opt.value}
                             type="button"
-                            variant={isSelected ? 'default' : 'outline'}
+                            variant="secondary"
                             size="sm"
                             onClick={() => setAnalysisPreset(opt.value)}
-                            className={
-                              isSelected
-                                ? 'focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
-                                : 'border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
-                            }
+                            className={isSelected ? 'opacity-60' : undefined}
                             aria-pressed={isSelected}
                           >
                             {opt.label}
@@ -771,15 +771,11 @@ export default function AuditPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               onClick={() => handlePageChange(currentPage - 1)}
                               disabled={currentPage === 1}
-                              className={
-                                currentPage === 1
-                                  ? 'gap-1'
-                                  : 'gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
-                              }
+                              className="gap-1"
                             >
                               <ChevronLeft className="h-4 w-4" />
                               Anterior
@@ -788,15 +784,11 @@ export default function AuditPage() {
                               Página {currentPage} de {totalPages}
                             </span>
                             <Button
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               onClick={() => handlePageChange(currentPage + 1)}
                               disabled={currentPage === totalPages}
-                              className={
-                                currentPage === totalPages
-                                  ? 'gap-1'
-                                  : 'gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
-                              }
+                              className="gap-1"
                             >
                               Siguiente
                               <ChevronRight className="h-4 w-4" />

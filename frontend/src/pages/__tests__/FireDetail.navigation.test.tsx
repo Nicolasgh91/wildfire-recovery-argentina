@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import FireDetailPage from '@/pages/FireDetail'
 import { RETURN_CONTEXT_KEY, type ReturnContext } from '@/types/navigation'
+import { HOME_PATH } from '@/lib/routing'
 
 vi.mock('@/hooks/queries/useFire', () => ({
   useFire: () => ({
@@ -62,13 +64,23 @@ function renderWithRouter(
     state,
   }: { route?: string; initialEntries?: string[]; state?: ReturnContext } = {},
 ) {
+  const queryClient = new QueryClient()
+
   return render(
     <MemoryRouter initialEntries={[{ pathname: route, state }]}>
       <Routes>
-        <Route path="/fires/:id" element={ui} />
-        <Route path="/" element={<div data-testid="home-page" />} />
+        <Route
+          path="/fires/:id"
+          element={
+            <QueryClientProvider client={queryClient}>
+              {ui}
+            </QueryClientProvider>
+          }
+        />
+        <Route path={HOME_PATH} element={<div data-testid="home-page" />} />
         <Route path="/fires/history" element={<div data-testid="history-page" />} />
         <Route path="/map" element={<div data-testid="map-page" />} />
+        <Route path="/audit" element={<div data-testid="audit-page" />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -126,5 +138,24 @@ describe('FireDetailPage navigation back button', () => {
     expect(screen.getByTestId('history-page')).toBeInTheDocument()
     expect(sessionStorage.getItem(RETURN_CONTEXT_KEY)).toBeNull()
   })
-}
+
+  it('navigates back to audit when context returnTo=audit', () => {
+    const ctx: ReturnContext = {
+      returnTo: 'audit',
+      audit: {
+        origin: 'search',
+        q: 'Rio Tercero',
+        radius_km: 1,
+        page: 2,
+      },
+    }
+
+    renderWithRouter(<FireDetailPage />, { state: ctx })
+
+    const backButton = screen.getByText('goBack')
+    fireEvent.click(backButton)
+
+    expect(screen.getByTestId('audit-page')).toBeInTheDocument()
+  })
+})
 
