@@ -346,8 +346,6 @@ export default function AuditPage() {
     setCurrentPage(page)
   }
 
-  const buildAuditReturnContext = (ctx: AuditReturnContext): AuditReturnContext => ctx
-
   const handleFireDetailNavFromPoint = (fireEventId?: string | null) => {
     if (!fireEventId) return
     if (!isAuthenticated) {
@@ -364,13 +362,13 @@ export default function AuditPage() {
       return
     }
 
-    const auditCtx: AuditReturnContext = buildAuditReturnContext({
+    const auditCtx: AuditReturnContext = {
       origin: 'land-use',
       lat,
       lon,
       radius_m: radiusMeters,
       page: currentPage,
-    })
+    }
     const returnCtx: ReturnContext = {
       returnTo: 'audit',
       audit: auditCtx,
@@ -399,12 +397,12 @@ export default function AuditPage() {
       lastSearchRadiusKm ??
       ((form.getValues('radius_m') ?? analysisPreset) / 1000)
 
-    const auditCtx: AuditReturnContext = buildAuditReturnContext({
+    const auditCtx: AuditReturnContext = {
       origin: 'search',
       q,
       radius_km: radiusKm,
       page: currentPage,
-    })
+    }
     const returnCtx: ReturnContext = {
       returnTo: 'audit',
       audit: auditCtx,

@@ -7,6 +7,7 @@
 
 ## Frontend
 
+- **Audit.tsx:** Función `buildAuditReturnContext` (línea ~314) que construye contexto desde `currentLat`, `currentLon` y `form` no tiene usos activos tras la corrección del símbolo duplicado. Evaluar si debe reutilizarse en algún flujo o eliminarla.
 - Revisar y reducir tamaño de bundles principales, mejorando code splitting por ruta.
 - Unificar estrategia de imports estáticos y dinámicos para módulos compartidos (por ejemplo, componentes de tarjetas y cliente de Supabase).
 
