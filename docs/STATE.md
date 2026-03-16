@@ -28,7 +28,7 @@ El estado de producto se organiza por casos de uso funcionales.
 
 - **UC-F01 contacto y soporte**: listo en producción, formulario público con adjuntos.
 - **UC-F03 histórico y dashboard**: listo en producción, filtros, estadísticas y export.
-- **UC-F06 verificar terreno**: listo en producción como módulo avanzado.
+- **UC-F06 verificar terreno**: listo en producción como módulo avanzado. Los CTAs secundarios de auditoría (presets de área, paginación e ingreso a detalle en `result.fires`) usan el mismo estilo marrón de `variant="secondary"` que el botón «Ver detalles» del carrusel; los presets seleccionados se muestran como el mismo botón atenuado (~0.6 de opacidad) en lugar de cambiar de color.
 - **UC-F08 carrusel satelital de activos**: listo en producción, thumbnails operativos y refresco de imágenes.
 - **UC-F11 exploración y reportes especializados**: listo en producción, wizard de exploración con assets HD y PDF.
 - **UC-F12 recuperación y cambio de uso (VAE)**: en progreso, base técnica presente pero experiencia de producto en consolidación. La grilla de históricos (/fires/history) muestra estado de vegetación (badge por evento) y cada fila enlaza al detalle (/fires/:id), donde el RecoveryPanel muestra NDVI y métricas para eventos con datos VAE.
@@ -72,6 +72,6 @@ Cualquier nueva inconsistencia detectada debe registrarse aquí sin modificar el
 
 ## Última actualización
 
-- Fecha: 2026-03-15
+- Fecha: 2026-03-16
 - Commit: pendiente de actualizar al realizar el commit correspondiente
-- Cambio: UI VAE en grilla de históricos — columna Vegetación con badge (latest_recovery_status), filas clickeables a detalle, RecoveryPanel en /fires/:id para eventos; backend expone latest_recovery_status/latest_recovery_pct en listado de fires. Navegación de detalle de incendio alineada con pantalla de origen (Home, Historial o Mapa) mediante contexto de retorno y botón de volver contextual en el mapa de detalle.
+- Cambio: Ajustes de UC-F06 — backend de `/audit/search` extendido con `fire_event_id` por episodio (join vía `fire_episode_events` con criterio `max_frp DESC, start_date ASC`), navegación de auditoría hacia `/fires/:id` con `ReturnContext.audit` minimal (lat, lon, radius, page) y contrato de estilos de botones que alinea presets, paginación y botones secundarios de auditoría con el botón marrón de «Ver detalles» del carrusel, usando `variant="secondary"` y opacidad fija (~0.6) solo para el estado seleccionado.

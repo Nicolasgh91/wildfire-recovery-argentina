@@ -14,6 +14,7 @@ export type AuditSearchResolvedPlace = {
 
 export type AuditSearchEpisode = {
   id: string
+  fire_event_id?: string | null
   start_date: string
   end_date?: string | null
   status?: string | null

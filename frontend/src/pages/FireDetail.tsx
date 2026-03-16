@@ -1,15 +1,6 @@
 import { Suspense, lazy, useCallback, useMemo } from 'react'
 import { Link, useParams, useNavigate, useLocation } from 'react-router-dom'
-import {
-  Activity,
-  AlertTriangle,
-  ArrowLeft,
-  Calendar,
-
-  FileText,
-  Flame,
-  MapPin,
-} from 'lucide-react'
+import { Activity, AlertTriangle, ArrowLeft, Calendar, FileText, Flame, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
@@ -120,6 +111,12 @@ export default function FireDetailPage() {
       navigate(`/fires/history${search}`)
     } else if (ctx.returnTo === 'map') {
       navigate('/map', { state: { restore: { selectedFireId: ctx.map?.selectedFireId } } })
+    } else if (ctx.returnTo === 'audit') {
+      if (ctx.audit) {
+        navigate('/audit', { state: { restore: ctx.audit } })
+      } else {
+        navigate('/audit')
+      }
     }
 
     if (fromStorage) {

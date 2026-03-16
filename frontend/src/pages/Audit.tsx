@@ -2,16 +2,8 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Download,
-  Loader2,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { AlertTriangle, CheckCircle2, Download, Loader2, Search, ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -39,6 +31,7 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useI18n } from '@/context/LanguageContext'
 import { useAuth } from '@/context/AuthContext'
 import { useAuditMutation } from '@/hooks/mutations/useAudit'
@@ -46,6 +39,8 @@ import { searchAuditEpisodes } from '@/services/endpoints/audit-search'
 import { reverseGeocode } from '@/services/endpoints/geocode'
 import type { AuditFire, EvidenceThumbnail } from '@/types/audit'
 import type { AuditSearchResponse } from '@/types/audit-search'
+import type { AuditReturnContext, ReturnContext } from '@/types/navigation'
+import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 
 const AuditMap = lazy(() => import('@/components/audit-map').then((mod) => ({ default: mod.AuditMap })))
 
@@ -134,11 +129,14 @@ export default function AuditPage() {
   const { t, language } = useI18n()
   const { isAuthenticated, status } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [analysisPreset, setAnalysisPreset] = useState(1000)
   const [localError, setLocalError] = useState<string | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchResult, setSearchResult] = useState<AuditSearchResponse | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [lastSearchQuery, setLastSearchQuery] = useState<string | null>(null)
+  const [lastSearchRadiusKm, setLastSearchRadiusKm] = useState<number | null>(null)
   const itemsPerPage = 10
   const locale = language === 'es' ? 'es-AR' : 'en-US'
 
@@ -164,11 +162,59 @@ export default function AuditPage() {
     mode: 'onChange',
   })
 
+  const auditMutation = useAuditMutation()
+
+  // Restaurar contexto de retorno desde FireDetail (búsqueda textual o puntual)
+  useEffect(() => {
+    const state = location.state as { restore?: AuditReturnContext } | (ReturnContext & { restore?: AuditReturnContext }) | null
+    const restore = state?.restore
+    if (!restore) return
+
+    if (restore.origin === 'search') {
+      const radiusMeters = Math.round(restore.radius_km * 1000)
+      setAnalysisPreset(radiusMeters)
+      form.setValue('search', restore.q, { shouldDirty: false, shouldValidate: true })
+      form.setValue('radius_m', radiusMeters, { shouldDirty: false, shouldValidate: true })
+      setLastSearchQuery(restore.q)
+      setLastSearchRadiusKm(restore.radius_km)
+      setCurrentPage(restore.page || 1)
+
+      setSearchLoading(true)
+      setSearchResult(null)
+      searchAuditEpisodes(restore.q, {
+        limit: 20,
+        radius_km: restore.radius_km,
+      })
+        .then((response) => {
+          setSearchResult(response)
+        })
+        .catch(() => {
+          setLocalError(t('geocodeNotFound'))
+        })
+        .finally(() => {
+          setSearchLoading(false)
+        })
+    } else if (restore.origin === 'land-use') {
+      const radiusMeters = restore.radius_m
+      setAnalysisPreset(radiusMeters)
+      form.setValue('lat', restore.lat.toFixed(6), { shouldDirty: false, shouldValidate: true })
+      form.setValue('lon', restore.lon.toFixed(6), { shouldDirty: false, shouldValidate: true })
+      form.setValue('radius_m', radiusMeters, { shouldDirty: false, shouldValidate: true })
+      setCurrentPage(restore.page || 1)
+
+      auditMutation.reset()
+      auditMutation.mutate({
+        lat: restore.lat,
+        lon: restore.lon,
+        radius_meters: radiusMeters,
+        metadata: { is_test: import.meta.env.MODE === 'test' },
+      })
+    }
+  }, [auditMutation, form, location.state, t])
+
   useEffect(() => {
     form.setValue('radius_m', analysisPreset, { shouldDirty: true, shouldValidate: true })
   }, [analysisPreset, form])
-
-  const auditMutation = useAuditMutation()
   const numberFormatter = useMemo(
     () =>
       new Intl.NumberFormat(locale, {
@@ -214,6 +260,8 @@ export default function AuditPage() {
     if (query) {
       setSearchLoading(true)
       setSearchResult(null)
+      setLastSearchQuery(query)
+      setLastSearchRadiusKm((values.radius_m ?? analysisPreset) / 1000)
       try {
         const response = await searchAuditEpisodes(query, {
           limit: 20,
@@ -260,6 +308,79 @@ export default function AuditPage() {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page)
+  }
+
+  const buildAuditReturnContext = (ctx: AuditReturnContext): AuditReturnContext => ctx
+
+  const handleFireDetailNavFromPoint = (fireEventId?: string | null) => {
+    if (!fireEventId) return
+    if (!isAuthenticated) {
+      navigate('/login')
+      return
+    }
+
+    const values = form.getValues()
+    const lat = Number(values.lat)
+    const lon = Number(values.lon)
+    const radiusMeters = values.radius_m ?? analysisPreset
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      return
+    }
+
+    const auditCtx: AuditReturnContext = buildAuditReturnContext({
+      origin: 'land-use',
+      lat,
+      lon,
+      radius_m: radiusMeters,
+      page: currentPage,
+    })
+    const returnCtx: ReturnContext = {
+      returnTo: 'audit',
+      audit: auditCtx,
+    }
+
+    try {
+      sessionStorage.setItem(RETURN_CONTEXT_KEY, JSON.stringify(returnCtx))
+    } catch {
+      // ignore storage errors
+    }
+
+    navigate(`/fires/${fireEventId}`, { state: returnCtx })
+  }
+
+  const handleFireDetailNavFromSearch = (fireEventId?: string | null) => {
+    if (!fireEventId) return
+    if (!isAuthenticated) {
+      navigate('/login')
+      return
+    }
+
+    const q = (lastSearchQuery ?? form.getValues('search') ?? '').trim()
+    if (!q) return
+
+    const radiusKm =
+      lastSearchRadiusKm ??
+      ((form.getValues('radius_m') ?? analysisPreset) / 1000)
+
+    const auditCtx: AuditReturnContext = buildAuditReturnContext({
+      origin: 'search',
+      q,
+      radius_km: radiusKm,
+      page: currentPage,
+    })
+    const returnCtx: ReturnContext = {
+      returnTo: 'audit',
+      audit: auditCtx,
+    }
+
+    try {
+      sessionStorage.setItem(RETURN_CONTEXT_KEY, JSON.stringify(returnCtx))
+    } catch {
+      // ignore storage failures
+    }
+
+    navigate(`/fires/${fireEventId}`, { state: returnCtx })
   }
 
   const renderThumbnails = (thumbnails: EvidenceThumbnail[]) => {
@@ -379,17 +500,26 @@ export default function AuditPage() {
                   <div className="space-y-2">
                     <FormLabel>{t('analysisArea')}</FormLabel>
                     <div className="flex flex-wrap gap-2">
-                      {AREA_PRESETS.map((opt) => (
-                        <Button
-                          key={opt.value}
-                          type="button"
-                          variant={analysisPreset === opt.value ? 'default' : 'outline'}
-                          size="sm"
-                          onClick={() => setAnalysisPreset(opt.value)}
-                        >
-                          {opt.label}
-                        </Button>
-                      ))}
+                      {AREA_PRESETS.map((opt) => {
+                        const isSelected = analysisPreset === opt.value
+                        return (
+                          <Button
+                            key={opt.value}
+                            type="button"
+                            variant={isSelected ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setAnalysisPreset(opt.value)}
+                            className={
+                              isSelected
+                                ? 'focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
+                                : 'border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
+                            }
+                            aria-pressed={isSelected}
+                          >
+                            {opt.label}
+                          </Button>
+                        )
+                      })}
                     </div>
                   </div>
 
@@ -547,6 +677,7 @@ export default function AuditPage() {
                               <TableHead className="whitespace-nowrap">{t('area')}</TableHead>
                               <TableHead className="whitespace-nowrap">{t('detections')}</TableHead>
                               <TableHead className="whitespace-nowrap">Señal de recuperación</TableHead>
+                              <TableHead className="whitespace-nowrap">ID de incendio</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -581,6 +712,50 @@ export default function AuditPage() {
                                   <TableCell>
                                     <Badge className={`border ${recoverySignal.className}`}>{recoverySignal.label}</Badge>
                                   </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center justify-between gap-2">
+                                      <div>
+                                        {episode.fire_event_id ? (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <span className="font-mono text-[11px] text-muted-foreground cursor-default">
+                                                  {episode.fire_event_id.slice(0, 8)}...
+                                                </span>
+                                              </TooltipTrigger>
+                                              <TooltipContent>
+                                                <span className="font-mono text-[11px]">
+                                                  {episode.fire_event_id}
+                                                </span>
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        ) : (
+                                          <span className="font-mono text-[11px] text-muted-foreground">N/D</span>
+                                        )}
+                                      </div>
+                                      {episode.fire_event_id ? (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-7 w-7 border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                                                onClick={() => handleFireDetailNavFromSearch(episode.fire_event_id)}
+                                              >
+                                                <ExternalLink className="h-3 w-3" />
+                                              </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <span className="text-xs">Ver detalle del incendio</span>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
                                 </TableRow>
                               )
                             })}
@@ -600,7 +775,11 @@ export default function AuditPage() {
                               size="sm"
                               onClick={() => handlePageChange(currentPage - 1)}
                               disabled={currentPage === 1}
-                              className="gap-1"
+                              className={
+                                currentPage === 1
+                                  ? 'gap-1'
+                                  : 'gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
+                              }
                             >
                               <ChevronLeft className="h-4 w-4" />
                               Anterior
@@ -613,7 +792,11 @@ export default function AuditPage() {
                               size="sm"
                               onClick={() => handlePageChange(currentPage + 1)}
                               disabled={currentPage === totalPages}
-                              className="gap-1"
+                              className={
+                                currentPage === totalPages
+                                  ? 'gap-1'
+                                  : 'gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
+                              }
                             >
                               Siguiente
                               <ChevronRight className="h-4 w-4" />
@@ -747,6 +930,47 @@ export default function AuditPage() {
                                     {t('prohibitedUntil')}: {formatDate(fire.prohibition_until, locale)}
                                   </span>
                                 )}
+                              </div>
+                              <div className="mt-2 flex items-center justify-between gap-2">
+                                <div className="text-xs text-muted-foreground">
+                                  <p className="font-semibold text-foreground text-[11px]">ID de incendio</p>
+                                  {fire.fire_event_id ? (
+                                    <TooltipProvider>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="font-mono text-[11px] text-muted-foreground cursor-default">
+                                            {fire.fire_event_id.slice(0, 8)}...
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <span className="font-mono text-[11px]">{fire.fire_event_id}</span>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  ) : (
+                                    <span className="font-mono text-[11px] text-muted-foreground">N/D</span>
+                                  )}
+                                </div>
+                                {fire.fire_event_id ? (
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="icon"
+                                          className="h-7 w-7 border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                                          onClick={() => handleFireDetailNavFromPoint(fire.fire_event_id)}
+                                        >
+                                          <ExternalLink className="h-3 w-3" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <span className="text-xs">Ver detalle del incendio</span>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                ) : null}
                               </div>
                             </div>
                           )
