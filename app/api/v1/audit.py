@@ -333,7 +333,6 @@ def _build_episode_items(rows: list[dict]) -> list[AuditSearchEpisode]:
                 frp_max=float(row["frp_max"])
                 if row.get("frp_max") is not None
                 else None,
-                fire_event_id=row.get("fire_event_id"),
             )
         )
     return items
