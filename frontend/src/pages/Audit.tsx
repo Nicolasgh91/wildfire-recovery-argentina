@@ -471,7 +471,7 @@ export default function AuditPage() {
         <div className="grid gap-6 lg:grid-cols-2 lg:auto-rows-[minmax(0,1fr)]">
           {/* Mapa */}
           <div className="h-full">
-            <div className="h-full min-h-[400px] w-full rounded-lg border border-border bg-muted/20 p-2">
+            <div className="h-full min-h-[400px] w-full bg-card rounded-xl border border-border overflow-hidden">
               <Suspense fallback={mapFallback}>
                 <AuditMap onLocationSelect={handleMapSelect} />
               </Suspense>
@@ -519,7 +519,9 @@ export default function AuditPage() {
                             variant={isSelected ? 'default' : 'outline'}
                             size="sm"
                             onClick={() => setAnalysisPreset(opt.value)}
-                            className={isSelected ? undefined : 'border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-400'}
+                            className={isSelected 
+                              ? "bg-primary text-white hover:bg-primary/90" 
+                              : "bg-white dark:bg-transparent border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"}
                             aria-pressed={isSelected}
                           >
                             {opt.label}
@@ -729,11 +731,11 @@ export default function AuditPage() {
                                                   {episode.fire_event_id.slice(0, 8)}...
                                                 </span>
                                               </TooltipTrigger>
-                                              <TooltipContent>
-                                                <span className="font-mono text-[11px]">
-                                                  {episode.fire_event_id}
-                                                </span>
-                                              </TooltipContent>
+                                                <TooltipContent className="bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 border-none shadow-md font-medium">
+                                                  <span className="font-mono text-[11px]">
+                                                    {episode.fire_event_id}
+                                                  </span>
+                                                </TooltipContent>
                                             </Tooltip>
                                           </TooltipProvider>
                                         ) : (
@@ -744,19 +746,19 @@ export default function AuditPage() {
                                         <TooltipProvider>
                                           <Tooltip>
                                             <TooltipTrigger asChild>
-                                              <Button
+                                               <Button
                                                 type="button"
-                                                variant="secondary"
+                                                variant="ghost"
                                                 size="icon"
-                                                className="h-7 w-7"
+                                                className="h-7 w-7 text-muted-foreground hover:text-primary transition-colors"
                                                 onClick={() => handleFireDetailNavFromSearch(episode.fire_event_id)}
                                               >
                                                 <ExternalLink className="h-3 w-3" />
                                               </Button>
                                             </TooltipTrigger>
-                                            <TooltipContent>
-                                              <span className="text-xs">Ver detalle del incendio</span>
-                                            </TooltipContent>
+                                              <TooltipContent className="bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 border-none shadow-md font-medium">
+                                                <span className="text-xs">Ver detalle del incendio</span>
+                                              </TooltipContent>
                                           </Tooltip>
                                         </TooltipProvider>
                                       ) : null}
@@ -782,12 +784,12 @@ export default function AuditPage() {
                               size="sm"
                               onClick={() => handlePageChange(currentPage - 1)}
                               disabled={currentPage === 1}
-                              className="gap-1"
+                              className="gap-1 bg-white dark:bg-transparent border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                             >
                               <ChevronLeft className="h-4 w-4" />
                               Anterior
                             </Button>
-                            <span className="px-2 text-sm text-muted-foreground">
+                            <span className="px-2 text-sm text-foreground font-medium">
                               Página {currentPage} de {totalPages}
                             </span>
                             <Button
@@ -795,7 +797,7 @@ export default function AuditPage() {
                               size="sm"
                               onClick={() => handlePageChange(currentPage + 1)}
                               disabled={currentPage === totalPages}
-                              className="gap-1"
+                              className="gap-1 bg-white dark:bg-transparent border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                             >
                               Siguiente
                               <ChevronRight className="h-4 w-4" />
@@ -808,7 +810,7 @@ export default function AuditPage() {
                 </div>
               )}
 
-              {!result && !auditMutation.isPending && !auditMutation.error && !localError && (
+                  {!result && !auditMutation.isPending && !auditMutation.error && !localError && (
                 <div className="space-y-2 text-sm text-muted-foreground">
                   <p className="font-semibold text-foreground">{t('whatYouWillSee')}</p>
                   <ul className="space-y-1">
@@ -972,9 +974,9 @@ export default function AuditPage() {
                                             {fire.fire_event_id.slice(0, 8)}...
                                           </span>
                                         </TooltipTrigger>
-                                        <TooltipContent>
-                                          <span className="font-mono text-[11px]">{fire.fire_event_id}</span>
-                                        </TooltipContent>
+                                         <TooltipContent className="bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 border-none shadow-md font-medium">
+                                           <span className="font-mono text-[11px]">{fire.fire_event_id}</span>
+                                         </TooltipContent>
                                       </Tooltip>
                                     </TooltipProvider>
                                   ) : (
@@ -987,17 +989,17 @@ export default function AuditPage() {
                                       <TooltipTrigger asChild>
                                         <Button
                                           type="button"
-                                          variant="secondary"
+                                          variant="ghost"
                                           size="icon"
-                                          className="h-7 w-7"
+                                          className="h-7 w-7 text-muted-foreground hover:text-primary transition-colors"
                                           onClick={() => handleFireDetailNavFromPoint(fire.fire_event_id)}
                                         >
                                           <ExternalLink className="h-3 w-3" />
                                         </Button>
                                       </TooltipTrigger>
-                                      <TooltipContent>
-                                        <span className="text-xs">Ver detalle del incendio</span>
-                                      </TooltipContent>
+                                       <TooltipContent className="bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 border-none shadow-md font-medium">
+                                         <span className="text-xs">Ver detalle del incendio</span>
+                                       </TooltipContent>
                                     </Tooltip>
                                   </TooltipProvider>
                                 ) : null}
