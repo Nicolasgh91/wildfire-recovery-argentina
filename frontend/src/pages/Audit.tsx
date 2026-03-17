@@ -169,10 +169,15 @@ export default function AuditPage() {
   const auditMutation = useAuditMutation()
 
   // Restaurar contexto de retorno desde FireDetail (búsqueda textual o puntual)
+  // eslint-disable-next-line react-hooks/exhaustive-deps — intencional: solo al montar.
+  // auditMutation/searchAuditEpisodes se recrean en cada render y no deben ser dependencias.
   useEffect(() => {
     const state = location.state as { restore?: AuditReturnContext } | (ReturnContext & { restore?: AuditReturnContext }) | null
     const restore = state?.restore
     if (!restore) return
+
+    // Limpiar location.state inmediatamente para evitar re-ejecuciones
+    window.history.replaceState({}, '', location.pathname + location.search)
 
     if (restore.origin === 'search') {
       const radiusMeters = Math.round(restore.radius_km * 1000)
@@ -214,7 +219,7 @@ export default function AuditPage() {
         metadata: { is_test: import.meta.env.MODE === 'test' },
       })
     }
-  }, [auditMutation, form, location.state, t])
+  }, [])
 
   useEffect(() => {
     form.setValue('radius_m', analysisPreset, { shouldDirty: true, shouldValidate: true })
@@ -540,10 +545,10 @@ export default function AuditPage() {
                           <Button
                             key={opt.value}
                             type="button"
-                            variant="secondary"
+                            variant={isSelected ? 'default' : 'outline'}
                             size="sm"
                             onClick={() => setAnalysisPreset(opt.value)}
-                            className={isSelected ? 'opacity-60' : undefined}
+                            className={isSelected ? undefined : 'border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-400'}
                             aria-pressed={isSelected}
                           >
                             {opt.label}
@@ -794,6 +799,7 @@ export default function AuditPage() {
                       </div>
 
                       {/* Controles de paginación */}
+                      {/* Paginación inline mantenida: integración con Pagination genérico requeriría > 15 líneas. Ver docs/tech_audit_debt.md. */}
                       {totalPages > 1 && (
                         <div className="flex items-center justify-between pt-4">
                           <div className="text-sm text-muted-foreground">
@@ -801,14 +807,14 @@ export default function AuditPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
-                              variant="secondary"
+                              variant="outline"
                               size="sm"
                               onClick={() => handlePageChange(currentPage - 1)}
                               disabled={currentPage === 1}
                               className={
                                 currentPage === 1
                                   ? 'gap-1'
-                                  : 'gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
+                                  : 'gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
                               }
                             >
                               <ChevronLeft className="h-4 w-4" />
@@ -818,14 +824,14 @@ export default function AuditPage() {
                               Página {currentPage} de {totalPages}
                             </span>
                             <Button
-                              variant="secondary"
+                              variant="outline"
                               size="sm"
                               onClick={() => handlePageChange(currentPage + 1)}
                               disabled={currentPage === totalPages}
                               className={
                                 currentPage === totalPages
                                   ? 'gap-1'
-                                  : 'gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
+                                  : 'gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
                               }
                             >
                               Siguiente
@@ -972,7 +978,7 @@ export default function AuditPage() {
                                       size="sm"
                                       variant="secondary"
                                       className="gap-1"
-                                      onClick={() => handleFireDetailNav(fire.fire_event_id)}
+                                      onClick={() => handleFireDetailNavFromPoint(fire.fire_event_id)}
                                     >
                                       {t('seeDetail') ?? 'Ver detalle'}
                                     </Button>

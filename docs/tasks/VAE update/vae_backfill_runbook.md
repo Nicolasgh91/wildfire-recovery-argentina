@@ -332,6 +332,46 @@ docker compose exec worker-gee \
   celery -A workers.celery_app result ID-DE-INCENDIO
 ```
 
+### Worker GEE OOM (exit 137)
+
+Si el contenedor `forestguard-worker-gee` sale con **código 137**, el kernel lo terminó por falta de memoria (OOM kill). El worker tiene por defecto `mem_limit: 256M` en `docker-compose.yml`. Las tareas de backfill (GEE + series temporales) pueden picos de RAM; si 137 es recurrente, valorar subir el límite.
+
+**Comprobar si un backfill estaba en curso**
+
+- Tras el OOM, la tarea que se estaba ejecutando se pierde (no hay retry automático del mismo batch). La cola `vae` puede seguir teniendo mensajes si la tarea se encoló como múltiples chunks.
+- Ver si quedan tareas en cola: `docker compose exec redis redis-cli LLEN vae`
+- Ver progreso en BD (cuántos eventos del año ya tienen datos): usar la query "Progreso de backfill por año" de la sección 3.
+
+**Reiniciar worker y re-lanzar backfill 2016 (o el año afectado)**
+
+```bash
+# 1. Reiniciar el worker
+docker compose restart worker-gee
+
+# 2. Esperar a que esté healthy (healthcheck celery inspect ping)
+docker compose ps worker-gee
+
+# 3. Re-lanzar backfill del año que estaba en curso (ej. 2016)
+docker compose exec worker-gee celery -A workers.celery_app call \
+  workers.tasks.backfill.backfill_historical_recovery \
+  --kwargs='{"batch_size": 500, "target_year": 2016, "prioritize_protected": true, "optimize_frequency": true}' \
+  -Q vae
+```
+
+La tarea solo procesa eventos que aún **no** tienen datos en `vegetation_monitoring`, por lo que es idempotente: no duplica trabajo ya hecho.
+
+**Monitorear RAM**
+
+```bash
+# Uso de memoria del contenedor en tiempo real
+docker stats forestguard-worker-gee --no-stream
+
+# Logs recientes del worker (buscar OOM o errores de memoria)
+docker compose logs --tail 200 worker-gee
+```
+
+Si 137 se repite con 256M, en `docker-compose.yml` (servicio `worker-gee`) subir `mem_limit` y `deploy.resources.limits.memory` (por ejemplo a 512M) y volver a desplegar.
+
 ---
 
 ## 6. Resumen de regímenes de backfill
