@@ -516,10 +516,10 @@ export default function AuditPage() {
                           <Button
                             key={opt.value}
                             type="button"
-                            variant="secondary"
+                            variant={isSelected ? 'default' : 'outline'}
                             size="sm"
                             onClick={() => setAnalysisPreset(opt.value)}
-                            className={isSelected ? 'opacity-60' : undefined}
+                            className={isSelected ? undefined : 'border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-400'}
                             aria-pressed={isSelected}
                           >
                             {opt.label}
@@ -778,7 +778,7 @@ export default function AuditPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Button
-                              variant="secondary"
+                              variant="outline"
                               size="sm"
                               onClick={() => handlePageChange(currentPage - 1)}
                               disabled={currentPage === 1}
@@ -791,7 +791,7 @@ export default function AuditPage() {
                               Página {currentPage} de {totalPages}
                             </span>
                             <Button
-                              variant="secondary"
+                              variant="outline"
                               size="sm"
                               onClick={() => handlePageChange(currentPage + 1)}
                               disabled={currentPage === totalPages}
