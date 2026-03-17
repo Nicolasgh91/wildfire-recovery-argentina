@@ -119,15 +119,14 @@ def _fetch_episodes_by_province(
             text(
                 """
                 SELECT fe.id,
-                       rep.fire_event_id,
+                       ev.fire_event_id,
                        fe.start_date,
                        fe.end_date,
                        fe.status,
                        fe.provinces,
                        fe.estimated_area_hectares,
                        fe.detection_count,
-                       fe.frp_max,
-                       ev.fire_event_id
+                       fe.frp_max
                   FROM fire_episodes fe
              LEFT JOIN LATERAL (
                        SELECT fee.event_id AS fire_event_id
@@ -179,15 +178,14 @@ def _fetch_episodes_by_protected_area(
                      WHERE id = :area_id
                 )
                 SELECT fe.id,
-                       rep.fire_event_id,
+                       ev.fire_event_id,
                        fe.start_date,
                        fe.end_date,
                        fe.status,
                        fe.provinces,
                        fe.estimated_area_hectares,
                        fe.detection_count,
-                       fe.frp_max,
-                       ev.fire_event_id
+                       fe.frp_max
                   FROM fire_episodes fe
                   JOIN area
                     ON fe.bbox_minx IS NOT NULL

@@ -11,6 +11,7 @@ import { I18nProvider } from '@/context/LanguageContext'
 import { isFeatureEnabled } from '@/lib/featureFlags'
 import { useIdleTimer } from '@/hooks/useIdleTimer'
 import { HOME_PATH, resolveRootDestination } from '@/lib/routing'
+import { RETURN_CONTEXT_KEY } from '@/types/navigation'
 import { NavigationErrorBoundary } from '@/features/navigation/components/navigation-error-boundary'
 
 const HomePage = lazy(() => import('@/pages/Home'))
@@ -74,6 +75,7 @@ function AppShell({ children }: { children: ReactNode }) {
     enabled: isAuthenticated,
     onIdle: async () => {
       await signOut()
+      try { sessionStorage.removeItem(RETURN_CONTEXT_KEY) } catch { /* ignore storage errors */ }
       navigate('/login', { state: { reason: 'idle' } })
     },
   })

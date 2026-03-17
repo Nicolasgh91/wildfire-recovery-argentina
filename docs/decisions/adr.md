@@ -20,6 +20,6 @@ Este archivo actúa como índice de decisiones arquitectónicas relevantes para 
   - **Título**: Origen `audit` en ReturnContext y límites de datos en sessionStorage  
   - **Fecha**: 2026-03-16  
   - **Estado**: Accepted  
-  - **Resumen**: Se incorpora un nuevo origen `returnTo: 'audit'` al `ReturnContext` del frontend para UC-F06. Solo se persisten en `sessionStorage` parámetros compactos (`lat`, `lon`, `radius`, `page`) necesarios para reconstruir la búsqueda en auditoría, sin guardar resultados ni textos completos de auditoría en cumplimiento con la ley 25.326.
+  - **Resumen**: Se incorpora un nuevo origen `returnTo: 'audit'` al `ReturnContext` del frontend para UC-F06. `AuditReturnContext` usa un discriminated union con `origin: 'search' | 'land-use'`: shape puntual `{ origin: 'land-use', lat, lon, radius_m, page }` y shape textual `{ origin: 'search', q, radius_km, page }`. Solo se persisten en `sessionStorage` parámetros compactos necesarios para reconstruir la búsqueda en auditoría, sin guardar resultados ni textos completos de auditoría en cumplimiento con la ley 25.326. El `handleBack` de `FireDetail.tsx` maneja ambos shapes correctamente.
 
 Nuevas decisiones deben documentarse como archivos adicionales en esta carpeta y enlazarse desde este índice.
