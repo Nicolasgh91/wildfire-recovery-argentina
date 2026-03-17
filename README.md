@@ -126,3 +126,29 @@ Detalle con fuentes:
 ## nota de alcance
 
 Vestigia prioriza exploracion e investigacion guiada. El componente legal existe y se mantiene como capacidad avanzada, no como narrativa principal de entrada.
+
+
+### Paleta principal de colores de la UI
+
+🌟 Colores Principales (Light Mode)
+Primary (Acción principal): hsl(155 55% 45%) — Un verde esmeralda vibrante.
+Secondary (Acción secundaria): hsl(40 20% 35%) — Un marrón cálido oscuro.
+Accent (Destacados): hsl(40 60% 70%) — Un tono arena/dorado suave.
+Destructive (Errores/Peligro): hsl(0 84% 60%) — Rojo intenso.
+Background (Fondo global): hsl(164 86% 16%) — Un verde bosque muy oscuro.
+Foreground (Texto principal): hsl(40 10% 20%) — Casi negro con matiz cálido.
+🌑 Modo Oscuro (Dark Mode)
+Background: hsl(40 10% 18%) — Gris oscuro cálido.
+Foreground: hsl(100 10% 95%) — Blanco con ligero matiz verdoso.
+Primary: Se mantiene igual (hsl(155 55% 45%)).
+Secondary: hsl(40 25% 45%).
+Destructive: hsl(0 65% 50%).
+🛠️ Elementos de UI y Bordes
+Border: hsl(110 10% 88%) (Light) / hsl(40 10% 32%) (Dark).
+Input: hsl(110 10% 92%) (Light) / hsl(40 10% 28%) (Dark).
+Ring (Outline/Foco): Usa el color Primary.
+⚓ Componentes Específicos
+Nav (Barra de navegación): hsl(164 26% 68%).
+Footer: hsl(164 86% 16%) (mismo que el fondo oscuro de la app).
+Muted (Texto/fondos sutiles): hsl(100 10% 95%) (Light) / hsl(40 10% 28%) (Dark).
+Si necesitas los valores exactos para algún componente de Shadcn o un gráfico específico (Charts 1-5), también están disponibles en el archivo de estilos.

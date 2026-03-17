@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
-import { translations, type Language, type TranslationKey } from '@/data/translations'
+import { translations, type Language } from '@/data/translations'
+import type { TranslationKey } from '@/types/translation-keys'
 import { BRAND } from '@/config/brand'
 
 const LANGUAGE_STORAGE_KEY = 'fg:language'

@@ -33,7 +33,8 @@ export function AuthFormOAuth() {
     <div className="space-y-4" data-testid="auth-form-oauth">
       <Button
         type="button"
-        className="w-full gap-2 bg-white text-slate-800 border border-slate-200 hover:bg-[#DCBE87] hover:border-[#DCBE87] transition-colors"
+        variant="outline"
+        className="w-full gap-2 bg-white dark:bg-transparent border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white transition-all duration-200 ease-in-out hover:border-primary hover:bg-slate-100 hover:shadow-md hover:text-primary dark:hover:border-primary dark:hover:bg-slate-800 dark:hover:shadow-md dark:hover:text-primary"
         onClick={handleGoogleSignIn}
         disabled={isLoading}
         aria-label={t('loginGoogle') || 'Continuar con Google'}

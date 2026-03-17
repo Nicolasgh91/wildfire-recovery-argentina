@@ -1,4 +1,8 @@
-export const translations = {
+import type { TranslationKey } from '@/types/translation-keys'
+
+type TranslationsMap = Record<string, Record<TranslationKey, string> & Record<string, string>>
+
+export const translations: TranslationsMap = {
   es: {
     // Navigation
     home: 'Inicio',
@@ -28,6 +32,7 @@ export const translations = {
     shelters: 'Refugios',
     report: 'Reportar',
     reports: 'Explorá',
+    seeDetail: 'Ver detalle',
     creditsTitle: 'Créditos',
     creditsDescription: 'Compra créditos para reportes judiciales o históricos.',
     creditsBalance: 'Saldo de créditos',
@@ -96,6 +101,7 @@ export const translations = {
     status: 'Estado',
     severity: 'Severidad',
     date: 'Fecha',
+    recentFiresToggle: 'Mostrar recientes',
     recentFiresEmpty: 'No hay incendios activos ni recientes en los últimos 60 días.',
     fireLoadError: 'Error al cargar incendios',
     fireLoadErrorDetail: 'No pudimos obtener los datos. Verificá tu conexión e intentá de nuevo.',
@@ -693,6 +699,7 @@ export const translations = {
     shelters: 'Shelters',
     report: 'Report',
     reports: 'Explore',
+    seeDetail: 'See detail',
     creditsTitle: 'Credits',
     creditsDescription: 'Buy credits for judicial or historical reports.',
     creditsBalance: 'Credits balance',
@@ -1330,4 +1337,3 @@ export const translations = {
 } as const
 
 export type Language = keyof typeof translations
-export type TranslationKey = keyof typeof translations.es

@@ -363,22 +363,23 @@ describe('AuditPage UI styles (UC-F06)', () => {
     vi.restoreAllMocks()
   })
 
-  it('D-02/D-03: non-selected presets have emerald outline classes, selected does not', () => {
+  it('D-02/D-03: presets use secondary variant and active preset has opacity 0.6', () => {
     renderWithRouter(<AuditPage />)
 
     const preset500 = screen.getByRole('button', { name: 'Alrededores (500 m)' })
     const preset1000 = screen.getByRole('button', { name: 'Zona (1 km)' })
     const preset3000 = screen.getByRole('button', { name: 'Amplio (3 km)' })
 
-    // D-02: non-selected presets have emerald border and text classes
-    expect(preset500.className).toContain('border-emerald-600')
-    expect(preset500.className).toContain('text-emerald-700')
-    expect(preset3000.className).toContain('border-emerald-600')
-    expect(preset3000.className).toContain('text-emerald-700')
+    // D-02: all presets use secondary button styles (no emerald border/text classes)
+    expect(preset500.className).not.toContain('border-emerald-600')
+    expect(preset500.className).not.toContain('text-emerald-700')
+    expect(preset3000.className).not.toContain('border-emerald-600')
+    expect(preset3000.className).not.toContain('text-emerald-700')
 
-    // D-03: selected preset (1000 default) does NOT have emerald outline classes
-    expect(preset1000.className).not.toContain('border-emerald-600')
-    expect(preset1000.className).not.toContain('text-emerald-700')
+    // D-03: selected preset (1000 default) has opacity-60, non-selected do not
+    expect(preset1000.className).toContain('opacity-60')
+    expect(preset500.className).not.toContain('opacity-60')
+    expect(preset3000.className).not.toContain('opacity-60')
   })
 
   it('D-04/D-05/D-06: pagination buttons toggle disabled state correctly', async () => {

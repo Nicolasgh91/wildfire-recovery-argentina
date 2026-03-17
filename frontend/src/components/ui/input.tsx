@@ -10,18 +10,18 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
       className={cn(
         // Base
         'w-full px-4 py-3 rounded-lg transition-all duration-200',
-        // Background & border (light, premium feel)
-        'bg-gray-50 border border-gray-200',
-        // Text and placeholder
-        'text-base text-foreground placeholder:text-gray-400 md:text-sm',
+        // Background & border (solid, high contrast)
+        'bg-white text-slate-900 border-slate-300 placeholder:text-slate-400',
+        // Dark mode adjustments
+        'dark:bg-[#1E1E1E] dark:text-white dark:border-slate-700 dark:placeholder:text-slate-500',
+        // Text size
+        'text-base md:text-sm',
         // Focus state (visible for accessibility)
-        'focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         // Invalid state
-        'aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive',
+        'aria-invalid:ring-destructive aria-invalid:border-destructive',
         // Disabled
         'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
-        // Dark mode adjustments
-        'dark:bg-input/30 dark:border-input',
         // File input styles
         'file:text-foreground file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium',
         // Selection

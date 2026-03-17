@@ -881,7 +881,7 @@ export default function FireHistoryPage() {
                         <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
                         <ChartTooltip
                           content={<ChartTooltipContent />}
-                          formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
+                          formatter={(val: any) => (typeof val === 'number' ? val.toFixed(1) : (val as number | undefined ?? 0).toFixed(1))}
                           labelFormatter={(label: any, payload: any) =>
                             (payload?.[0]?.payload?.name as string) || (label as string)
                           }
@@ -921,7 +921,7 @@ export default function FireHistoryPage() {
                         <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} />
                         <ChartTooltip
                           content={<ChartTooltipContent />}
-                          formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
+                          formatter={(val: any) => (typeof val === 'number' ? val.toFixed(1) : (val as number | undefined ?? 0).toFixed(1))}
                           labelFormatter={(label: any, payload: any) =>
                             (payload?.[0]?.payload?.fullName as string) || (label as string)
                           }
@@ -1020,7 +1020,7 @@ export default function FireHistoryPage() {
                     <YAxis tickLine={false} axisLine={false} />
                     <ChartTooltip
                       content={<ChartTooltipContent />}
-                      formatter={(val: number | undefined) => (val ?? 0).toFixed(1)}
+                      formatter={(val: any) => (typeof val === 'number' ? val.toFixed(1) : (val as number | undefined ?? 0).toFixed(1))}
                       labelFormatter={(label: any, payload: any) =>
                         (payload?.[0]?.payload?.fullName as string) || (label as string)
                       }
@@ -1045,7 +1045,6 @@ export default function FireHistoryPage() {
               onFiltersChange={updateFilters}
               onExportCSV={handleExportCSV}
               isExporting={exportMutation.isPending}
-              defaultStatusScope="historical"
               defaultFilters={DEFAULT_FILTERS}
             />
           </div>
@@ -1067,7 +1066,6 @@ export default function FireHistoryPage() {
                     onFiltersChange={updateFilters}
                     onExportCSV={handleExportCSV}
                     isExporting={exportMutation.isPending}
-                    defaultStatusScope="historical"
                     defaultFilters={DEFAULT_FILTERS}
                     showExportButton={false}
                   />
@@ -1213,7 +1211,7 @@ export default function FireHistoryPage() {
           <div className="hidden rounded-xl border border-border bg-[hsl(var(--history-grid-cell))] md:block">
             <div
               ref={tableContainerRef}
-              className="overflow-auto max-h-[70vh]"
+              className="overflow-auto max-h-[70vh] historical-grid-scroll"
               onScroll={handleTableScroll}
             >
               <Table>

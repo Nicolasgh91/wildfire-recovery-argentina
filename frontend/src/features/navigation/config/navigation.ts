@@ -13,7 +13,7 @@ import {
   User,
   type LucideIcon,
 } from 'lucide-react'
-import type { TranslationKey } from '@/data/translations'
+import type { TranslationKey } from '@/types/translation-keys'
 import { isFeatureEnabled } from '@/lib/featureFlags'
 import { HOME_PATH, LOGIN_PATH } from '@/lib/routing'
 import { BRAND } from '@/config/brand'

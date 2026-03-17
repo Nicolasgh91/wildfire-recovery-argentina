@@ -1,4 +1,4 @@
-import type { TranslationKey } from '@/data/translations'
+import type { TranslationKey } from '@/types/translation-keys'
 
 export type PublicSourceLink = {
   labelKey: TranslationKey
