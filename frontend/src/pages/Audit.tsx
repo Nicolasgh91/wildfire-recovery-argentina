@@ -305,35 +305,6 @@ export default function AuditPage() {
 
   const result = auditMutation.data
 
-  const currentLat = form.watch('lat')
-  const currentLon = form.watch('lon')
-
-  const parseNumberOrNull = (value?: string | null) => {
-    const trimmed = value?.trim()
-    if (!trimmed) return null
-    const num = Number(trimmed)
-    if (Number.isNaN(num)) return null
-    return num
-  }
-
-  const buildAuditReturnContext = (page: number): AuditReturnContext | null => {
-    const latNum = parseNumberOrNull(currentLat)
-    const lonNum = parseNumberOrNull(currentLon)
-    const radius = form.getValues('radius_m') || analysisPreset
-
-    if (latNum == null || lonNum == null) return null
-
-    return {
-      returnTo: 'audit',
-      audit: {
-        lat: latNum,
-        lon: lonNum,
-        radius,
-        page,
-      },
-    }
-  }
-
   // Lógica de paginación para episodios
   const paginatedEpisodes = useMemo(() => {
     if (!searchResult?.episodes) return []
@@ -775,9 +746,9 @@ export default function AuditPage() {
                                             <TooltipTrigger asChild>
                                               <Button
                                                 type="button"
-                                                variant="outline"
+                                                variant="secondary"
                                                 size="icon"
-                                                className="h-7 w-7 border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                                                className="h-7 w-7"
                                                 onClick={() => handleFireDetailNavFromSearch(episode.fire_event_id)}
                                               >
                                                 <ExternalLink className="h-3 w-3" />
@@ -811,11 +782,7 @@ export default function AuditPage() {
                               size="sm"
                               onClick={() => handlePageChange(currentPage - 1)}
                               disabled={currentPage === 1}
-                              className={
-                                currentPage === 1
-                                  ? 'gap-1'
-                                  : 'gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
-                              }
+                              className="gap-1"
                             >
                               <ChevronLeft className="h-4 w-4" />
                               Anterior
@@ -828,11 +795,7 @@ export default function AuditPage() {
                               size="sm"
                               onClick={() => handlePageChange(currentPage + 1)}
                               disabled={currentPage === totalPages}
-                              className={
-                                currentPage === totalPages
-                                  ? 'gap-1'
-                                  : 'gap-1 border-emerald-600 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-400 focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2'
-                              }
+                              className="gap-1"
                             >
                               Siguiente
                               <ChevronRight className="h-4 w-4" />
@@ -1024,9 +987,9 @@ export default function AuditPage() {
                                       <TooltipTrigger asChild>
                                         <Button
                                           type="button"
-                                          variant="outline"
+                                          variant="secondary"
                                           size="icon"
-                                          className="h-7 w-7 border-emerald-600 text-emerald-700 hover:bg-emerald-50"
+                                          className="h-7 w-7"
                                           onClick={() => handleFireDetailNavFromPoint(fire.fire_event_id)}
                                         >
                                           <ExternalLink className="h-3 w-3" />

@@ -69,18 +69,18 @@ export default function LoginPage() {
               </h2>
             </section>
 
-            <div className="rounded-2xl bg-auth-form-container p-6 shadow-sm border border-border/50">
+            <div className="rounded-2xl bg-white/80 dark:bg-black/40 backdrop-blur-xl p-6 shadow-2xl border border-white/50 dark:border-white/10">
               <Tabs defaultValue="magic-link" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-6 p-1 bg-black/5 dark:bg-muted/50 rounded-lg">
-                  <TabsTrigger
+                <TabsList className="grid w-full grid-cols-2 mb-6 p-1 bg-slate-200/50 dark:bg-black/50 rounded-lg">
+                    <TabsTrigger
                     value="magic-link"
-                    className="data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground shadow-none transition-all duration-200 ease-in-out"
+                    className="data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-[#1E1E1E] dark:data-[state=active]:text-white text-slate-600 dark:text-slate-300 hover:text-foreground rounded-md transition-all duration-200 ease-in-out"
                   >
                     Enlace de acceso único
                   </TabsTrigger>
                   <TabsTrigger
                     value="password"
-                    className="data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground shadow-none transition-all duration-200 ease-in-out"
+                    className="data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-[#1E1E1E] dark:data-[state=active]:text-white text-slate-600 dark:text-slate-300 hover:text-foreground rounded-md transition-all duration-200 ease-in-out"
                   >
                     Contraseña
                   </TabsTrigger>
@@ -97,15 +97,15 @@ export default function LoginPage() {
 
               <div className="mt-6">
                 <div className="relative flex items-center mb-6">
-                  <hr className="flex-grow border-border" />
-                  <span className="mx-3 shrink-0 text-xs text-muted-foreground bg-card px-2 rounded-sm">O continuar con</span>
-                  <hr className="flex-grow border-border" />
+                  <div className="flex-grow border-t border-border" />
+                  <span className="mx-3 shrink-0 text-xs text-slate-600 dark:text-slate-300 px-2">O continuar con</span>
+                  <div className="flex-grow border-t border-border" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <AuthFormOAuth />
 
-                  <Button asChild className="w-full gap-2 bg-[#6D5A45] text-white border-none hover:bg-[#584836] transition-colors">
+                  <Button asChild variant="outline" className="w-full gap-2 bg-white dark:bg-transparent border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white transition-all duration-200 ease-in-out hover:border-primary hover:bg-slate-100 hover:shadow-md hover:text-primary dark:hover:border-primary dark:hover:bg-slate-800 dark:hover:shadow-md dark:hover:text-primary">
                     <Link to={HOME_PATH}>
                       <User className="h-4 w-4" />
                       Invitado
@@ -113,9 +113,9 @@ export default function LoginPage() {
                   </Button>
                 </div>
 
-                <p className="mt-6 text-sm text-muted-foreground text-center">
+                <p className="mt-6 text-sm text-slate-600 dark:text-slate-300 text-center">
                   {t('noAccount')}{' '}
-                  <Link to="/register" className="font-medium text-primary underline underline-offset-4">
+                  <Link to="/register" className="font-bold text-primary underline underline-offset-4 hover:underline dark:brightness-125">
                     {t('register')}
                   </Link>
                 </p>

@@ -156,7 +156,7 @@ export default function RegisterPage() {
       <div className="grid min-h-[calc(100vh-3rem)] grid-cols-1 items-center gap-10 lg:grid-cols-2">
         <div className="flex items-center justify-center">
           <div className="w-full max-w-lg text-left pt-16 lg:pt-0">
-            <div className="rounded-2xl bg-auth-form-container p-6 shadow-sm border border-border/50">
+            <div className="rounded-2xl bg-white/80 dark:bg-black/40 backdrop-blur-xl p-6 shadow-2xl border border-white/50 dark:border-white/10">
               <h1 className="text-2xl font-semibold text-foreground md:text-3xl">
                 {t('registerTitle')}
               </h1>
@@ -264,15 +264,16 @@ export default function RegisterPage() {
 
               <div className="mt-6">
                 <div className="relative flex items-center mb-6">
-                  <hr className="flex-grow border-border" />
-                  <span className="mx-3 shrink-0 text-xs text-muted-foreground bg-card px-2 rounded-sm">O continuar con</span>
-                  <hr className="flex-grow border-border" />
+                  <div className="flex-grow border-t border-border" />
+                  <span className="mx-3 shrink-0 text-xs text-slate-600 dark:text-slate-300 px-2">O continuar con</span>
+                  <div className="flex-grow border-t border-border" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <Button
                     type="button"
-                    className="w-full gap-2 bg-white text-slate-800 border border-slate-200 hover:bg-[#DCBE87] hover:border-[#DCBE87] transition-colors"
+                    variant="outline"
+                    className="w-full gap-2 bg-white dark:bg-transparent border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white transition-all duration-200 ease-in-out hover:border-primary hover:bg-slate-100 hover:shadow-md hover:text-primary dark:hover:border-primary dark:hover:bg-slate-800 dark:hover:shadow-md dark:hover:text-primary"
                     onClick={handleGoogleSignIn}
                     disabled={isGoogleLoading}
                     aria-label="Continuar con Google"
@@ -298,7 +299,7 @@ export default function RegisterPage() {
                     {isGoogleLoading ? t('loading') || 'Cargando...' : 'Google'}
                   </Button>
 
-                  <Button asChild className="w-full gap-2 bg-[#6D5A45] text-white border-none hover:bg-[#584836] transition-colors">
+                  <Button asChild variant="outline" className="w-full gap-2 bg-white dark:bg-transparent border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white transition-all duration-200 ease-in-out hover:border-primary hover:bg-slate-100 hover:shadow-md hover:text-primary dark:hover:border-primary dark:hover:bg-slate-800 dark:hover:shadow-md dark:hover:text-primary">
                     <Link to={HOME_PATH}>
                       <User className="h-4 w-4" />
                       Invitado
@@ -306,9 +307,9 @@ export default function RegisterPage() {
                   </Button>
                 </div>
 
-                <p className="mt-4 text-sm text-muted-foreground">
+                <p className="mt-4 text-sm text-slate-600 dark:text-slate-300">
                   {t('registerHaveAccount')}{' '}
-                  <Link to="/login" className="text-primary underline">
+                  <Link to="/login" className="text-primary font-bold hover:underline dark:brightness-125">
                     {t('login')}
                   </Link>
                 </p>

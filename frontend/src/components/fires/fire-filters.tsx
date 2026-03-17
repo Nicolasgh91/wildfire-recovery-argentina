@@ -83,7 +83,6 @@ interface FireFiltersProps {
   onFiltersChange: (filters: Partial<FireFiltersState>) => void
   onExportCSV: () => void
   isExporting?: boolean
-  defaultStatusScope?: FireFiltersState['status_scope']
   defaultFilters: FireFiltersState
   showExportButton?: boolean
 }
@@ -93,7 +92,6 @@ export function FireFilters({
   onFiltersChange,
   onExportCSV,
   isExporting = false,
-  defaultStatusScope = 'active',
   defaultFilters,
   showExportButton = true,
 }: FireFiltersProps) {
