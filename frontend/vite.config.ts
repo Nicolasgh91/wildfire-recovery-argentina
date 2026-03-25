@@ -130,6 +130,20 @@ export default defineConfig(async () => {
               return 'vendor-state'
             }
 
+            // 5b. Supabase — auth, storage, realtime (solo cuando se usa)
+            if (id.includes('node_modules/@supabase')) {
+              return 'vendor-supabase'
+            }
+
+            // 5c. Forms — Zod, react-hook-form (solo en rutas con formularios)
+            if (
+              id.includes('node_modules/zod') ||
+              id.includes('node_modules/react-hook-form') ||
+              id.includes('node_modules/@hookform')
+            ) {
+              return 'vendor-forms'
+            }
+
             // 6. React core — siempre se carga; separado para cache de larga duración
             if (
               id.includes('node_modules/react/') ||

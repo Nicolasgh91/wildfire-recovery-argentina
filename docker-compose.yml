@@ -77,6 +77,7 @@ services:
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
     
     volumes:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
