@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://huelladelfuego.com.ar/sitemap.xml
