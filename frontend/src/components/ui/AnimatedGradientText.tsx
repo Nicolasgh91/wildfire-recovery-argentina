@@ -5,6 +5,7 @@
  * - Revela el texto de izquierda a derecha con efecto de gradiente
  * - Respeta prefers-reduced-motion (muestra texto estático)
  * - Usa GPU acceleration para animación fluida
+ * - Implementado con CSS puro (sin dependencias de librerías de animación)
  *
  * @example
  * <AnimatedGradientText
@@ -15,8 +16,7 @@
  * />
  */
 
-import { motion, useReducedMotion } from 'framer-motion'
-import type { ElementType, ComponentPropsWithoutRef } from 'react'
+import { useEffect, useState, type ElementType, type ComponentPropsWithoutRef } from 'react'
 import { cn } from '@/lib/utils'
 
 interface AnimatedGradientTextProps<T extends ElementType = 'span'> {
@@ -42,14 +42,30 @@ export function AnimatedGradientText<T extends ElementType = 'span'>({
   ...props
 }: AnimatedGradientTextProps<T> &
   Omit<ComponentPropsWithoutRef<T>, keyof AnimatedGradientTextProps<T>>) {
-  const shouldReduceMotion = useReducedMotion()
   const Component = as || 'span'
+  const [shouldAnimate, setShouldAnimate] = useState(false)
 
-  // Fallback para navegadores sin soporte de background-clip: text
+  useEffect(() => {
+    // Respetar prefers-reduced-motion
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return
+    }
+    // Verificar soporte de background-clip: text
+    if (typeof CSS !== 'undefined' && !CSS.supports('background-clip', 'text')) {
+      return
+    }
+    // Iniciar animación después del delay
+    const timer = setTimeout(() => setShouldAnimate(true), delay * 1000)
+    return () => clearTimeout(timer)
+  }, [delay])
+
+  // Fallback estático para reduced-motion o sin soporte
   const supportsBackgroundClipText =
     typeof CSS !== 'undefined' && CSS.supports('background-clip', 'text')
+  const prefersReducedMotion =
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-  if (shouldReduceMotion || !supportsBackgroundClipText) {
+  if (prefersReducedMotion || !supportsBackgroundClipText) {
     return (
       <Component className={cn('text-gray-900', className)} {...props}>
         {text}
@@ -58,28 +74,22 @@ export function AnimatedGradientText<T extends ElementType = 'span'>({
   }
 
   return (
-    <motion.span
+    <span
       className={cn(
         'inline-block bg-clip-text text-transparent',
-        'will-change-[background-position]', // GPU acceleration
         className
       )}
       style={{
         backgroundImage: `linear-gradient(90deg, ${toColor} 0%, ${toColor} 50%, ${fromColor} 50%, ${fromColor} 100%)`,
         backgroundSize: '200% 100%',
-        backgroundPosition: '100% 0',
-      }}
-      initial={{ backgroundPosition: '100% 0' }}
-      animate={{ backgroundPosition: '0% 0' }}
-      transition={{
-        duration,
-        delay,
-        ease: [0.25, 0.46, 0.45, 0.94], // easeOutQuad
+        backgroundPosition: shouldAnimate ? '0% 0' : '100% 0',
+        transition: `background-position ${duration}s cubic-bezier(0.25, 0.46, 0.45, 0.94)`,
+        willChange: shouldAnimate ? 'auto' : 'background-position',
       }}
       aria-label={text}
       {...props}
     >
       {text}
-    </motion.span>
+    </span>
   )
 }

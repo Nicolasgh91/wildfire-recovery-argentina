@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+import 'leaflet/dist/leaflet.css'
+import './map-overrides.css'
 import { MapContainer, TileLayer, ZoomControl, useMap } from 'react-leaflet'
 import type { Map as LeafletMap } from 'leaflet'
 import { MAP_CONFIG, TILE_LAYERS } from '@/lib/leaflet/config'
