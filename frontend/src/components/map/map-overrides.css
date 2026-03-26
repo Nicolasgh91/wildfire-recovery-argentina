@@ -1,0 +1,19 @@
+/* Leaflet fire popup overrides — loaded only on map routes */
+.fire-popup .leaflet-popup-content-wrapper {
+  border-radius: 0.75rem;
+  padding: 0;
+}
+
+.fire-popup .leaflet-popup-content {
+  margin: 0;
+  scrollbar-width: thin;
+}
+
+.fire-popup .leaflet-popup-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.fire-popup .leaflet-popup-content::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  border-radius: 2px;
+}

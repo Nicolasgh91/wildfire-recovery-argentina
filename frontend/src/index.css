@@ -1,26 +1,8 @@
+@import '@fontsource-variable/inter';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Leaflet fire popup overrides */
-.fire-popup .leaflet-popup-content-wrapper {
-  border-radius: 0.75rem;
-  padding: 0;
-}
-
-.fire-popup .leaflet-popup-content {
-  margin: 0;
-  scrollbar-width: thin;
-}
-
-.fire-popup .leaflet-popup-content::-webkit-scrollbar {
-  width: 4px;
-}
-
-.fire-popup .leaflet-popup-content::-webkit-scrollbar-thumb {
-  background-color: hsl(var(--border));
-  border-radius: 2px;
-}
 
 /* Historical grid scrollbar with rounded corners */
 .historical-grid-scroll::-webkit-scrollbar {
@@ -54,7 +36,7 @@
 
 @layer base {
   :root {
-    --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+    --font-sans: "Inter Variable", Inter, system-ui, -apple-system, "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
     --background: 164 86% 16%;
     --history-page-bg: 164 86% 16%;
     --auth-page-background: 0 0% 100%;

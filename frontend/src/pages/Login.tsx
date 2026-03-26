@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ import { BrandLogo } from '@/components/brand/BrandLogo'
 import { HOME_PATH, LOGIN_PATH } from '@/lib/routing'
 
 import { AuthFormOTP } from '@/components/auth/AuthFormOTP'
-import { AuthFormEmail } from '@/components/auth/AuthFormEmail'
+const AuthFormEmail = lazy(() => import('@/components/auth/AuthFormEmail').then(m => ({ default: m.AuthFormEmail })))
 import { AuthFormOAuth } from '@/components/auth/AuthFormOAuth'
 
 export default function LoginPage() {
@@ -64,23 +64,23 @@ export default function LoginPage() {
                 delay={0.2}
                 data-testid="hero-title"
               />
-              <h2 className="text-xl lg:text-2xl text-muted-foreground font-medium">
+              <h2 className="text-xl lg:text-2xl text-slate-700 dark:text-slate-200 font-medium">
                 {t('loginHeroSubtitle')}
               </h2>
             </section>
 
-            <div className="rounded-2xl bg-white/80 dark:bg-black/40 backdrop-blur-xl p-6 shadow-2xl border border-white/50 dark:border-white/10">
+            <div className="rounded-2xl bg-white/90 dark:bg-black/60 backdrop-blur-xl p-6 shadow-2xl border border-white/50 dark:border-white/10">
               <Tabs defaultValue="magic-link" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 mb-6 p-1 bg-slate-200/50 dark:bg-black/50 rounded-lg">
                     <TabsTrigger
                     value="magic-link"
-                    className="data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-[#1E1E1E] dark:data-[state=active]:text-white text-slate-700 dark:text-slate-300 hover:text-foreground rounded-md transition-all duration-200 ease-in-out"
+                    className="data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-[#1E1E1E] dark:data-[state=active]:text-white text-slate-800 dark:text-slate-200 hover:text-foreground rounded-md transition-all duration-200 ease-in-out"
                   >
                     Enlace de acceso único
                   </TabsTrigger>
                   <TabsTrigger
                     value="password"
-                    className="data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-[#1E1E1E] dark:data-[state=active]:text-white text-slate-700 dark:text-slate-300 hover:text-foreground rounded-md transition-all duration-200 ease-in-out"
+                    className="data-[state=active]:bg-white data-[state=active]:text-slate-900 dark:data-[state=active]:bg-[#1E1E1E] dark:data-[state=active]:text-white text-slate-800 dark:text-slate-200 hover:text-foreground rounded-md transition-all duration-200 ease-in-out"
                   >
                     Contraseña
                   </TabsTrigger>
@@ -91,14 +91,16 @@ export default function LoginPage() {
                 </TabsContent>
 
                 <TabsContent value="password" className="space-y-4">
-                  <AuthFormEmail />
+                  <Suspense fallback={null}>
+                    <AuthFormEmail />
+                  </Suspense>
                 </TabsContent>
               </Tabs>
 
               <div className="mt-6">
                 <div className="relative flex items-center mb-6">
                   <div className="flex-grow border-t border-border" />
-                  <span className="mx-3 shrink-0 text-xs text-slate-700 dark:text-slate-300 px-2">O continuar con</span>
+                  <span className="mx-3 shrink-0 text-xs text-slate-800 dark:text-slate-200 px-2">O continuar con</span>
                   <div className="flex-grow border-t border-border" />
                 </div>
 
@@ -113,7 +115,7 @@ export default function LoginPage() {
                   </Button>
                 </div>
 
-                <p className="mt-6 text-sm text-slate-700 dark:text-slate-300 text-center">
+                <p className="mt-6 text-sm text-slate-800 dark:text-slate-200 text-center">
                   {t('noAccount')}{' '}
                   <Link to="/register" className="font-bold text-primary underline underline-offset-4 hover:underline dark:brightness-125">
                     {t('register')}
