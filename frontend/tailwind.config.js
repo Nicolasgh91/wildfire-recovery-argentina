@@ -95,7 +95,7 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", ...fontFamily.sans],
+        sans: ["Inter Variable", "Inter", "system-ui", "-apple-system", "BlinkMacSystemFont", "Segoe UI", ...fontFamily.sans],
         mono: ["var(--font-mono)", ...fontFamily.mono],
       },
       keyframes: {

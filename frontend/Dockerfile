@@ -53,8 +53,15 @@ COPY . .
 RUN node ./scripts/validate-build-env.mjs
 RUN ./node_modules/.bin/vite build --mode production
 
+# 5) Pre-compress assets with Brotli and Gzip for static serving.
+#    Brotli --best (quality 11) at build time avoids runtime CPU cost.
+RUN apk add --no-cache brotli gzip && \
+    find /app/dist -type f \( -name '*.js' -o -name '*.css' -o -name '*.html' -o -name '*.svg' -o -name '*.json' \) \
+    -exec brotli --best --keep {} \; \
+    -exec gzip --best --keep {} \;
+
 # ── Stage 2: Serve ──────────────────────────────────────────────
-FROM nginx:alpine
+FROM fholzer/nginx-brotli:latest
 
 # Remove default config and add SPA-compatible one
 RUN rm /etc/nginx/conf.d/default.conf
