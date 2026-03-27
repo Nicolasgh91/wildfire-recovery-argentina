@@ -4,12 +4,41 @@ Clustering Task: ST-DBSCAN spatio-temporal clustering de fire detections.
 
 import logging
 from celery import shared_task
+from sqlalchemy import text
 
 from app.db.session import SessionLocal
 from app.services.detection_clustering_service import DetectionClusteringService
 from workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+_GEO_ENRICH_RECENT_EVENTS_SQL = text(
+    """
+    UPDATE fire_events fe
+       SET province = COALESCE(fe.province, geo.province),
+           department = COALESCE(fe.department, geo.department),
+           updated_at = NOW()
+      FROM LATERAL assign_province_department(fe.centroid) AS geo
+     WHERE fe.centroid IS NOT NULL
+       AND fe.created_at >= NOW() - make_interval(hours => :lookback_hours)
+       AND (fe.province IS NULL OR fe.department IS NULL)
+    """
+)
+
+
+def _enrich_recent_event_geo(db, *, lookback_hours: int = 6) -> int:
+    """
+    Best-effort guardrail: enrich province/department on newly created events.
+
+    The canonical enrichment occurs during event insert in
+    DetectionClusteringService. This fallback closes the operational gap when
+    legacy rows are generated without geo metadata.
+    """
+    result = db.execute(
+        _GEO_ENRICH_RECENT_EVENTS_SQL,
+        {"lookback_hours": int(max(1, lookback_hours))},
+    )
+    return int(result.rowcount or 0)
 
 
 @celery_app.task(
@@ -33,9 +62,12 @@ def cluster_detections(self, days_back: int = 1, max_detections: int | None = No
     try:
         service = DetectionClusteringService(db)
         result = service.run_clustering(days_back=days_back, max_detections=max_detections)
+        geo_updates = _enrich_recent_event_geo(db, lookback_hours=max(days_back * 24, 6))
+        if geo_updates:
+            logger.info("Geo enrichment fallback updated %s recent events", geo_updates)
         db.commit()
         logger.info("Clustering completado: %s", result)
-        return {"success": True, **result}
+        return {"success": True, "geo_enriched_events": geo_updates, **result}
     except Exception as exc:
         db.rollback()
         logger.exception("Error en clustering: %s", exc)

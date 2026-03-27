@@ -367,7 +367,7 @@ app.include_router(
     admin.router,
     prefix=f"{settings.API_V1_PREFIX}/admin",
     tags=["admin"],
-    dependencies=[Depends(verify_api_key)],
+    dependencies=[Depends(get_current_user)],
 )
 
 # Health checks - detailed service status (ROB-003)

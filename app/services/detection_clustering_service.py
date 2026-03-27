@@ -268,6 +268,8 @@ class DetectionClusteringService:
         clustering_version_id: UUID,
         supports_h3: bool,
         supports_version: bool,
+        supports_province: bool,
+        supports_department: bool,
         h3_resolution: int,
     ) -> UUID:
         lats = [det.lat for det in cluster]
@@ -334,6 +336,44 @@ class DetectionClusteringService:
             "avg_confidence": round(avg_conf, 2),
             "is_significant": is_significant,
         }
+
+        province = None
+        department = None
+        if supports_province or supports_department:
+            geo_row = (
+                self.db.execute(
+                    text(
+                        """
+                        SELECT province, department
+                        FROM assign_province_department(
+                            ST_SetSRID(ST_MakePoint(:lon, :lat), 4326)::geography
+                        )
+                        """
+                    ),
+                    {"lon": centroid_lon, "lat": centroid_lat},
+                )
+                .mappings()
+                .first()
+            )
+            if geo_row:
+                province = geo_row.get("province")
+                department = geo_row.get("department")
+            else:
+                logger.warning(
+                    "No geo assignment for centroid lat=%s lon=%s",
+                    centroid_lat,
+                    centroid_lon,
+                )
+
+        if supports_province:
+            columns.append("province")
+            values.append(":province")
+            payload["province"] = province
+
+        if supports_department:
+            columns.append("department")
+            values.append(":department")
+            payload["department"] = department
 
         if supports_h3:
             h3_index = _compute_h3_index(centroid_lat, centroid_lon, h3_resolution)
@@ -407,6 +447,8 @@ class DetectionClusteringService:
         supports_h3 = "h3_index" in columns
         h3_resolution = self._resolve_h3_resolution() if supports_h3 else 8
         supports_version = "clustering_version_id" in columns
+        supports_province = "province" in columns
+        supports_department = "department" in columns
 
         clusters: dict[int, List[DetectionRow]] = {}
         noise_ids: List[UUID] = []
@@ -425,6 +467,8 @@ class DetectionClusteringService:
                 clustering_version_id=version.id,
                 supports_h3=supports_h3,
                 supports_version=supports_version,
+                supports_province=supports_province,
+                supports_department=supports_department,
                 h3_resolution=h3_resolution,
             )
 

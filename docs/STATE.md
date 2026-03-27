@@ -58,6 +58,11 @@ Los detalles por contenedor, colas y tareas típicas se documentan en `docs/arch
 - Frontend estable para exploración, mapa, historial, login y contenido de soporte. La navegación entre Home/carrusel, grilla de históricos (`/fires/history`), mapa y detalle de incendio (`/fires/:id`) preserva la pantalla de origen mediante un contexto de retorno: el botón de volver en el mapa del detalle regresa al Home, Historial o Mapa según el flujo desde el que se llegó, y se oculta cuando no hay página previa (acceso directo o refresh).
 - Módulos con caveats: pagos (dependencias de webhook y sesión), citizen report (envío final mock), certificados y refugios (feature flags).
 - Producto de recuperación y cambio de uso (VAE) en fase de consolidación de UX.
+- Fase F1 de geocodificación completada (`assign_province_department` + checks) y F1-BIS cerrada: `regions` poblada con `DEPARTAMENTO` (`529`) y `PROVINCIA` (`24`), validación de Córdoba (`Córdoba/Capital`) correcta y backfill histórico de `fire_events` ejecutado por batches.
+- Fase F2 integrada en clustering de detecciones: cada `fire_event` nuevo intenta resolver `province`/`department` desde `assign_province_department` al momento del `INSERT` (con fallback a `NULL` + warning cuando no hay cobertura). La propagación de `provinces` en `fire_episodes` continúa resuelta en `EpisodeService.update_episode_metrics`.
+- Hardening operativo F2 en tasks: `cluster_detections` ejecuta fallback post-clustering para geo-asignar eventos recientes sin `province/department` usando `assign_province_department`, y `cluster_fire_episodes` sincroniza explícitamente `fire_episodes.provinces` desde `fire_events` vinculados.
+- Fase F3 integrada en workers: disponible ingesta manual desde CSV local (`workers.tasks.ingestion.ingest_firms_csv`) y orquestación completa (`workers.tasks.ingestion.run_full_ingestion_pipeline`) con cadena `ingesta -> cluster_detections(days_back=30) -> cluster_fire_episodes_pipeline`.
+- Fase F4 integrada en API: endpoints admin `POST /api/v1/admin/ingest-firms` (upload + encolado) y `GET /api/v1/admin/ingest-firms/{task_id}` (estado), con validaciones de rol admin, tamaño/headers de CSV, almacenamiento temporal y rate limit operacional.
 
 La referencia de estado detallado se encuentra en `docs/product/estado-real-del-producto.md`.
 
@@ -72,6 +77,6 @@ Cualquier nueva inconsistencia detectada debe registrarse aquí sin modificar el
 
 ## Última actualización
 
-- Fecha: 2026-03-16
+- Fecha: 2026-03-27
 - Commit: pendiente de actualizar al realizar el commit correspondiente
-- Cambio: UC-F06 fases 1–4 completadas — presets de área y paginación migrados a `variant="outline"` con clases emerald (D-01), ID visible en `result.fires` con navegación a `/fires/:id`, `ReturnContext.audit` como discriminated union (`origin: 'search' | 'land-use'`), fix de referencia huérfana `handleFireDetailNav`, limpieza de tipos duplicados en `navigation.ts`, y cleanup de `sessionStorage` en idle timer (B3-02).
+- Cambio: cierre del gap central F2 solicitado en tasks de clustering. Se agregó fallback idempotente de asignación `province/department` en `workers/tasks/clustering.py` y sincronización explícita de `provinces[]` en `workers/tasks/clustering_task.py`, manteniendo intacta la lógica ST-DBSCAN y merge de episodios.
