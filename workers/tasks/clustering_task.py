@@ -14,6 +14,35 @@ from workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+_PROPAGATE_EPISODE_PROVINCES_SQL = text(
+    """
+    UPDATE fire_episodes ep
+       SET provinces = sub.province_list,
+           updated_at = NOW()
+      FROM (
+        SELECT
+            fee.episode_id,
+            ARRAY_AGG(DISTINCT fe.province)
+                FILTER (WHERE fe.province IS NOT NULL) AS province_list
+        FROM fire_episode_events fee
+        JOIN fire_events fe ON fe.id = fee.event_id
+        GROUP BY fee.episode_id
+      ) sub
+     WHERE ep.id = sub.episode_id
+       AND (
+            ep.provinces IS NULL
+            OR ep.provinces = '{}'
+            OR ep.provinces <> sub.province_list
+       )
+    """
+)
+
+
+def _propagate_episode_provinces(db) -> int:
+    """Ensure fire_episodes.provinces reflects linked fire_events.province."""
+    result = db.execute(_PROPAGATE_EPISODE_PROVINCES_SQL)
+    return int(result.rowcount or 0)
+
 
 @celery_app.task(
     bind=True,
@@ -29,6 +58,9 @@ def cluster_fire_episodes(self, days_back: int = 90, max_events: int = 5000):
     try:
         service = ClusteringService(db)
         result = service.run_clustering(days_back=days_back, max_events=max_events)
+        provinces_synced = _propagate_episode_provinces(db)
+        if provinces_synced:
+            logger.info("Synced provinces array for %s episodes", provinces_synced)
         logger.info("Episode clustering completed: %s", result)
 
         # DT-002: si se crearon episodios nuevos, encolar carousel inmediatamente
@@ -42,7 +74,7 @@ def cluster_fire_episodes(self, days_back: int = 90, max_events: int = 5000):
                 result["episodes_created"],
             )
 
-        return {"success": True, **result}
+        return {"success": True, "provinces_synced": provinces_synced, **result}
     except Exception as exc:
         logger.exception("Episode clustering failed: %s", exc)
         db.rollback()

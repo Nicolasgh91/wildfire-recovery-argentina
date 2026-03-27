@@ -24,12 +24,52 @@ Se detectaron dos gaps en el pipeline actual:
 
 ```
 Fase 1 ──── Schema + función SQL de geocodificación     [no requiere deploy]
+Fase 1-BIS ─ Carga de departamentos Georef (script Python + fallback ogr2ogr) [completada]
 Fase 2 ──── Worker: integrar geocodificación al clustering
 Fase 3 ──── Worker: ingesta manual desde CSV
 Fase 4 ──── API: endpoint admin de upload + cadena completa
 Fase 5 ──── Corrección histórica (backfill) + propagación a episodios
 Fase 6 ──── Verificación end-to-end
 ```
+
+---
+
+## Fase 1-BIS: carga de departamentos Georef
+
+Jerarquía: **schema**
+
+Objetivo: poblar `public.regions` con `category='DEPARTAMENTO'` para destrabar asignación de `department` en `assign_province_department`.
+
+### F1B-T01: ingesta geoespacial principal
+
+**Archivo de referencia**: `docs/tasks/plan_f1bis_carga_departamentos.md`
+
+**Camino principal**: script Python `database/scripts/load_departments_georef.py` con `psycopg2` y `DATABASE_URL`.
+
+Notas operativas:
+- No usar SQL Editor para copiar geometrías MultiPolygon manualmente.
+- No usar CSV de dashboard para este flujo (pierde geometría).
+- `ogr2ogr` queda como fallback cuando GDAL esté disponible.
+
+### F1B-T02: idempotencia operacional y deduplicación
+
+Regla de ejecución:
+- `COUNT(DEPARTAMENTO) >= 500` => abortar carga full.
+- `COUNT(DEPARTAMENTO) = 0` => ejecutar carga full.
+- Sin `UNIQUE` ni `georef_id` estable en `regions`, evitar merge incremental.
+
+### F1B-T03: validación de desbloqueo
+
+Checklist:
+- `SELECT COUNT(*) FROM regions WHERE category='DEPARTAMENTO'` retorna `>= 500`.
+- Ninguna provincia queda con 0 departamentos en cruce espacial.
+- Puntos de control (Córdoba, frontera Córdoba/Santa Fe, Patagonia sur) devuelven `province` y `department` no `NULL` cuando hay cobertura.
+
+Estado: completada.
+Evidencia:
+- `regions`: `DEPARTAMENTO=529`, `PROVINCIA=24`.
+- `assign_province_department(-64.18,-31.42)` devuelve `Córdoba / Capital`.
+- Backfill histórico de `fire_events` finalizado por batches.
 
 ---
 
@@ -158,10 +198,11 @@ ON public.regions USING GIST (geom);
 ## Fase 2: integrar geocodificación al clustering
 
 Jerarquía: **flow logic → workers**
+Estado: **F2-T01 completada, F2-T02 validada en implementación existente**
 
 ### F2-T01: modificar `cluster_detections` para asignar provincia
 
-**Archivo**: `workers/tasks/clustering.py` (función que crea `fire_events`)
+**Archivo**: `app/services/detection_clustering_service.py` (función que inserta `fire_events`)
 
 **Cambio**: después de calcular el centroide del cluster y antes de `INSERT INTO fire_events`, ejecutar:
 
@@ -190,6 +231,12 @@ fire_event.department = result.department if result else None
 - Si `assign_province_department` no devuelve resultado (centroide fuera de Argentina), dejar `NULL` y loguear warning.
 - El cambio debe ser idempotente: si el evento ya tiene provincia asignada, no sobreescribir.
 
+**Implementación aplicada (cierre operativo del gap en task)**:
+- Además del enriquecimiento al crear eventos en `DetectionClusteringService`, `workers/tasks/clustering.py` incorpora fallback post-clustering para eventos recientes:
+  - `UPDATE fire_events ... FROM LATERAL assign_province_department(fe.centroid)`
+  - asignación idempotente con `COALESCE(fe.province, geo.province)` y `COALESCE(fe.department, geo.department)`
+  - alcance acotado por ventana temporal (`created_at` reciente) para evitar sobrecarga.
+
 **Verificación**:
 ```bash
 # Ejecutar clustering manual sobre detecciones recientes
@@ -216,7 +263,7 @@ db.close()
 
 ### F2-T02: modificar `cluster_fire_episodes_pipeline` para propagar provincias
 
-**Archivo**: `workers/tasks/clustering_task.py`
+**Archivo**: `app/services/episode_service.py` (métricas agregadas de `fire_episodes`)
 
 **Cambio**: al crear/actualizar `fire_episodes`, poblar el campo `provinces` (ARRAY) desde los `fire_events` vinculados:
 
@@ -240,11 +287,22 @@ episode.provinces = provinces or []
 - Aplicar en el punto donde se actualizan las métricas agregadas del episodio (`event_count`, `detection_count`, etc.).
 - No modificar la lógica de merge de episodios.
 
+**Estado actual**:
+- La propagación ya está implementada en `EpisodeService.update_episode_metrics` usando `array_remove(array_agg(DISTINCT fe.province), NULL)` sobre `fire_episode_events` + `fire_events`.
+- No se requiere cambio adicional en `workers/tasks/clustering_task.py`; el pipeline ya invoca esa actualización de métricas.
+
+**Implementación aplicada (cierre operativo del gap en task)**:
+- `workers/tasks/clustering_task.py` ejecuta sincronización explícita post-clustering:
+  - `UPDATE fire_episodes ... provinces = ARRAY_AGG(DISTINCT fe.province) FILTER (...)`
+  - actualiza episodios con `provinces` nulo/vacío/desalineado respecto de sus eventos.
+  - devuelve métrica `provinces_synced` para observabilidad.
+
 ---
 
 ## Fase 3: ingesta manual desde CSV
 
 Jerarquía: **workers**
+Estado: **F3-T01 y F3-T02 completadas en `workers/tasks/ingestion.py`**
 
 ### F3-T01: crear task `ingest_firms_csv`
 
@@ -272,6 +330,13 @@ def ingest_firms_csv(self, csv_path: str, source_label: str = 'manual_upload'):
 - Marcar `is_processed=false`, `fire_event_id=null`.
 - Loguear: total de filas, insertadas, duplicadas, errores.
 - Al finalizar, disparar encadenamiento automático (ver F3-T02).
+
+**Implementación aplicada**:
+- Task creada: `workers.tasks.ingestion.ingest_firms_csv` (cola `ingestion`).
+- Lee CSV local (`utf-8-sig`) con `csv.DictReader` y transforma filas FIRMS a payload de `fire_detections`.
+- Reutiliza funciones canónicas de `scripts/maintenance/load_firms_incremental.py` para: `build_detected_at`, `normalize_confidence`, `build_detection_hash`, `insert_detections`, resolución de H3 y detección de columnas soportadas.
+- Inserta con deduplicación y deja `is_processed=false`, `fire_event_id=null` vía `insert_detections`.
+- Logging de trazabilidad: `total_rows`, `valid_rows`, `new_detections`, `duplicates`, `errors`.
 
 **Formato CSV esperado de FIRMS** (columnas mínimas):
 ```
@@ -304,11 +369,20 @@ def run_full_ingestion_pipeline(self, csv_path: str, source_label: str = 'manual
 
 **Nota**: el `days_back=30` es un valor seguro para capturar detecciones recientes. Si el CSV contiene datos más antiguos, se puede parametrizar.
 
+**Implementación aplicada**:
+- Task creada: `workers.tasks.ingestion.run_full_ingestion_pipeline` (cola `ingestion`).
+- Orquesta `chain(...)` de Celery con:
+  1) `ingest_firms_csv.si(csv_path, source_label)`
+  2) `cluster_detections.si(days_back=30)`
+  3) `cluster_fire_episodes_pipeline.si()`
+- Retorna `pipeline_id` para polling externo.
+
 ---
 
 ## Fase 4: endpoint API admin de upload
 
 Jerarquía: **API**
+Estado: **F4-T01/F4-T02/F4-T03 completadas**
 
 ### F4-T01: crear endpoint `POST /api/v1/admin/ingest-firms`
 
@@ -342,6 +416,11 @@ async def upload_firms_csv(
 4. Encolar `run_full_ingestion_pipeline.delay(csv_path, source_label='admin_upload')`.
 5. Retornar `202 Accepted` con `{"task_id": "...", "status": "queued"}`.
 
+**Implementación aplicada**:
+- Endpoint implementado en `app/api/v1/admin.py` (`POST /ingest-firms`, bajo prefijo `/api/v1/admin`).
+- Validaciones activas: rol admin, extensión `.csv`, `content-type` permitido, tamaño máximo configurable por `system_parameters.manual_ingest_max_upload_mb` (default 50 MB), columnas FIRMS obligatorias y rate limit (1 ingesta cada 10 minutos por admin).
+- Persistencia temporal en `/tmp/firms_uploads`.
+
 ### F4-T02: endpoint de estado de ingesta
 
 **Archivo**: `app/api/routes/admin.py`
@@ -357,6 +436,9 @@ async def get_ingestion_status(
 
 **Respuesta**: estado Celery (`PENDING`, `STARTED`, `SUCCESS`, `FAILURE`) + resultado si completó.
 
+**Implementación aplicada**:
+- Endpoint implementado en `app/api/v1/admin.py` (`GET /ingest-firms/{task_id}`) con validación de admin y lectura de estado mediante `celery_app.AsyncResult(task_id)`.
+
 ### F4-T03: registrar router admin en `main.py`
 
 **Archivo**: `app/main.py`
@@ -371,6 +453,10 @@ app.include_router(
     dependencies=[Depends(get_current_user)],
 )
 ```
+
+**Implementación aplicada**:
+- Router admin ya registrado en `app/main.py` bajo `prefix=f"{settings.API_V1_PREFIX}/admin`.
+- Se ajustó dependencia global del router admin a `Depends(get_current_user)` para alinear autenticación por usuario y permitir control de rol por endpoint.
 
 ---
 
@@ -403,6 +489,9 @@ WHERE fe.id = geo.id;
 ```
 
 **Ejecución**: manual, una sola vez, después de verificar F1-T01 y F2-T01.
+
+**Nota operativa (Supabase/timeouts)**: si el volumen de `fire_events` es grande, preferir backfill por batches desde el repo con:
+- `database/scripts/backfill_fire_events_departments_batched.py` (batch 100 por ejecución, con logging)
 
 **Verificación pre-backfill**:
 ```sql
@@ -481,6 +570,7 @@ WHERE province IS NULL
 |---------|--------|------|
 | `database/functions/assign_province_department.sql` | Crear | F1 |
 | `database/migrations/check_regions_spatial_index.sql` | Crear | F1 |
+| `database/scripts/load_departments_georef.py` | Crear | F1-BIS |
 | `workers/tasks/clustering.py` | Modificar | F2 |
 | `workers/tasks/clustering_task.py` | Modificar | F2 |
 | `workers/tasks/ingestion.py` | Modificar (agregar 2 tasks) | F3 |
@@ -502,10 +592,11 @@ WHERE province IS NULL
 ## Dependencias entre fases
 
 ```
-F1 ──→ F2 (clustering necesita la función SQL)
-F1 ──→ F5 (backfill necesita la función SQL)
+F1 ──→ F1-BIS (función lista; falta cobertura de departamentos)
+F1-BIS ──→ F2 (clustering requiere department disponible)
+F1-BIS ──→ F5 (backfill requiere department disponible)
 F3 ──→ F4 (API llama a la task de ingesta)
 F2 + F3 ──→ F6 (verificación requiere ambos cambios)
 ```
 
-F1 y F3 pueden ejecutarse en paralelo. F5 puede ejecutarse apenas F1 esté lista (no bloquea a F4).
+F1 y F3 pueden ejecutarse en paralelo. F5 quedó desbloqueada tras completar F1-BIS.
