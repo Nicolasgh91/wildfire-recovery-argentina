@@ -93,12 +93,11 @@ El sistema sigue un principio **async-first**: toda operación pesada (imágenes
 |---|---|---|
 | Grilla espacial | H3 (BIGINT) | 10× menos almacenamiento, agregaciones rápidas para heatmaps |
 | Procesamiento pesado | Celery async workers | Desacople total de la API, resiliencia ante fallos de GEE |
-| Evidencia legal | Hash SHA-256 + metadata reproducible | Cadena de custodia digital verificable para uso judicial |
+| Reportes | Hash SHA-256 + metadata reproducible | Consulta histórica descargable en PDF |
 | Baseline NDVI | `qualityMosaic('NDVI')` 365 días pre-incendio | Captura el pico anual de vegetación, superior a ventanas cortas |
-| Thumbnails | `visualize()` + `getThumbURL` server-side | Evita `reproject()` que causa errores de proyección inconsistentes |
 | Bbox de episodios | Calculado desde perímetros (`ST_XMin/YMin/XMax/YMax`) | Los centroides producen áreas microscópicas inutilizables |
-| Audit log | Append-only inmutable | Requisito de validez jurídica bajo normativa argentina |
-| Operación | Costo cero (free tiers) | Supabase 500 MB, GEE 50K req/día, OCI free tier |
+| Trazabilidad del dato | Append-only inmutable | Los datos crudos son procesados y el historial de cambios realizados se persiste en la base de datos. Incluye versionado ante actuzalicaciones en el agrupamiento de los datos |
+| Operación | Costo cero (free tiers) | Supabase 500 MB, GEE 50K req/día, OCI 1gb free tier |
 
 ---
 
