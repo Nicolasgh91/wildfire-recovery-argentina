@@ -1,154 +1,242 @@
-# Vestigia
+# 🔥 Huella del Fuego
 
-Vestigia te ayuda a explorar incendios historicos en Argentina con evidencia satelital, sin necesitar perfil tecnico.
+**Plataforma de inteligencia geoespacial para monitoreo de incendios forestales históricos y análisis de recuperación vegetal en Argentina.**
 
-## propuesta de valor en 10 segundos
+> Transforma datos satelitales de NASA FIRMS y Sentinel-2 en evidencia verificable para entender que sucedió en los terrenos afectados durante los años posteriores al incendio.
 
-- miras incendios historicos y recientes en un solo lugar
-- comparas antes/despues con imagenes satelitales
-- generas evidencia descargable para compartir o investigar
-- si lo necesitas, accedes a verificacion de terreno como modulo avanzado
+🌐 [huelladelfuego.com.ar](https://huelladelfuego.com.ar)
 
-## que se puede hacer hoy
+---
 
-- explorar incendios desde `/exploracion` con flujo guiado
-- revisar historial con filtros y estadisticas en `/fires/history`
-- visualizar episodios en mapa con datos reales en `/map`
-- generar assets HD y PDF en flujo de exploracion/reportes
-- usar verificar terreno (`/audit`) con login
-- cargar creditos y usar checkout de pagos (con caveats)
+## El problema
 
-## estado real del producto
+Argentina pierde miles de hectáreas cada año por incendios forestales. La Ley 26.815 prohíbe el cambio de uso del suelo en zonas quemadas por 30 a 60 años, pero la fiscalización es manual, lenta y carece de evidencia técnica reproducible. Escribanías, fiscalías y ONGs no cuentan con herramientas accesibles para verificar si un terreno fue afectado por fuego ni para monitorear su recuperación vegetal.
 
-- ✅ listo en produccion: exploracion, historial, mapa, assets HD/PDF, verificar terreno, contacto
-- 🟡 implementado con caveats: MercadoPago, certificados, citizen report, shelters
-- ⏳ en progreso: VAE como experiencia final de producto
-- ❌ descartado/post-MVP: narrativa principal centrada en "auditoria legal"
+## La solución
 
-Detalle completo:
+Huella del fuego automatiza la detección, agrupación y seguimiento de incendios forestales (API desarrollada integramente por https://www.escalatunegocioconia.com/) integrando múltiples fuentes satelitales. Genera evidencia y brinda la posibilidad de analizar la recuperación de la vegetación mes a mes (o rango de fecha particular) mediante análisis NDVI sobre imágenes Sentinel-2.
 
-- `docs/product/estado-real-del-producto.md`
+---
 
-## limitaciones honestas
+## Características principales
 
-- MercadoPago esta implementado, pero aun se opera con caveats de entorno y retorno.
-- En frontend, citizen report todavia tiene envio simulado.
-- Certificates en frontend sigue en modo mock y con feature flag.
-- Shelters/visitor logs existen, pero permanecen bajo feature flag por defecto.
+- **Detección automática de incendios** — Ingesta diaria de datos NASA FIRMS (VIIRS/MODIS) con clustering espacial DBSCAN e indexación hexagonal H3.
+- **Monitoreo de recuperación vegetal (VAE)** — Análisis NDVI mensual vía Google Earth Engine con clasificación automática: recuperación temprana, moderada, avanzada, completa, estancada o anomalía.
+- **Verificación del suelo** — Búsqueda por coordenadas con cruce contra áreas protegidas y generación de evidencia con disclaimers legales (Ley 26.815 / Ley 27.604).
+- **Creación de reportes** — PDFs con hash verificable, cronología satelital y metadata.
+- **Enriquecimiento geográfico** — Asignación automática de provincia y departamento a cada evento mediante PostGIS y datos del Georef argentino.
+- **Dashboard y mapa interactivo** — Visualización de episodios activos, históricos y KPIs de recurrencia con heatmaps H3.
+- **Thumbnails satelitales** — Renderizado server-side desde GEE con cobertura espacial evaluada y bbox calculado desde perímetros reales.
 
-## casos de uso y estado (extracto)
+---
 
-Fuente canonica:
+## Arquitectura
 
-- `docs/product/casos-de-uso-y-estado.md`
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        CLIENTE                                  │
+│   React 19 + TypeScript + Vite 7 + Tailwind + Leaflet          │
+│                  Cloudflare Pages (CDN)                         │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │ HTTPS
+┌──────────────────────▼──────────────────────────────────────────┐
+│                      NGINX (reverse proxy)                      │
+└──────────┬─────────────────────────────┬────────────────────────┘
+           │                             │
+┌──────────▼──────────┐    ┌─────────────▼────────────────────────┐
+│    FastAPI (API)     │    │         Celery workers               │
+│  Endpoints REST     │    │  ┌────────────┐  ┌────────────────┐  │
+│  JWT + API keys     │    │  │ worker-fast │  │  worker-gee    │  │
+│  Rate limiting      │    │  │ (ingesta,  │  │  (GEE/VAE,     │  │
+│  Pydantic schemas   │    │  │  clustering)│  │   recovery,    │  │
+│                     │    │  │            │  │   thumbnails)  │  │
+└──────────┬──────────┘    │  └────────────┘  └────────────────┘  │
+           │               │  ┌────────────┐                      │
+           │               │  │ celery-beat│ (scheduler diario)   │
+           │               │  └────────────┘                      │
+           │               └──────────────┬───────────────────────┘
+           │                              │
+┌──────────▼──────────────────────────────▼───────────────────────┐
+│              PostgreSQL + PostGIS (Supabase)                     │
+│    RLS · Funciones PostGIS · Vistas materializadas              │
+└─────────────────────────────────────────────────────────────────┘
+           │                              │
+┌──────────▼──────────┐    ┌──────────────▼───────────────────────┐
+│   Redis (broker)    │    │       Servicios externos              │
+│   Celery queues     │    │  NASA FIRMS · Google Earth Engine     │
+│   Rate limit store  │    │  Georef AR · OCI Object Storage      │
+└─────────────────────┘    └──────────────────────────────────────┘
+```
 
-Resumen rapido:
+El sistema sigue un principio **async-first**: toda operación pesada (imágenes satelitales, clustering, análisis NDVI, generación de PDFs) se delega a workers de Celery, y la API responde con `202 Accepted` de forma inmediata.
 
-| UC | nombre | estado |
+---
+
+## Stack tecnológico
+
+| Capa | Tecnologías |
+|---|---|
+| **Frontend** | React 19, TypeScript, Vite 7, Tailwind CSS, Leaflet, pnpm |
+| **Backend** | Python, FastAPI, Celery, Redis, Pydantic |
+| **Base de datos** | PostgreSQL + PostGIS (Supabase), H3 hexagonal indexing |
+| **Satelital / geo** | Google Earth Engine (Sentinel-2 L2A), NASA FIRMS (VIIRS/MODIS) |
+| **Infraestructura** | Docker Compose, Nginx, Oracle Cloud ARM64 VM |
+| **CI/CD** | GitHub Actions (frontend), Cloudflare Pages |
+| **Storage** | OCI Object Storage (thumbnails, reportes PDF) |
+| **Autenticación** | Supabase Auth, Google OAuth, JWT |
+
+---
+
+## Decisiones técnicas destacadas
+
+| Decisión | Elección | Justificación |
 |---|---|---|
-| UC-F03 | historico y dashboard | ✅ |
-| UC-F06 | verificar terreno (modulo avanzado) | ✅ |
-| UC-F08 | carrusel satelital | ✅ |
-| UC-F11 | exploracion y reportes especializados | ✅ |
-| UC-F10 | certificados monetizados | 🟡 |
-| UC-F12 | recuperacion/cambio de uso (VAE) | ⏳ |
+| Grilla espacial | H3 (BIGINT) | 10× menos almacenamiento, agregaciones rápidas para heatmaps |
+| Procesamiento pesado | Celery async workers | Desacople total de la API, resiliencia ante fallos de GEE |
+| Evidencia legal | Hash SHA-256 + metadata reproducible | Cadena de custodia digital verificable para uso judicial |
+| Baseline NDVI | `qualityMosaic('NDVI')` 365 días pre-incendio | Captura el pico anual de vegetación, superior a ventanas cortas |
+| Thumbnails | `visualize()` + `getThumbURL` server-side | Evita `reproject()` que causa errores de proyección inconsistentes |
+| Bbox de episodios | Calculado desde perímetros (`ST_XMin/YMin/XMax/YMax`) | Los centroides producen áreas microscópicas inutilizables |
+| Audit log | Append-only inmutable | Requisito de validez jurídica bajo normativa argentina |
+| Operación | Costo cero (free tiers) | Supabase 500 MB, GEE 50K req/día, OCI free tier |
 
-## arquitectura en una pantalla
+---
 
-- frontend: React + Vite
-- api: FastAPI
-- workers: Celery + Redis
-- base de datos: PostgreSQL/PostGIS (Supabase)
-- imagenes y reportes: object storage + pipeline satelital
-- datos publicos: NASA FIRMS, Sentinel-2/GEE, Open-Meteo
+## Módulos del sistema
 
-Documentacion tecnica:
+### Pipeline de datos (automatizado)
+```
+NASA FIRMS → Ingesta diaria → DBSCAN clustering → Eventos → Episodios
+                                    ↓
+                        Enriquecimiento geográfico
+                        (provincia + departamento)
+```
 
-- `docs/frontend/README.md`
-- `docs/backend/api/auth_matrix.md`
-- `docs/infrastructure/deployment/DEPLOYMENT.md`
-- `docs/containers/README.md` (arquitectura de contenedores y workers)
+### Análisis de recuperación vegetal (VAE)
+```
+Evento de incendio → Baseline NDVI (365d pre-fuego)
+        ↓
+Análisis mensual → NDVI actual vs baseline → Clasificación
+        ↓
+early_recovery | moderate | advanced | full | stalled | anomaly
+        ↓
+Detección de cambio de uso del suelo → Alertas (Ley 26.815)
+```
 
-## como correr local
+### Reportes
+```
+Solicitud → Worker async → GEE imagery + clima + metadata
+        ↓
+    PDF con hash SHA-256 + QR de verificación
+        ↓
+    OCI Object Storage → URL de descarga
+```
 
-### opcion 1: docker (recomendada)
+---
+
+## Estado del proyecto
+
+### Completado
+- Ingesta automatizada NASA FIRMS con ingesta manual de CSV como fallback
+- Clustering espacial DBSCAN con versionado y H3 indexing
+- Pipeline VAE completo (14 fases, 58 tareas): análisis NDVI, clasificación, backfill histórico
+- Enriquecimiento geográfico con ~530 departamentos argentinos
+- Thumbnails satelitales con evaluación de cobertura espacial
+- Reportes PDF con hash y cadena de custodia
+- Suite de tests (unitarios, integración, E2E)
+- Deploy en producción (Oracle Cloud ARM64 + Cloudflare Pages)
+
+### En progreso
+- Backfill VAE histórico 2016–2025
+- Corrección de schedule de clustering diario (celery-beat)
+
+### Planificado
+- Aplicación móvil vía Capacitor / Google Play
+- Migración de builds a GHCR
+- KPIs de recurrencia con heatmaps H3 interactivos
+
+---
+
+## Ejecución local
 
 ```bash
+# Clonar el repositorio
+git clone https://github.com/<usuario>/forestguard.git
+cd forestguard
+
+# Configurar variables de entorno
+cp .env.template .env
+# Editar .env con credenciales de Supabase, GEE, Redis, etc.
+
+# Levantar servicios
 docker compose up -d
-```
 
-Servicios esperados:
-
-- API: `http://localhost:8000/docs`
-- Frontend: `http://localhost:5173`
-
-### opcion 2: manual
-
-```bash
-# backend
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-
-# frontend
+# Frontend (en otra terminal)
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-Variables de entorno de referencia:
+**Requisitos:** Docker, Docker Compose, pnpm, cuenta de Google Earth Engine (free tier), proyecto en Supabase.
 
-- `./.env.template`
-- `frontend/.env.example`
+---
 
-## como se despliega hoy
+## Estructura del repositorio
 
-- deploy principal automatizado por GitHub Actions hacia VM de produccion
-- script operativo principal: `scripts/deploy.sh`
-- flujo resumido: `docs/flujo-deploy.md`
-- guia de deployment: `docs/infrastructure/deployment/DEPLOYMENT.md`
+```
+forestguard/
+├── app/
+│   ├── api/routes/          # Endpoints REST (FastAPI)
+│   ├── core/                # Config, auth, rate limiting, circuit breaker
+│   ├── models/              # SQLAlchemy / Pydantic models
+│   ├── services/            # Lógica de negocio (GEE, VAE, reportes)
+│   └── workers/tasks/       # Tareas Celery (ingesta, clustering, recovery)
+├── frontend/
+│   ├── src/components/      # React components (mapa, dashboard, monitoring)
+│   ├── src/pages/           # Rutas principales
+│   └── src/services/        # API clients
+├── database/
+│   └── functions/           # Funciones PostGIS (assign_province_department)
+├── docs/                    # ADRs, specs, runbooks
+├── tests/                   # Unit, integration, E2E
+├── docker-compose.yml
+└── .github/workflows/       # CI/CD pipelines
+```
 
-## diferenciacion
+---
 
-Hay dashboards globales y herramientas de monitoreo/alerta, pero Vestigia apunta a una experiencia guiada para usuario general con foco en investigacion reproducible.
+## Contexto 
 
-Detalle con fuentes:
+Este sistema opera bajo el marco regulatorio argentino:
+- **Ley 26.815 / 27.604** — Manejo del fuego y prohibición de cambio de uso del suelo en zonas quemadas.
+- **Ley 25.326** — Protección de datos personales.
 
-- `docs/product/diferenciacion-mercado.md`
+Las clasificaciones de cambio de uso del suelo son generadas algorítmicamente sin validación de campo. Toda la información sobre violaciones potenciales incluye disclaimers legales obligatorios y se presenta con indicadores discretos (decisión D-03).
 
-## indice de documentacion
+---
 
-- indice general: `docs/INDEX.md`
-- hub de producto: `docs/product/README.md`
-- archivo historico: `docs/archive/`
+## Sobre el proyecto
 
-## nota de alcance
+Proyecto diseñado, arquitectado e implementado de forma independiente como primera aplicación full-stack, combinando análisis funcional, diseño de arquitectura y desarrollo end-to-end. Tiene un fin académico.
 
-Vestigia prioriza exploracion e investigacion guiada. El componente legal existe y se mantiene como capacidad avanzada, no como narrativa principal de entrada.
+**Competencias demostradas:**
+- Diseño de arquitectura distribuida (API + workers async + message broker)
+- Integración de APIs satelitales (Google Earth Engine, NASA FIRMS)
+- Modelado de datos geoespaciales (PostGIS, H3)
+- Pipeline de datos con procesamiento asíncrono (Celery + Redis)
+- Seguridad por capas (JWT, RLS, rate limiting, audit trail inmutable)
+- Infraestructura cloud (Docker, Oracle Cloud ARM64, Cloudflare)
+- CI/CD con GitHub Actions
+- Dominio funcional: legislación ambiental argentina, remote sensing, NDVI
 
+---
 
-### Paleta principal de colores de la UI
+## Licencia
 
-🌟 Colores Principales (Light Mode)
-Primary (Acción principal): hsl(155 55% 45%) — Un verde esmeralda vibrante.
-Secondary (Acción secundaria): hsl(40 20% 35%) — Un marrón cálido oscuro.
-Accent (Destacados): hsl(40 60% 70%) — Un tono arena/dorado suave.
-Destructive (Errores/Peligro): hsl(0 84% 60%) — Rojo intenso.
-Background (Fondo global): hsl(164 86% 16%) — Un verde bosque muy oscuro.
-Foreground (Texto principal): hsl(40 10% 20%) — Casi negro con matiz cálido.
-🌑 Modo Oscuro (Dark Mode)
-Background: hsl(40 10% 18%) — Gris oscuro cálido.
-Foreground: hsl(100 10% 95%) — Blanco con ligero matiz verdoso.
-Primary: Se mantiene igual (hsl(155 55% 45%)).
-Secondary: hsl(40 25% 45%).
-Destructive: hsl(0 65% 50%).
-🛠️ Elementos de UI y Bordes
-Border: hsl(110 10% 88%) (Light) / hsl(40 10% 32%) (Dark).
-Input: hsl(110 10% 92%) (Light) / hsl(40 10% 28%) (Dark).
-Ring (Outline/Foco): Usa el color Primary.
-⚓ Componentes Específicos
-Nav (Barra de navegación): hsl(164 26% 68%).
-Footer: hsl(164 86% 16%) (mismo que el fondo oscuro de la app).
-Muted (Texto/fondos sutiles): hsl(100 10% 95%) (Light) / hsl(40 10% 28%) (Dark).
-Si necesitas los valores exactos para algún componente de Shadcn o un gráfico específico (Charts 1-5), también están disponibles en el archivo de estilos.
+Este proyecto es software propietario. Todos los derechos reservados.
+
+---
+
+<p align="center">
+  <i>Construido con datos abiertos de NASA y ESA para la protección de los bosques argentinos.</i>
+</p>
