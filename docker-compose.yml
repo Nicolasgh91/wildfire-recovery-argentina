@@ -6,9 +6,9 @@ services:
     image: redis:7-alpine
     container_name: forestguard-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --maxmemory 48mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 48mb --maxmemory-policy allkeys-lru --requirepass ${REDIS_PASSWORD}
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     networks:
@@ -20,7 +20,7 @@ services:
           memory: 64M
     mem_limit: 64m
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "sh", "-c", "REDISCLI_AUTH=$$REDIS_PASSWORD redis-cli ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -63,8 +63,8 @@ services:
       GEE_PRIVATE_KEY_PATH: ${GEE_PRIVATE_KEY_PATH:-/run/secrets/gee-service-account.json}
 
       # Celery/Redis
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
       
       # Aplicación
       ENVIRONMENT: ${ENVIRONMENT:-production}
@@ -83,16 +83,16 @@ services:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
       - ~/.oci:/home/opc/.oci:ro
     
-    ports:
-      - "8000:8000"
-    
+    expose:
+      - "8000"
+
     depends_on:
       redis:
         condition: service_healthy
-    
+
     networks:
       - forestguard
-      
+
     deploy:
       resources:
         limits:
@@ -141,8 +141,8 @@ services:
       OCI_PUBLIC_URL: ${OCI_PUBLIC_URL:-}
       OCI_CONFIG_FILE: /home/opc/.oci/config
       
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
       
       FIRMS_API_KEY: ${FIRMS_API_KEY}
       
@@ -215,8 +215,8 @@ services:
       GEE_SERVICE_ACCOUNT_EMAIL: ${GEE_SERVICE_ACCOUNT_EMAIL:-}
       GEE_PRIVATE_KEY_PATH: ${GEE_PRIVATE_KEY_PATH:-/run/secrets/gee-service-account.json}
 
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
 
       ENVIRONMENT: ${ENVIRONMENT:-production}
       SECRET_KEY: ${SECRET_KEY}
@@ -269,8 +269,8 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
 
       ENVIRONMENT: ${ENVIRONMENT:-production}
       SECRET_KEY: ${SECRET_KEY}
@@ -314,19 +314,21 @@ services:
       - debug
     restart: unless-stopped
     environment:
-      CELERY_BROKER_URL: redis://redis:6379/0
-      CELERY_RESULT_BACKEND: redis://redis:6379/1
-    
+      CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
+      FLOWER_USER: ${FLOWER_USER}
+      FLOWER_PASSWORD: ${FLOWER_PASSWORD}
+
     ports:
       - "5555:5555"
-    
+
     depends_on:
       redis:
         condition: service_healthy
-    
+
     networks:
       - forestguard
-    
+
     deploy:
       resources:
         limits:
@@ -335,8 +337,8 @@ services:
     mem_limit: 128m
 
     command: >
-      bash -c "sleep 50 && 
-      celery -A workers.celery_app flower --port=5555"
+      bash -c "sleep 50 &&
+      celery -A workers.celery_app flower --port=5555 --basic_auth=${FLOWER_USER}:${FLOWER_PASSWORD}"
     healthcheck:
       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5555/healthcheck')\" || exit 1" ]
       interval: 30s
