@@ -83,16 +83,16 @@ services:
       - ${GCP_CREDENTIALS_DIR:-./secrets}:/run/secrets:ro
       - ~/.oci:/home/opc/.oci:ro
     
-    ports:
-      - "8000:8000"
-    
+    expose:
+      - "8000"
+
     depends_on:
       redis:
         condition: service_healthy
-    
+
     networks:
       - forestguard
-      
+
     deploy:
       resources:
         limits:
