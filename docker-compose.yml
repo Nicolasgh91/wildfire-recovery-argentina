@@ -316,17 +316,19 @@ services:
     environment:
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD}@redis:6379/1
-    
+      FLOWER_USER: ${FLOWER_USER}
+      FLOWER_PASSWORD: ${FLOWER_PASSWORD}
+
     ports:
       - "5555:5555"
-    
+
     depends_on:
       redis:
         condition: service_healthy
-    
+
     networks:
       - forestguard
-    
+
     deploy:
       resources:
         limits:
@@ -335,8 +337,8 @@ services:
     mem_limit: 128m
 
     command: >
-      bash -c "sleep 50 && 
-      celery -A workers.celery_app flower --port=5555"
+      bash -c "sleep 50 &&
+      celery -A workers.celery_app flower --port=5555 --basic_auth=${FLOWER_USER}:${FLOWER_PASSWORD}"
     healthcheck:
       test: [ "CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5555/healthcheck')\" || exit 1" ]
       interval: 30s
