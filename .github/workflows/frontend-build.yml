@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         # Sin "ref: main" — se hace checkout del commit que disparó el evento.
         # En PRs: checkout del HEAD del PR (para validar el código del PR).
         # En push a main: checkout del commit mergeado.
