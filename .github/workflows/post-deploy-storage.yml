@@ -63,7 +63,7 @@ jobs:
     steps:
       # ── 0. Checkout (for traceability) ─────────────────────────────────────
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # ── 1. Preflight — validate required secrets ────────────────────────────
       - name: Preflight — validate required secrets
